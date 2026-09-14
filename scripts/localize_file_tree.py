@@ -2,8 +2,9 @@
 """Rename reader-facing repository paths to Chinese-first bilingual names.
 
 This is intentionally idempotent. It updates chapter / appendix filenames,
-reader-facing top-level directories, and all textual references in Markdown,
-Python and GitHub Actions YAML files.
+reader-facing top-level directories, and textual references in Markdown/Python.
+GitHub workflow files are intentionally left untouched here and are updated
+separately through the GitHub connector, avoiding workflow-token restrictions.
 """
 
 from __future__ import annotations
@@ -41,23 +42,19 @@ DIR_RENAMES = {
     "scripts": "工具-scripts",
 }
 
-# Reader-facing script names also get Chinese first, while retaining an English
-# suffix for command-line discoverability.
 SCRIPT_RENAMES = {
     "scripts/normalize_math.py": "scripts/数学公式规范化-normalize_math.py",
     "scripts/localize_headings.py": "scripts/章节标题中文化-localize_headings.py",
     "scripts/localize_file_tree.py": "scripts/文件树中文化-localize_file_tree.py",
 }
 
-TEXT_SUFFIXES = {".md", ".py", ".yml", ".yaml"}
+TEXT_SUFFIXES = {".md", ".py"}
 
 
 def git_mv(old: str, new: str) -> bool:
     src = ROOT / old
     dst = ROOT / new
-    if not src.exists():
-        return False
-    if dst.exists():
+    if not src.exists() or dst.exists():
         return False
     dst.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "mv", old, new], cwd=ROOT, check=True)
@@ -67,18 +64,13 @@ def git_mv(old: str, new: str) -> bool:
 
 def all_replacements() -> list[tuple[str, str]]:
     pairs: list[tuple[str, str]] = []
-
     for old, new in {**FILE_RENAMES, **SCRIPT_RENAMES}.items():
         pairs.append((old, new))
         pairs.append((Path(old).name, Path(new).name))
-
     for old, new in DIR_RENAMES.items():
         pairs.append((f"{old}/", f"{new}/"))
         pairs.append((f'ROOT / "{old}"', f'ROOT / "{new}"'))
         pairs.append((f"ROOT / '{old}'", f"ROOT / '{new}'"))
-
-    # Longest first prevents shorter directory substitutions from interfering
-    # with full-path replacements.
     return sorted(set(pairs), key=lambda x: len(x[0]), reverse=True)
 
 
@@ -86,7 +78,12 @@ def rewrite_text_references() -> int:
     pairs = all_replacements()
     changed = 0
     for path in sorted(ROOT.rglob("*")):
-        if not path.is_file() or ".git" in path.parts or path.suffix not in TEXT_SUFFIXES:
+        if (
+            not path.is_file()
+            or ".git" in path.parts
+            or ".github" in path.parts
+            or path.suffix not in TEXT_SUFFIXES
+        ):
             continue
         try:
             text = path.read_text(encoding="utf-8")
@@ -104,18 +101,13 @@ def rewrite_text_references() -> int:
 
 def main() -> int:
     renamed = 0
-
-    # Rename files while their original parent directories still exist.
     for old, new in FILE_RENAMES.items():
         renamed += int(git_mv(old, new))
-
     for old, new in SCRIPT_RENAMES.items():
         renamed += int(git_mv(old, new))
 
     rewritten = rewrite_text_references()
 
-    # Finally rename reader-facing top-level directories. .github intentionally
-    # stays unchanged because GitHub requires that special path.
     for old, new in DIR_RENAMES.items():
         renamed += int(git_mv(old, new))
 

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """A deliberately small, inspectable MCP teaching implementation.
 
 This module targets the 2026-07-28 stateless protocol direction and implements
@@ -15,6 +13,8 @@ It is NOT a production MCP SDK. Authentication, HTTP/stdio transports, streaming
 extensions, resources, prompts, and the rest of the specification are future
 layers. The point is to make protocol mechanics visible before using an SDK.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Protocol

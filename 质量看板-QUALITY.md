@@ -39,10 +39,11 @@ Primary Sources
 
 | 主题 | 原始资料 | 数学 | 图/数据流 | 从零代码 | 自动测试 | 真实复现 | 反例/争议 | 当前等级 | 下一关键动作 |
 |---|---:|---:|---:|---:|---:|---:|---:|---|---|
-| Transformer 基础 | ✓ | ✓ | ✓ | ✓ | ✓ | △ | △ | L2 | 原论文结构逐层 parity + 手算增强 |
+| Transformer 基础 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | △ | L2 | 更多逐层 activation parity + 手算增强 |
 | GPT-3 / ICL / Scaling | ✓ | ✓ | ✓ | △ | — | △ | ✓ | L1 | Scaling 数据复绘、ICL toy experiments |
 | RLHF / DPO | ✓ | ✓ | ✓ | △ | △ | △ | ✓ | L1-L2 | tiny preference pipeline |
-| RoPE / RMSNorm / GQA / SwiGLU | ✓ | ✓ | ✓ | ✓ | ✓ | △ | △ | L2 | 真实公开 checkpoint parity |
+| RoPE / RMSNorm / GQA / SwiGLU | ✓ | ✓ | ✓ | ✓ | ✓ | **✓** | △ | **L2** | 扩展到更多公开模型族 |
+| LLaMA-family runtime | ✓ | ✓ | ✓ | **✓** | **✓** | **✓** | △ | **L2** | tokenizer parity、更多 checkpoints |
 | LLaMA / LoRA / Quantization | ✓ | ✓ | △ | △ | △ | △ | ✓ | L1 | LoRA / QLoRA / quant reference labs |
 | MoE | ✓ | ✓ | ✓ | △ | — | △ | ✓ | L1 | 从零 router + load balance lab |
 | Reasoning / RLVR | ✓ | ✓ | ✓ | △ | — | △ | ✓ | L1 | verifier + toy RL trajectory lab |
@@ -50,10 +51,24 @@ Primary Sources
 | Optimization Dynamics | ✓ | ✓ | △ | △ | — | △ | ✓ | L1 | optimizer trajectory labs |
 | Interpretability | ✓ | ✓ | ✓ | △ | — | △ | ✓ | L1 | activation patch / SAE lab |
 | Training Systems | ✓ | ✓ | ✓ | △ | — | △ | ✓ | L1 | distributed simulation + communication accounting |
-| Inference Systems | ✓ | ✓ | ✓ | ✓ | ✓ | △ | ✓ | L2 | paged KV / batching / speculative decoding |
+| Inference Systems | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | L2 | paged KV / batching / speculative decoding |
 | Hardware / Kernels | ✓ | ✓ | ✓ | △ | — | △ | ✓ | L1 | roofline / bandwidth measurement labs |
 | Post-Transformer | ✓ | ✓ | ✓ | — | — | — | ✓ | L1 | SSM / linear attention reference code |
 | Diffusion LM | ✓ | ✓ | ✓ | — | — | — | ✓ | L1 | tiny masked diffusion LM |
+
+## 真实模型 parity 里程碑
+
+当前已对 `HuggingFaceTB/SmolLM2-135M` 做真实公开 checkpoint 验证。raw safetensors 经我们自己的 key mapping 与 `DecoderOnlyTransformer` forward 后，与 Hugging Face reference eager implementation 在固定输入、CPU float32 下得到：
+
+```json
+{
+  "max_abs": 0.0,
+  "mean_abs": 0.0,
+  "argmax_agreement": 1.0
+}
+```
+
+因此“我们的 runtime 能否真正运行公开现代 Llama-family 权重”已经从计划项变成有 CI 证据的完成项。这个结论只限当前受测模型和设置，不外推到所有模型族。
 
 ---
 
@@ -69,8 +84,25 @@ Primary Sources
 | Multi-Agent | ✓ | ✓ | ✓ | ✓ | △ | △ | △ | L2 | parallel workers + reviewer/merge |
 | Agent Evaluation | ✓ | ✓ | △ | △ | △ | ✓ | ✓ | L1 | WebArena / OSWorld / SWE-bench harness |
 | Agentic RL | ✓ | ✓ | — | — | — | △ | △ | L1 | trajectory dataset + offline toy RL |
-| Agent Protocols | ✓ | ✓ | △ | △ | — | △ | ✓ | L1 | minimal MCP → stdio/HTTP → A2A |
+| Agent Protocols | ✓ | ✓ | **✓** | **✓** | △ | △ | ✓ | **L2** | MCP stdio/HTTP → auth → minimal A2A |
 | Computer Use | ✓ | ✓ | — | — | — | △ | ✓ | L1 | DOM adapter → screenshot → grounding |
+
+## Agent protocol 里程碑
+
+当前已经从零实现一个可读的 MCP 教学子集：
+
+```text
+JSON-RPC 2.0
+→ stateless server/discover
+→ tools/list
+→ tools/call
+→ ToolRegistry adapter
+→ in-process transport
+→ client wrapper
+→ unit tests
+```
+
+它不是生产 SDK；stdio、HTTP、auth、resources/prompts/extensions 和 A2A 仍按未完成处理。
 
 ---
 
@@ -85,6 +117,7 @@ Primary Sources
 - [x] cached-decode parity against full recomputation
 - [x] sampling
 - [x] safetensors raw loader
+- [x] **公开真实 SmolLM2-135M checkpoint logits parity**
 - [x] structured tool calls
 - [x] filesystem / shell / Git / repo map / exact edit
 - [x] persistent event memory
@@ -92,13 +125,14 @@ Primary Sources
 - [x] external verifier
 - [x] coordinator primitive
 - [x] Git worktree primitive
+- [x] **minimal MCP client/server + tests**
 
-## P0：必须优先完成
+## P0：当前基础设施优先项
 
-- [ ] **公开真实 checkpoint logits parity**
-- [ ] minimal MCP client/server + tests
-- [ ] 统一 fast CPU CI
 - [ ] 自动生成目录/质量数据，消除 README 漂移
+- [ ] source-audit / link-check 进入 CI
+- [ ] Theory ↔ Code ↔ Paper 三向索引
+- [ ] 当前 fast CPU CI 完成 correctness-lint 收敛
 
 ## P1：模型系统
 
@@ -109,6 +143,7 @@ Primary Sources
 - [ ] Chunked Prefill
 - [ ] Speculative Decoding
 - [ ] Grammar-level Constrained Decoding
+- [ ] 更多公开模型族 checkpoint parity matrix
 
 ## P1：Coding / Agent
 
@@ -121,6 +156,8 @@ Primary Sources
 - [ ] test-selection verifier
 - [ ] parallel worktree workers
 - [ ] reviewer / merge agent
+- [ ] MCP stdio / HTTP / auth
+- [ ] minimal A2A runtime
 
 ## P2：General Agent
 

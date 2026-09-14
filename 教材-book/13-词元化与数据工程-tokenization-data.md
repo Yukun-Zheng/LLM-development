@@ -311,7 +311,7 @@ hash(document)
 一种做法是阈值过滤：
 
 $$
-\mathcal D'=\{x\in\mathcal D:q(x)>\tau\}.
+\mathcal D'=\{x\in\mathcal D:q(x)\gt \tau\}.
 $$
 
 但这会造成新的分布偏差。

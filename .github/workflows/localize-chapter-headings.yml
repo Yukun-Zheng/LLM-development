@@ -1,0 +1,44 @@
+name: Localize chapter headings
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/localize_headings.py'
+      - '.github/workflows/localize-chapter-headings.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  localize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库 / Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 配置 Python / Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 中文化章节标题 / Localize headings
+        run: python scripts/localize_headings.py
+
+      - name: 提交变更 / Commit changes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'Chapter headings already localized.'
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add book/*.md
+          git commit -m 'docs: use Chinese-first chapter headings'
+          git push

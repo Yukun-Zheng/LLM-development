@@ -43,6 +43,11 @@
 - [x] Git worktree manager primitive
 - [x] minimal public HTTP text browser
 - [x] deterministic scripted backend for tests
+- [x] typed task DAG / dependency-aware `PlanGraph`
+- [x] plan failure → downstream blocked-state propagation
+- [x] external verifier protocol + file / argv-command verifiers
+- [x] composite verification with structured evidence
+- [x] deterministic coordinator primitive over task graph
 
 ## 当前明确未实现
 
@@ -61,11 +66,12 @@
 - [ ] tree-sitter / LSP semantic code intelligence
 - [ ] unified diff parser
 - [ ] test selection / coverage-guided verifier
-- [ ] parallel worker scheduler
+- [ ] **parallel** worker scheduler
 - [ ] reviewer / merge agent
 - [ ] task checkpoint / resume across processes
 - [ ] SWE-bench evaluation harness
 - [ ] long-horizon general-agent benchmark
+- [ ] online Agentic RL / policy-parameter update
 
 ## 成熟度规则
 
@@ -76,3 +82,5 @@
 3. 有至少一个自动测试；
 4. 教材能解释对应数学或系统机制；
 5. 若声称与工业实现等价，必须有 parity / benchmark 证据。
+
+智能体主线理论入口：[`../../智能体-agent/README.md`](../../智能体-agent/README.md)

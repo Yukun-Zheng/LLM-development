@@ -232,7 +232,7 @@ LayerNorm 就是在 hidden dimension 内使用这些统计量。
 RMS：
 
 $$
-\operatorname{RMS}(x)
+\mathrm{RMS}(x)
 =\sqrt{\frac1n\sum_i x_i^2}.
 $$
 
@@ -301,7 +301,7 @@ $$
 若所有 logits 同时加常数 $c$：
 
 $$
-\operatorname{softmax}(z+c)=\operatorname{softmax}(z).
+\mathrm{softmax}(z+c)=\mathrm{softmax}(z).
 $$
 
 因此数值实现常减最大值：
@@ -322,14 +322,14 @@ $$
 定义：
 
 $$
-\operatorname{LSE}(z)=
+\mathrm{LSE}(z)=
 \log\sum_i e^{z_i}.
 $$
 
 稳定形式：
 
 $$
-\operatorname{LSE}(z)
+\mathrm{LSE}(z)
 =m+\log\sum_i e^{z_i-m},
 $$
 
@@ -343,7 +343,7 @@ LogSoftmax：
 
 $$
 \log p_i
-=z_i-\operatorname{LSE}(z).
+=z_i-\mathrm{LSE}(z).
 $$
 
 CrossEntropy 通常直接使用 log-softmax 的 fused/stable implementation，而不是先算概率再手动取 log。
@@ -423,7 +423,7 @@ $$
 方差：
 
 $$
-\operatorname{Var}(X)
+\mathrm{Var}(X)
 =
 \mathbb E[(X-\mathbb E[X])^2].
 $$
@@ -693,7 +693,7 @@ $$
 设：
 
 $$
-p=\operatorname{softmax}(z),
+p=\mathrm{softmax}(z),
 $$
 
 真实 one-hot label：
@@ -874,7 +874,7 @@ rank 是其线性独立行/列空间维度。
 若：
 
 $$
-\operatorname{rank}(W)=r,
+\mathrm{rank}(W)=r,
 $$
 
 则它可以被表示为低维因子乘积。
@@ -1236,13 +1236,13 @@ $$
 浮点数因为每一步都舍入：
 
 $$
-\operatorname{fl}(\operatorname{fl}(a+b)+c)
+\mathrm{fl}(\mathrm{fl}(a+b)+c)
 $$
 
 可能不等于：
 
 $$
-\operatorname{fl}(a+\operatorname{fl}(b+c)).
+\mathrm{fl}(a+\mathrm{fl}(b+c)).
 $$
 
 所以：
@@ -1381,7 +1381,7 @@ $$
 手算：
 
 $$
-\operatorname{softmax}([1,2,3]).
+\mathrm{softmax}([1,2,3]).
 $$
 
 再手算 temperature $T=0.5,2$ 的结果，比较 entropy。

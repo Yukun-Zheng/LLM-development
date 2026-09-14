@@ -9,7 +9,7 @@
 预训练把大量统计规律压缩进参数：
 
 $$
-\theta\leftarrow\operatorname{Train}(D).
+\theta\leftarrow\mathrm{Train}(D).
 $$
 
 但参数记忆天然存在问题：
@@ -83,7 +83,7 @@ $$
 常见相似度：
 
 $$
-\operatorname{cos}(q,d_i)
+\mathrm{cos}(q,d_i)
 =\frac{q^Td_i}{\|q\|\|d_i\|}.
 $$
 

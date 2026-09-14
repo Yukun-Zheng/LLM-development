@@ -57,13 +57,13 @@ $$
 再得到 routing score：
 
 $$
-p_i=\operatorname{softmax}(z)_i.
+p_i=\mathrm{softmax}(z)_i.
 $$
 
 只选择 top-$k$ experts：
 
 $$
-\mathcal T(x)=\operatorname{TopK}(p,k).
+\mathcal T(x)=\mathrm{TopK}(p,k).
 $$
 
 输出：

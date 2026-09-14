@@ -25,11 +25,11 @@ flowchart TD
 用公式表示 Pre-Norm block：
 
 $$
-H'=H+\operatorname{Attn}(\operatorname{Norm}(H)),
+H'=H+\mathrm{Attn}(\mathrm{Norm}(H)),
 $$
 
 $$
-H''=H'+\operatorname{FFN}(\operatorname{Norm}(H')).
+H''=H'+\mathrm{FFN}(\mathrm{Norm}(H')).
 $$
 
 与原始 Transformer 相比，现代 LLM 常见变化包括：
@@ -61,20 +61,20 @@ $$
 $$
 
 $$
-\operatorname{LN}(x)_i
+\mathrm{LN}(x)_i
 =\gamma_i\frac{x_i-\mu}{\sqrt{\sigma^2+\epsilon}}+\beta_i.
 $$
 
 RMSNorm 删除了显式均值中心化，使用均方根：
 
 $$
-\operatorname{RMS}(x)
+\mathrm{RMS}(x)
 =\sqrt{\frac1d\sum_i x_i^2+\epsilon},
 $$
 
 $$
-\operatorname{RMSNorm}(x)_i
-=\gamma_i\frac{x_i}{\operatorname{RMS}(x)}.
+\mathrm{RMSNorm}(x)_i
+=\gamma_i\frac{x_i}{\mathrm{RMS}(x)}.
 $$
 
 因此它不做：
@@ -98,7 +98,7 @@ $$
 则：
 
 $$
-\operatorname{RMS}(x)
+\mathrm{RMS}(x)
 =\sqrt{\frac{9+16}{2}}
 =\sqrt{12.5}.
 $$
@@ -106,7 +106,7 @@ $$
 所以：
 
 $$
-\operatorname{RMSNorm}(x)
+\mathrm{RMSNorm}(x)
 =\frac{[3,4]}{\sqrt{12.5}}.
 $$
 
@@ -119,13 +119,13 @@ $$
 Post-Norm：
 
 $$
-y=\operatorname{Norm}(x+F(x)).
+y=\mathrm{Norm}(x+F(x)).
 $$
 
 Pre-Norm：
 
 $$
-y=x+F(\operatorname{Norm}(x)).
+y=x+F(\mathrm{Norm}(x)).
 $$
 
 Pre-Norm 中 residual path 更接近恒等映射：
@@ -145,7 +145,7 @@ $$
 原始 FFN：
 
 $$
-\operatorname{FFN}(x)=W_2\operatorname{ReLU}(W_1x).
+\mathrm{FFN}(x)=W_2\mathrm{ReLU}(W_1x).
 $$
 
 现代 LLM 常使用 gated linear unit 变体。
@@ -153,24 +153,24 @@ $$
 Swish / SiLU：
 
 $$
-\operatorname{SiLU}(x)=x\sigma(x).
+\mathrm{SiLU}(x)=x\sigma(x).
 $$
 
 SwiGLU 可以写成：
 
 $$
-\operatorname{SwiGLU}(x)
+\mathrm{SwiGLU}(x)
 =
-\operatorname{SiLU}(xW_g)\odot(xW_u),
+\mathrm{SiLU}(xW_g)\odot(xW_u),
 $$
 
 再 down-project：
 
 $$
-\operatorname{FFN}(x)
+\mathrm{FFN}(x)
 =
 \left[
-\operatorname{SiLU}(xW_g)\odot(xW_u)
+\mathrm{SiLU}(xW_g)\odot(xW_u)
 \right]W_d.
 $$
 
@@ -535,7 +535,7 @@ S=QK^T,
 $$
 
 $$
-P=\operatorname{softmax}(S),
+P=\mathrm{softmax}(S),
 $$
 
 $$
@@ -587,7 +587,7 @@ $$
 softmax 看起来需要先知道全行最大值：
 
 $$
-\operatorname{softmax}(x_i)
+\mathrm{softmax}(x_i)
 =
 \frac{e^{x_i-m}}
 {\sum_j e^{x_j-m}},

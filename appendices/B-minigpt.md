@@ -99,7 +99,7 @@ $$
 代码实现：
 
 $$
-\operatorname{RMSNorm}(x)
+\mathrm{RMSNorm}(x)
 =
 \gamma\odot
 \frac{x}{\sqrt{\frac{1}{C}\sum_{i=1}^{C}x_i^2+\epsilon}}.
@@ -108,11 +108,11 @@ $$
 与 LayerNorm 相比，RMSNorm 不减均值，只按 root mean square 缩放。教材采用 Pre-Norm：
 
 $$
-x' = x + \operatorname{Attention}(\operatorname{Norm}(x)),
+x' = x + \mathrm{Attention}(\mathrm{Norm}(x)),
 $$
 
 $$
-y = x' + \operatorname{MLP}(\operatorname{Norm}(x')).
+y = x' + \mathrm{MLP}(\mathrm{Norm}(x')).
 $$
 
 这样你能清楚看到 residual stream 是贯穿整个 Transformer 的“主干状态”，attention 与 MLP 更像不断写回主干的两个计算模块。
@@ -166,7 +166,7 @@ $$
 然后施加 causal mask：位置 $t$ 不能读取 $t+1,t+2,\ldots$。
 
 $$
-A=\operatorname{softmax}(S+M),
+A=\mathrm{softmax}(S+M),
 $$
 
 $$
@@ -232,9 +232,9 @@ $$
 每个 Transformer block 还有逐 token 的前馈网络。教材采用：
 
 $$
-\operatorname{SwiGLU}(x)
+\mathrm{SwiGLU}(x)
 =
-W_{down}\left[\operatorname{SiLU}(W_gx)\odot(W_ux)\right].
+W_{down}\left[\mathrm{SiLU}(W_gx)\odot(W_ux)\right].
 $$
 
 Attention 负责 token 间的信息交换；MLP/FFN 在每个位置上做非线性变换。二者在计算图中的角色不同。
@@ -263,7 +263,7 @@ $$
 对每个位置：
 
 $$
-p(x_{t+1}\mid x_{\le t})=\operatorname{softmax}(Z_t).
+p(x_{t+1}\mid x_{\le t})=\mathrm{softmax}(Z_t).
 $$
 
 训练标签就是输入序列向右平移一位：

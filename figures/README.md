@@ -82,9 +82,9 @@ flowchart LR
 公式：
 
 $$
-\operatorname{Attention}(Q,K,V)
+\mathrm{Attention}(Q,K,V)
 =
-\operatorname{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}+M\right)V.
+\mathrm{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}+M\right)V.
 $$
 
 **主要来源**：Vaswani et al., 2017, https://arxiv.org/abs/1706.03762

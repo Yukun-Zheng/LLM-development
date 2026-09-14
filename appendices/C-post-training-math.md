@@ -144,7 +144,7 @@ L^{CLIP}(\theta)
 \left[
 \min\left(
  r_t(\theta)\hat A_t,
- \operatorname{clip}(r_t(\theta),1-\epsilon,1+\epsilon)\hat A_t
+ \mathrm{clip}(r_t(\theta),1-\epsilon,1+\epsilon)\hat A_t
 \right)
 \right],
 $$
@@ -262,8 +262,8 @@ $$
 $$
 \hat A_i
 =
-\frac{r_i-\operatorname{mean}(r_1,\ldots,r_G)}
-{\operatorname{std}(r_1,\ldots,r_G)+\epsilon}.
+\frac{r_i-\mathrm{mean}(r_1,\ldots,r_G)}
+{\mathrm{std}(r_1,\ldots,r_G)+\epsilon}.
 $$
 
 然后仍使用 importance ratio / clipping 约束更新幅度，并通常加入 KL regularization。
@@ -304,7 +304,7 @@ Reasoning 模型时代的关键变化，是大量任务存在便宜、可靠、�
 $$
 r(y)=
 \begin{cases}
-1,&\operatorname{answer}(y)=a^*\\
+1,&\mathrm{answer}(y)=a^*\\
 0,&\text{otherwise}
 \end{cases}
 $$

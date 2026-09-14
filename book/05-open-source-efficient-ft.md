@@ -369,7 +369,7 @@ $$
 最简单 uniform quantization：
 
 $$
-q=\operatorname{round}\left(\frac{x-z}{s}\right),
+q=\mathrm{round}\left(\frac{x-z}{s}\right),
 $$
 
 反量化：

@@ -123,7 +123,7 @@ $$
 subject to：
 
 $$
-\mathbb E[\operatorname{Cost}(c)]\le B,
+\mathbb E[\mathrm{Cost}(c)]\le B,
 $$
 
 其中 $c(x)$ 是为输入 $x$ 分配的计算预算。

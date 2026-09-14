@@ -146,7 +146,7 @@ $$
 再做行方向 softmax：
 
 $$
-A=\operatorname{softmax}(S).
+A=\mathrm{softmax}(S).
 $$
 
 最终：
@@ -194,13 +194,13 @@ $$
 其方差会随 $d_k$ 增长，约为：
 
 $$
-\operatorname{Var}(q\cdot k)\propto d_k.
+\mathrm{Var}(q\cdot k)\propto d_k.
 $$
 
 若不缩放，维度大时 score 的绝对值会很大，softmax 很容易进入极尖锐区域：
 
 $$
-\operatorname{softmax}([0,1,20])\approx[0,0,1],
+\mathrm{softmax}([0,1,20])\approx[0,0,1],
 $$
 
 导致梯度变差。
@@ -274,15 +274,15 @@ $$
 单头 attention 只有一套相似性空间。Multi-Head Attention（MHA）将 hidden dimension 分成多个子空间：
 
 $$
-\operatorname{head}_i=
-\operatorname{Attention}(XW_i^Q,XW_i^K,XW_i^V).
+\mathrm{head}_i=
+\mathrm{Attention}(XW_i^Q,XW_i^K,XW_i^V).
 $$
 
 再拼接：
 
 $$
-\operatorname{MHA}(X)=
-\operatorname{Concat}(\operatorname{head}_1,\ldots,\operatorname{head}_h)W^O.
+\mathrm{MHA}(X)=
+\mathrm{Concat}(\mathrm{head}_1,\ldots,\mathrm{head}_h)W^O.
 $$
 
 在 batch 形式中：
@@ -328,7 +328,7 @@ $$
 attention 变成：
 
 $$
-A=\operatorname{softmax}\left(
+A=\mathrm{softmax}\left(
 \frac{QK^\top}{\sqrt{d_k}}+M
 \right).
 $$
@@ -389,7 +389,7 @@ $$
 每个 Transformer block 通常还包含逐 token 的前馈网络：
 
 $$
-\operatorname{FFN}(x)=W_2\sigma(W_1x+b_1)+b_2.
+\mathrm{FFN}(x)=W_2\sigma(W_1x+b_1)+b_2.
 $$
 
 原 Transformer 用 ReLU，hidden expansion 通常把维度从 $d$ 放大到 $d_{ff}$，再投影回来。
@@ -427,13 +427,13 @@ $$
 原 Transformer 常写作 Post-LN：
 
 $$
-y=\operatorname{LN}(x+F(x)).
+y=\mathrm{LN}(x+F(x)).
 $$
 
 后来很多 LLM 更偏好 Pre-Norm：
 
 $$
-y=x+F(\operatorname{Norm}(x)).
+y=x+F(\mathrm{Norm}(x)).
 $$
 
 Pre-Norm 通常更利于深网络稳定训练。现代 LLM 还大量使用 RMSNorm；详见 Part IV。
@@ -847,7 +847,7 @@ flowchart LR
 4. Self-attention 的核心是：
 
 $$
-\operatorname{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V.
+\mathrm{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V.
 $$
 
 5. GPT 使用 causal mask，因此适合自回归生成；BERT 使用双向 encoder，更适合理解与表示任务。

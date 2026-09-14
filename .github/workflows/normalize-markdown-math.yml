@@ -1,0 +1,45 @@
+name: Normalize Markdown math
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.md'
+      - 'scripts/normalize_math.py'
+      - '.github/workflows/normalize-markdown-math.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Normalize math delimiters
+        run: python scripts/normalize_math.py
+
+      - name: Commit normalized Markdown
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No math-format changes required.'
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- '*.md'
+          git commit -m 'style: normalize GitHub math rendering'
+          git push

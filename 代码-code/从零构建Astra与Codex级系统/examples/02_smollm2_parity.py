@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Numerically compare our from-scratch runtime with a real public checkpoint.
 
 This script deliberately uses Transformers only as the independent reference
 oracle. Our forward pass and weight loading come from astra_codex.
 """
+
+from __future__ import annotations
 
 import argparse
 import json

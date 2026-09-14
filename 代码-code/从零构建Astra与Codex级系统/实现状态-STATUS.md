@@ -79,7 +79,7 @@ GitHub Actions 受测 CPU float32 / eager-reference 结果：
 
 ### OpenAI Codex Source-Anatomy / Clean-room Runtime
 
-官方源码课程：[`../../../Codex源码解剖-codex-anatomy/README.md`](../../../Codex源码解剖-codex-anatomy/README.md)
+官方源码课程：[`../../Codex源码解剖-codex-anatomy/README.md`](../../Codex源码解剖-codex-anatomy/README.md)
 
 当前从公开 `openai/codex` 源码提取行为契约后，已经独立实现：
 
@@ -170,4 +170,4 @@ Fast CI 使用 **CPU-only PyTorch + pip cache**；真实 checkpoint parity 使�
 5. 若声称与工业/公开实现等价，必须有 parity / benchmark 证据。
 
 智能体通识：[`../../智能体-agent/README.md`](../../智能体-agent/README.md)  
-Codex 官方源码解剖：[`../../../Codex源码解剖-codex-anatomy/README.md`](../../../Codex源码解剖-codex-anatomy/README.md)
+Codex 官方源码解剖：[`../../Codex源码解剖-codex-anatomy/README.md`](../../Codex源码解剖-codex-anatomy/README.md)

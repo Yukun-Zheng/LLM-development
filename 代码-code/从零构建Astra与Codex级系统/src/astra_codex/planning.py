@@ -28,17 +28,19 @@ class PlanStep:
 class PlanGraph:
     """Small inspectable DAG for closed-loop agent planning.
 
-    The plan is intentionally data, not prose.  A caller can persist, inspect,
+    The plan is intentionally data, not prose. A caller can persist, inspect,
     re-plan, or schedule this structure without scraping a natural-language
     checklist out of a model response.
     """
 
     def __init__(self, steps: Iterable[PlanStep]) -> None:
-        self.steps = {step.id: step for step in steps}
-        if not self.steps:
+        step_list = list(steps)
+        if not step_list:
             raise ValueError("plan must contain at least one step")
-        if len(self.steps) != len(list(self.steps.values())):
+        ids = [step.id for step in step_list]
+        if len(ids) != len(set(ids)):
             raise ValueError("duplicate step ids")
+        self.steps = {step.id: step for step in step_list}
         self._validate_dependencies()
         self._validate_acyclic()
 

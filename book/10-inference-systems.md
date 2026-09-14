@@ -533,7 +533,7 @@ rejected: cup
 若平均接受长度为：
 
 $$
-E[K_{accept}]>1,
+E[K_{accept}]\gt 1,
 $$
 
 就减少了昂贵 target model 串行调用次数。
@@ -599,11 +599,11 @@ p_i=
 {\sum_j\exp(z_j/T)}.
 $$
 
-### $T<1$
+### $T\lt 1$
 
 分布更尖锐。
 
-### $T>1$
+### $T\gt 1$
 
 分布更平。
 
@@ -723,7 +723,7 @@ Disaggregation 后必须把 Prefill 生成的大量 KV Cache 传到 Decode worke
 
 $$
 \text{compute saved}
->
+\gt 
 \text{KV transfer overhead}.
 $$
 
@@ -764,11 +764,11 @@ $$
 subject to：
 
 $$
-TTFT<P99_{target},
+TTFT\lt P99_{target},
 $$
 
 $$
-TPOT<P99_{target}.
+TPOT\lt P99_{target}.
 $$
 
 ---

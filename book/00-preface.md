@@ -31,7 +31,7 @@ flowchart TB
 
 $$
 \mathcal{L}_{\text{LM}}
-= -\sum_{t=1}^{T}\log p_\theta(x_t\mid x_{<t}).
+= -\sum_{t=1}^{T}\log p_\theta(x_t\mid x_{\lt t}).
 $$
 
 但“今天的大模型”并不只经历这一项损失。一个现代模型的生命周期往往包含：

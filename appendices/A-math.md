@@ -259,7 +259,7 @@ $$
 $$
 p(x_1,\ldots,x_T)
 =
-\prod_t p(x_t|x_{<t}).
+\prod_t p(x_t|x_{\lt t}).
 $$
 
 取 log：
@@ -267,7 +267,7 @@ $$
 $$
 \log p(x_{1:T})
 =
-\sum_t\log p(x_t|x_{<t}).
+\sum_t\log p(x_t|x_{\lt t}).
 $$
 
 乘法变加法，更稳定也更方便优化。
@@ -293,7 +293,7 @@ $$
 性质：
 
 $$
-p_i>0,
+p_i\gt 0,
 \qquad
 \sum_i p_i=1.
 $$
@@ -381,7 +381,7 @@ $$
 $$
 p(x_1,\ldots,x_T)
 =
-\prod_{t=1}^Tp(x_t|x_{<t}).
+\prod_{t=1}^Tp(x_t|x_{\lt t}).
 $$
 
 这不是 Transformer 特有，而是概率分解本身。
@@ -726,7 +726,7 @@ $$
 则：
 
 $$
-\frac{\partial L}{\partial z_i}=p_i-1<0,
+\frac{\partial L}{\partial z_i}=p_i-1\lt 0,
 $$
 
 gradient descent 会把正确 logit 往上推。
@@ -740,7 +740,7 @@ $$
 则：
 
 $$
-\frac{\partial L}{\partial z_j}=p_j>0,
+\frac{\partial L}{\partial z_j}=p_j\gt 0,
 $$
 
 更新会把错误 logit 往下压。
@@ -954,7 +954,7 @@ $$
 如果最大特征值绝对值：
 
 $$
-|\lambda_{max}|>1,
+|\lambda_{max}|\gt 1,
 $$
 
 某些方向可能指数增长；若都小于 1，则衰减。
@@ -1011,7 +1011,7 @@ $$
 LLM 生成可以写：
 
 $$
-s_t=(x,y_{<t}),
+s_t=(x,y_{\lt t}),
 $$
 
 $$
@@ -1099,8 +1099,8 @@ $$
 
 解释：
 
-- $A_t>0$：提高这个动作 log-prob；
-- $A_t<0$：降低这个动作 log-prob。
+- $A_t\gt 0$：提高这个动作 log-prob；
+- $A_t\lt 0$：降低这个动作 log-prob。
 
 这正是 reasoning RL 中“成功轨迹以后更容易被生成”的数学核心之一。
 
@@ -1120,7 +1120,7 @@ $$
 如果：
 
 $$
-r_t>1,
+r_t\gt 1,
 $$
 
 说明新 policy 更偏好这个动作。
@@ -1128,7 +1128,7 @@ $$
 如果：
 
 $$
-r_t<1,
+r_t\lt 1,
 $$
 
 说明新 policy 降低它概率。

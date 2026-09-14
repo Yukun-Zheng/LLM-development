@@ -204,7 +204,7 @@ V [B,h,T,dh] ────────────┘
 语言模型训练的目标是：
 
 $$
-p(x_1,\ldots,x_T)=\prod_{t=1}^{T}p(x_t\mid x_{<t}).
+p(x_1,\ldots,x_T)=\prod_{t=1}^{T}p(x_t\mid x_{\lt t}).
 $$
 
 因此预测第 $t$ 个位置时，模型只能看到过去。

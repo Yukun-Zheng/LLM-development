@@ -321,7 +321,7 @@ $$
 M_{ij}=
 \begin{cases}
 0,&j\le i\\
--\infty,&j>i.
+-\infty,&j\gt i.
 \end{cases}
 $$
 
@@ -598,7 +598,7 @@ GPT‑2 的论文标题就是《Language Models are Unsupervised Multitask Learn
 它仍然做一个极其朴素的事情：
 
 $$
-\max_\theta \sum_t \log p_\theta(x_t\mid x_{<t}).
+\max_\theta \sum_t \log p_\theta(x_t\mid x_{\lt t}).
 $$
 
 变化主要来自：
@@ -784,7 +784,7 @@ $$
 为了很好地预测：
 
 $$
-p(x_t\mid x_{<t}),
+p(x_t\mid x_{\lt t}),
 $$
 
 模型往往需要隐式估计对未来有帮助的潜在因素，例如：
@@ -800,9 +800,9 @@ $$
 从信息论直觉看，如果某个潜变量能显著减少未来 token 的条件熵：
 
 $$
-H(X_t\mid X_{<t},Z)
-<
-H(X_t\mid X_{<t}),
+H(X_t\mid X_{\lt t},Z)
+\lt 
+H(X_t\mid X_{\lt t}),
 $$
 
 那么学习某种关于 $Z$ 的内部表示可能有助于降低语言建模 loss。

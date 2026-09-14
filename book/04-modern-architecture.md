@@ -315,7 +315,7 @@ relative-position-aware attention score
 如果模型训练时主要见过：
 
 $$
-0\le pos < 4096,
+0\le pos \lt  4096,
 $$
 
 测试突然使用：
@@ -413,7 +413,7 @@ $$
 Grouped-Query Attention（GQA）设置：
 
 $$
-1<h_{kv}<h_q.
+1\lt h_{kv}\lt h_q.
 $$
 
 例如：

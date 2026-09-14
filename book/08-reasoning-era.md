@@ -475,13 +475,13 @@ $$
 高于组平均：
 
 $$
-A_i>0,
+A_i\gt 0,
 $$
 
 低于组平均：
 
 $$
-A_i<0.
+A_i\lt 0.
 $$
 
 然后使用类似 PPO 的 clipped policy-ratio objective，并配合 KL regularization。

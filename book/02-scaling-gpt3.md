@@ -371,7 +371,7 @@ Llama 3 把 vocabulary 扩展到 128K，并在官方模型卡中说明其预训�
 若平均 token negative log-likelihood 为：
 
 $$
-L=-\frac1T\sum_t\log p(x_t\mid x_{<t}),
+L=-\frac1T\sum_t\log p(x_t\mid x_{\lt t}),
 $$
 
 perplexity 定义为：
@@ -589,7 +589,7 @@ GPT‑3 证明了 scale + ICL 的巨大潜力，同时暴露一个关键缺陷�
 最大化：
 
 $$
-\log p_\theta(x_t\mid x_{<t})
+\log p_\theta(x_t\mid x_{\lt t})
 $$
 
 只要求模型拟合这些文本分布，而没有一个变量明确说：

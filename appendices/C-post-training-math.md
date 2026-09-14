@@ -11,7 +11,7 @@
 $$
 \mathcal L_{\mathrm{pretrain}}
 =-\mathbb E_{x\sim\mathcal D}
-\sum_t\log\pi_\theta(x_t\mid x_{<t}).
+\sum_t\log\pi_\theta(x_t\mid x_{\lt t}).
 $$
 
 它学习“互联网/语料中什么文本更可能出现”。但用户真正希望的是：
@@ -34,7 +34,7 @@ $$
 
 $$
 \mathcal L_{\mathrm{SFT}}
-=-\sum_{t=1}^{T}\log \pi_\theta(y_t\mid x,y_{<t}).
+=-\sum_{t=1}^{T}\log \pi_\theta(y_t\mid x,y_{\lt t}).
 $$
 
 与预训练的区别主要不在数学形式，而在**数据分布和意图**：

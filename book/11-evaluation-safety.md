@@ -47,7 +47,7 @@ $$
 语言模型 loss：
 
 $$
-L=-\frac1T\sum_t\log p(x_t|x_{<t}).
+L=-\frac1T\sum_t\log p(x_t|x_{\lt t}).
 $$
 
 perplexity：
@@ -529,7 +529,7 @@ $$
 subject to：
 
 $$
-\text{error rate}<\epsilon.
+\text{error rate}\lt \epsilon.
 $$
 
 ---

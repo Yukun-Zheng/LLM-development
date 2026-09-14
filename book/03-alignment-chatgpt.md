@@ -10,7 +10,7 @@
 
 $$
 \mathcal L_{\text{LM}}
-=-\sum_t\log p_\theta(x_t\mid x_{<t}).
+=-\sum_t\log p_\theta(x_t\mid x_{\lt t}).
 $$
 
 这个目标只要求：**真实语料里的下一个 token 概率尽可能高。**
@@ -64,7 +64,7 @@ $$
 $$
 \mathcal L_{\text{SFT}}
 =-\sum_{t\in \text{response}}
-\log p_\theta(y_t\mid x,y_{<t}).
+\log p_\theta(y_t\mid x,y_{\lt t}).
 $$
 
 也就是说，**SFT（Supervised Fine-Tuning）本身并不神秘**。它仍然是在做 teacher forcing，只不过数据分布从“互联网原始文本”变成了“人类希望助手如何响应指令”的示范。
@@ -245,7 +245,7 @@ $$
 形式上：
 
 $$
-s_t=(x,y_{<t}),
+s_t=(x,y_{\lt t}),
 $$
 
 $$
@@ -254,7 +254,7 @@ $$
 
 $$
 \pi_\theta(a_t\mid s_t)
-=p_\theta(y_t\mid x,y_{<t}).
+=p_\theta(y_t\mid x,y_{\lt t}).
 $$
 
 最终得到：
@@ -506,7 +506,7 @@ $$
 DPO 希望：
 
 $$
-\Delta_w>\Delta_l.
+\Delta_w\gt \Delta_l.
 $$
 
 也就是：

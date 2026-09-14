@@ -46,7 +46,7 @@ $$
 逐渐扩大为一个长程闭环系统：
 
 $$
-\pi_\theta(a_t\mid o_{\le t},a_{<t},m_t),
+\pi_\theta(a_t\mid o_{\le t},a_{\lt t},m_t),
 $$
 
 其中 $m_t$ 还可能包含外部 memory、检索结果、文件状态和工具执行历史。

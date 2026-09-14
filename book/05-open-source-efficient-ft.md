@@ -533,7 +533,7 @@ Double Quantization 再量化这些 quantization constants，从而继续减少�
 继续做 LM objective：
 
 $$
--\log p(x_t|x_{<t}).
+-\log p(x_t|x_{\lt t}).
 $$
 
 数据可能换成领域 corpus。

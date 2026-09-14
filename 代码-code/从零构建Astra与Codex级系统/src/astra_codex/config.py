@@ -7,7 +7,7 @@ from dataclasses import dataclass
 class ModelConfig:
     """Modern decoder-only Transformer configuration.
 
-    The defaults are intentionally tiny enough for CPU unit tests.  Nothing in
+    The defaults are intentionally tiny enough for CPU unit tests. Nothing in
     the implementation assumes frontier-scale dimensions.
     """
 
@@ -19,6 +19,7 @@ class ModelConfig:
     intermediate_size: int = 768
     max_seq_len: int = 2048
     rope_theta: float = 10_000.0
+    rope_interleaved: bool = False
     rms_norm_eps: float = 1e-6
     tie_embeddings: bool = True
 

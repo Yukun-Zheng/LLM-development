@@ -5,6 +5,9 @@
 > **最高写作规范**：[`00-教材方法论与证据标准-source-first.md`](00-教材方法论与证据标准-source-first.md)  
 > 本书采用 **Source-First / Mechanism-First / Reproducibility-First** 原则：重要结论优先回到原论文、官方技术报告、官方代码、模型卡、系统卡、数据集与 benchmark 原始资料，并区分“原始主张”“后续证据”“当前较稳健理解”。
 >
+> **智能体独立主线**：[`../智能体-agent/README.md`](../智能体-agent/README.md)  
+> 智能体不再只作为第六篇中的一个小节，而是与 LLM 模型主线并行的第二条主线：**Agent Foundations → Tools & Environments → Planning / Reflection / Verification → Memory → Coding Agents → Multi-Agent → Evaluation / Safety → Agentic RL**。模型主线回答“模型如何形成能力”，智能体主线回答“模型如何进入环境并长期完成真实任务”。
+>
 > **最终工程终点**：[`18-从零构建Astra与Codex级系统-capstone.md`](18-从零构建Astra与Codex级系统-capstone.md)  
 > 本书最终不是停在“理解 LLM”，而是要求读者从空目录开始，把现代模型运行时、推理引擎、工具运行时、Coding Agent、通用 Agent、长程记忆、Computer Use、多智能体与评测系统一步一步亲手写出来。训练权重本身不作为要求，但**纯代码系统必须能够真实运行**。
 >
@@ -35,7 +38,23 @@
 | 第十六篇 | **硬件、Kernel 与基础设施** | Roofline、Tensor Core、FlashAttention、NCCL、ZeRO、vLLM | [`16-硬件内核与基础设施-hardware-kernels.md`](16-硬件内核与基础设施-hardware-kernels.md) |
 | 第十七篇 | **闭源前沿模型与证据边界** | System Card、Model Card、Evidence Boundary、Frontier Models | [`17-闭源前沿模型与证据边界-frontier-closed-models.md`](17-闭源前沿模型与证据边界-frontier-closed-models.md) |
 | 第十八篇 | **从零构建 Astra-class 通用智能系统与 Codex-class 编程智能体** | Model Runtime、KV Cache、Tool Runtime、Coding Agent、Computer Use、Multi-Agent | [`18-从零构建Astra与Codex级系统-capstone.md`](18-从零构建Astra与Codex级系统-capstone.md) |
+| 智能体分支 | **智能体系统独立主线** | Agent Foundations、Tools、Planning、Memory、Coding、Multi-Agent、Agentic RL | [`../智能体-agent/README.md`](../智能体-agent/README.md) |
 | 蓝图 | **全书扩展蓝图 v2** | Full LLM Stack、Labs、L2/L3 Maturity | [`99-全书扩展蓝图-v2.md`](99-全书扩展蓝图-v2.md) |
+
+## 为什么智能体要成为独立主线
+
+原来的第六篇负责解释“模型走出参数”的历史转折，但不足以承载完整 Agent 学科。现在单独拆出 `智能体-agent/`，因为以下问题已经形成自己的理论与工程体系：
+
+1. **状态与环境**：state / observation / action / policy / stop condition；
+2. **工具协议**：schema、执行、权限、错误 observation；
+3. **规划与验证**：task DAG、replan、verifier、failure recovery；
+4. **长期状态**：memory、retrieval、compaction、checkpoint / resume；
+5. **编程智能体**：repo map、edit、test、Git、worktree；
+6. **多智能体**：task graph、workers、review、merge、communication cost；
+7. **评测与安全**：WebArena、OSWorld、SWE-bench、prompt injection、least privilege；
+8. **Agentic RL**：从环境轨迹和 verifier 中学习。
+
+因此智能体既是 LLM 的延伸，也是一个与系统、软件工程、强化学习、人机交互和安全交叉的独立研究对象。
 
 ## 为什么继续扩展到第十三至十八篇
 
@@ -54,26 +73,27 @@
 
 如果目标是**系统掌握大模型发展史、理论与完整代码实现**，建议：
 
-`00 方法论 → 00 导读 → 01 → 13 → 04 → 02 → 14 → 03 → 05 → 07 → 08 → 06 → 09 → 16 → 10 → 15 → 11 → 17 → 12 → 18`
+`00 方法论 → 00 导读 → 01 → 13 → 04 → 02 → 14 → 03 → 05 → 07 → 08 → 06 → 智能体 A1-A8 → 09 → 16 → 10 → 15 → 11 → 17 → 12 → 18`
 
 如果目标是快速补齐某条技术线，可以按主题跳读：
 
 - **Transformer 与模型核心代码**：01 → 04 → 13 → 18
 - **GPT‑3、Scaling 与数据**：02 → 13 → 14 → 09
 - **ChatGPT 与后训练**：03 → 08
-- **RAG、多模态与智能体**：06 → 08 → 12 → 18
+- **RAG、多模态与智能体**：06 → 智能体 A1-A8 → 12 → 18
 - **训练与推理系统工程**：09 → 16 → 10 → 18
 - **模型内部机制**：01 → 04 → 15
 - **闭源前沿模型研究**：08 → 17 → 12
-- **Codex-class 编程智能体**：01 → 04 → 10 → 06 → 16 → 18
-- **Astra-class 通用智能体**：06 → 08 → 10 → 12 → 17 → 18
-- **评测、安全与可靠性**：11 → 15 → 17 → 18
+- **Codex-class 编程智能体**：智能体 A1 → A2 → A3 → A4 → A5 → A6 → A7 → 18
+- **Astra-class 通用智能体**：智能体 A1 → A2 → A3 → A4 → A6 → A7 → A8 → 12 → 18
+- **评测、安全与可靠性**：11 → 智能体 A7 → 15 → 17 → 18
 
 ## 原始资料入口
 
 全书的统一一手资料地图见：
 
 - [`../参考文献-references/00-原始资料总索引-primary-sources.md`](../参考文献-references/00-原始资料总索引-primary-sources.md)
+- [`../参考文献-references/01-智能体原始资料-agent-sources.md`](../参考文献-references/01-智能体原始资料-agent-sources.md)
 - [`../参考文献-references/README.md`](../参考文献-references/README.md)
 
 ## 终极代码工程入口
@@ -92,6 +112,7 @@ tokenizer
 → context / memory
 → tool runtime
 → agent core
+→ planning / verification
 → Codex-class
 → Astra-class
 → multi-agent

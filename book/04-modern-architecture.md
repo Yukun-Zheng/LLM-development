@@ -1,4 +1,4 @@
-# Part IV　现代 LLM Block：RoPE、RMSNorm、SwiGLU、GQA、KV Cache 与 FlashAttention
+# 第四篇（Part IV）　现代 LLM Block：RoPE、RMSNorm、SwiGLU、GQA、KV Cache 与 FlashAttention
 
 > **本章主线**：今天常见的 decoder-only LLM 与 2017 年原始 Transformer 已经相当不同。本章不按模型名罗列，而是把一个现代 block 拆成可计算的数据流，区分“改变函数表达能力的架构设计”和“数学等价但显著降低硬件代价的系统设计”。
 

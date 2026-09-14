@@ -1,4 +1,4 @@
-# Part V　开放权重革命与高效适配：LLaMA、Mistral、LoRA、QLoRA、量化与蒸馏
+# 第五篇（Part V）　开放权重革命与高效适配：LLaMA、Mistral、LoRA、QLoRA、量化与蒸馏
 
 > **本章主线**：2023 年之后，大模型不再只是少数公司拥有的在线 API。开放权重模型把训练、微调、部署和架构研究扩散到整个社区；LoRA/QLoRA 又把“适配一个大模型”的门槛进一步降低。本章同时澄清一个经常混淆的概念：**open weights 不等于 open source。**
 

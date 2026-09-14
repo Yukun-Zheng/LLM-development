@@ -1,4 +1,4 @@
-# Part VIII　推理模型时代：CoT、Verifier、GRPO、RLVR 与 Test-Time Compute
+# 第八篇（Part VIII）　推理模型时代：CoT、Verifier、GRPO、RLVR 与 Test-Time Compute
 
 > **本章主线**：2022 年以后，“大模型推理”经历了三次明显变化：先用 prompt 诱导模型写中间步骤，再用采样/验证增加测试时计算，最后直接用强化学习塑造更有效的推理策略。2024–2026 年的关键变化，是 **scaling 不再只发生在 pretraining，训练期 reasoning RL 与测试期思考计算也开始成为新的扩展轴。**
 

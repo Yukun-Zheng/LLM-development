@@ -1,4 +1,4 @@
-# Part II　Scaling Laws、GPT‑3、In-Context Learning 与 Chinchilla：真正进入“大模型”时代
+# 第二篇（Part II）　Scaling Laws、GPT‑3、In-Context Learning 与 Chinchilla：真正进入“大模型”时代
 
 > **本章主线**：为什么 2020 年是一个分水岭？Scaling Laws 改变了研究组织方式，GPT‑3 把 in-context learning 推到主流视野，而 Chinchilla 又为什么迫使行业重新理解“更大”？
 

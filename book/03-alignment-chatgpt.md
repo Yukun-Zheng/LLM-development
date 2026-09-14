@@ -1,4 +1,4 @@
-# Part III　从 GPT‑3 到 ChatGPT：Instruction Tuning、RLHF 与偏好优化
+# 第三篇（Part III）　从 GPT‑3 到 ChatGPT：Instruction Tuning、RLHF 与偏好优化
 
 > **本章主线**：GPT‑3 已经“会很多东西”，为什么还不能直接成为好用的助手？Instruction tuning 改变了什么？RLHF 为什么需要 Reward Model 与 PPO？DPO 又为什么能绕过显式 RL？这一阶段真正把“语言模型”改造成了“遵循人类意图的助手”。
 

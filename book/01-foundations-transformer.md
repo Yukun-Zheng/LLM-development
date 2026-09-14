@@ -1,4 +1,4 @@
-# Part I　从 Seq2Seq 到 Transformer：大模型真正的技术起点
+# 第一篇（Part I）　从 Seq2Seq 到 Transformer：大模型真正的技术起点
 
 > **本章主线**：为什么 RNN/LSTM 式序列建模会遇到结构性瓶颈？Attention 最初解决的是什么问题？Transformer 为什么能成为大规模预训练的基础？GPT、BERT 又为什么沿两条不同路线分叉？
 

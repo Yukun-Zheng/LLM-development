@@ -1,4 +1,4 @@
-# Part VII　MoE 与中国大模型路线：从 GLM‑130B、Qwen 到 DeepSeek、Kimi 与 GLM‑5
+# 第七篇（Part VII）　MoE 与中国大模型路线：从 GLM‑130B、Qwen 到 DeepSeek、Kimi 与 GLM‑5
 
 > **本章主线**：中国大模型的发展不能被写成“国外模型的附录”。从百亿/千亿级预训练稳定性，到中英双语与开放权重生态，再到 MLA、DeepSeekMoE、Reasoning RL、Agentic Training、线性/稀疏注意力与超稀疏 MoE，中国团队逐步形成了自己的模型系统路线。本章先把 MoE 的数学讲清，再沿 2022–2026 的关键技术节点重走一次。
 >

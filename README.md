@@ -82,12 +82,14 @@ Reasoning / Diffusion   Scheduling / Compiler    Multi-Agent / Agentic RL
 | [`教材-book/`](教材-book/) | **模型科学与系统工程教材正文** |
 | [`智能体-agent/`](智能体-agent/) | **智能体独立主线** |
 | [`代码-code/`](代码-code/) | **从零实现代码与终极工程** |
-| [`附录-appendices/`](附录-appendices/) | 数学、MiniGPT、后训练数学等附录 |
+| [`原始论文-paper-notes/`](原始论文-paper-notes/) | **Paper Card + Claim Ledger：逐篇核验原始主张、公式、实验与后续证据** |
 | [`参考文献-references/`](参考文献-references/) | 原论文、官方技术报告、代码、Model/System Card 的证据地图 |
+| [`附录-appendices/`](附录-appendices/) | 数学、MiniGPT、后训练数学等附录 |
 | [`图表-figures/`](图表-figures/) | 作者重绘的数据流、机制图、时间线 |
-| [`工具-scripts/`](工具-scripts/) | 数学排版、来源审计、教材维护工具 |
+| [`工具-scripts/`](工具-scripts/) | 数学排版、来源审计、链接审计、教材维护工具 |
+| [`学习地图-MAP.md`](学习地图-MAP.md) | **Theory ↔ Code ↔ Paper ↔ Test 三向/四向索引** |
 | [`质量看板-QUALITY.md`](质量看板-QUALITY.md) | **全书成熟度与缺口审计** |
-| [`.github/`](.github/) | 自动测试与格式检查 |
+| [`.github/`](.github/) | 自动测试、真实 parity、证据与链接审计 |
 
 ---
 
@@ -116,7 +118,7 @@ Reasoning / Diffusion   Scheduling / Compiler    Multi-Agent / Agentic RL
 | 16 | 硬件、Kernel 与基础设施 |
 | 17 | 闭源前沿模型与证据边界 |
 | 18 | 从零构建 Astra-class / Codex-class 系统 |
-| 19 | **Post-Transformer：SSM、RWKV、Neural Memory 与混合架构** |
+| 19 | **Post-Transformer：SSM、Mamba、RWKV、Neural Memory 与混合架构** |
 | 20 | **Diffusion Language Models：非自回归语言建模** |
 
 详细目录：[`教材-book/README.md`](教材-book/README.md)
@@ -159,6 +161,8 @@ Causal GQA + SwiGLU
         ↓
 Decoder-only Transformer
         ↓
+Raw Safetensors / Public Checkpoint Mapping
+        ↓
 KV Cache / Prefill / Decode
         ↓
 Sampling / Structured Tool Call
@@ -167,19 +171,50 @@ Filesystem / Shell / Git / Repo Map / Edit
         ↓
 Agent Loop / Memory / Planning / Verification
         ↓
-Coding Agent / Worktree / Coordinator
+Minimal MCP / Coding Agent / Worktree / Coordinator
+```
+
+## 已跨过的两个关键门槛
+
+### 1. 真实公开 checkpoint parity
+
+`HuggingFaceTB/SmolLM2-135M` 的 raw public weights 已直接加载到我们自己写的 Transformer runtime，并在固定输入、CPU float32、HF eager reference 下得到：
+
+```json
+{
+  "max_abs": 0.0,
+  "mean_abs": 0.0,
+  "argmax_agreement": 1.0
+}
+```
+
+这证明当前受测配置不是“一个看起来像 Llama 的 toy model”，而能数值复现真实公开 Llama-family checkpoint 的 forward。
+
+### 2. Minimal MCP 已从零实现
+
+当前已有教学子集：
+
+```text
+JSON-RPC 2.0
+→ server/discover
+→ tools/list
+→ tools/call
+→ ToolRegistry adapter
+→ in-process transport
+→ client
+→ tests
 ```
 
 下一批关键里程碑：
 
-1. **公开真实 checkpoint logits parity**；
-2. minimal MCP client/server；
-3. Paged KV / Continuous Batching / Speculative Decoding；
+1. SDPA / FlashAttention parity；
+2. Paged KV / Prefix Cache / Continuous Batching / Speculative Decoding；
+3. MCP stdio/HTTP/auth + minimal A2A；
 4. tree-sitter / LSP / semantic patch；
-5. sandbox；
+5. permission manager + sandbox；
 6. Browser / Computer Use；
 7. parallel worktree workers + reviewer/merge；
-8. SWE-bench / long-horizon agent eval。
+8. SWE-bench / WebArena / OSWorld-style eval。
 
 ---
 
@@ -191,6 +226,9 @@ Coding Agent / Worktree / Coordinator
 
 - [`参考文献-references/00-原始资料总索引-primary-sources.md`](参考文献-references/00-原始资料总索引-primary-sources.md)
 - [`参考文献-references/01-智能体原始资料-agent-sources.md`](参考文献-references/01-智能体原始资料-agent-sources.md)
+- [`参考文献-references/02-PostTransformer与扩散语言模型原始资料.md`](参考文献-references/02-PostTransformer与扩散语言模型原始资料.md)
+
+更深一层是 [`原始论文-paper-notes/`](原始论文-paper-notes/)：核心论文开始建立 Paper Card 与稳定 Claim ID，用于记录“原论文到底声称什么、证据在哪里、后续是否修正”。第一张完整卡片已经覆盖 2017 Transformer。
 
 正文区分：
 
@@ -210,7 +248,34 @@ Coding Agent / Worktree / Coordinator
 
 ---
 
-# 七、学习标准
+# 七、自动化质量证据
+
+当前仓库自动化已经包括：
+
+```text
+Fast CPU CI
+├─ 26 tests passed
+└─ Ruff correctness lint passed
+
+Real Checkpoint Parity
+└─ SmolLM2-135M logits exact parity in tested setting
+
+Content Audit
+├─ 35 textbook/agent chapters audited for primary-source coverage
+├─ source report uploaded as artifact
+├─ 60 Markdown files audited
+└─ internal links PASS
+
+Math Normalization
+└─ GitHub MathJax compatibility auto-fix
+```
+
+质量总看板：[`质量看板-QUALITY.md`](质量看板-QUALITY.md)  
+跨层学习地图：[`学习地图-MAP.md`](学习地图-MAP.md)
+
+---
+
+# 八、学习标准
 
 任何核心概念最终都要求能经过五层：
 
@@ -220,7 +285,7 @@ Understand → Calculate → Implement → Reproduce → Research
 
 例如 KV Cache 不是“知道能加速”就算学完，而是应该做到：
 
-1. 推导缓存的 tensor shape 和显存占用；
+1. 推导缓存 tensor shape 和显存占用；
 2. 写 full recomputation；
 3. 写 incremental decode；
 4. 做 logits parity；
@@ -232,7 +297,7 @@ Understand → Calculate → Implement → Reproduce → Research
 
 ---
 
-# 八、最终毕业标准
+# 九、最终毕业标准
 
 给一个空目录，不依赖 LangChain 等 Agent 高层框架，也不把模型核心藏进 `AutoModelForCausalLM`，能够逐层构建：
 
@@ -242,7 +307,7 @@ Tokenizer
 → Weight Loader
 → Inference Engine
 → Structured Generation
-→ Tool Runtime
+→ Tool / Protocol Runtime
 → Context / Memory
 → Planning / Verification
 → Coding Agent

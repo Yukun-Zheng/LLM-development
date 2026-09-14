@@ -146,7 +146,14 @@ GitHub Actions 实测：
 
 当前单元测试已经覆盖 model/cache、tokenizer、structured tools、editing/memory/repo map、planning/verification/coordinator、public-checkpoint adapter 与 minimal MCP。
 
-Fast CI 使用 **CPU-only PyTorch**，避免普通单元测试无意义下载整套 CUDA wheel；真实 checkpoint parity 使用独立 workflow 并缓存公开权重。
+最新 Fast CI 真实结果：
+
+```text
+26 passed, 1 warning
+Ruff correctness lint: All checks passed
+```
+
+Fast CI 使用 **CPU-only PyTorch + pip cache**，避免普通单元测试无意义下载整套 CUDA wheel；真实 checkpoint parity 使用独立 workflow 并缓存公开权重。
 
 ## 成熟度规则
 

@@ -126,13 +126,24 @@ JSON-RPC 2.0
 - [x] coordinator primitive
 - [x] Git worktree primitive
 - [x] **minimal MCP client/server + tests**
+- [x] **Fast CPU CI：CPU-only PyTorch + pytest + Ruff correctness lint**
+
+## 自动化证据
+
+最新 Fast CI 已实际通过：
+
+```text
+26 passed, 1 warning
+Ruff correctness lint: All checks passed
+```
+
+并使用 CPU-only PyTorch 与 pip cache，避免普通单元测试下载整套 CUDA runtime。
 
 ## P0：当前基础设施优先项
 
 - [ ] 自动生成目录/质量数据，消除 README 漂移
 - [ ] source-audit / link-check 进入 CI
 - [ ] Theory ↔ Code ↔ Paper 三向索引
-- [ ] 当前 fast CPU CI 完成 correctness-lint 收敛
 
 ## P1：模型系统
 

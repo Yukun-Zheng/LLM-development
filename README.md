@@ -1,14 +1,12 @@
 # 大语言模型发展史、系统工程与智能体：从原始论文到从零实现
 
 > **版本**：v2 · 2026-09-14  
-> **定位**：中文主导、英文术语对照、Source-First、Mechanism-First、Reproducibility-First 的大语言模型与智能体教材工程。  
-> **最终目标**：不是“看懂几十篇论文”，而是从空目录开始，把现代 LLM runtime、推理系统、工具运行时、Coding Agent、Computer Use、多智能体与评测系统逐层亲手写出来。训练 frontier 权重本身不作为要求。
+> **定位**：中文主导、英文术语对照、Source-First、Mechanism-First、Reproducibility-First 的大语言模型、LLM Systems 与 Agent 教材工程。  
+> **最终目标**：从空目录开始，把现代 LLM runtime、推理系统、Coding Agent、Browser / Computer Use、多智能体与评测系统逐层亲手写出来。训练 frontier 权重本身不作为要求。
 
 ---
 
-# 一、三条主线
-
-这不是一条越来越长的时间线，而是三条相互约束的技术主线：
+# 一、四个互相约束的入口
 
 ```text
                          LLM Development
@@ -19,59 +17,49 @@
    模型科学主线             系统工程主线            智能体主线
   Model Science            LLM Systems          Agentic Systems
         │                      │                      │
-数学 / 概率 / 表示       GPU / Kernel / 通信     Tool / Environment
-Tokenizer / Data         Distributed Training     Planning / Memory
-Transformer / SSM       KV Cache / Serving       Verification
-Scaling / Post-train    Quantization / Runtime   Coding / Computer Use
-Reasoning / Diffusion   Scheduling / Compiler    Multi-Agent / Agentic RL
-        │                      │                      │
-        └──────────────────────┼──────────────────────┘
+        │                      │               ┌──────┴────────┐
+        │                      │               ▼               ▼
+        │                      │         Agent 通识       Codex 源码解剖
+        │                      │                         OpenAI/Codex
+        │                      │                              │
+        └──────────────────────┼──────────────────────────────┘
                                ▼
-                  从零 Frontier 系统总工程
-                 Astra-class / Codex-class
+                   从零 Frontier 系统总工程
+                  Astra-class / Codex-class
 ```
 
-## 1. 模型科学主线
+## 1. 模型科学
 
-研究“模型本身为什么能工作、能力从哪里来”：
-
-- 数学、概率、信息论、优化；
-- Tokenization、数据工程、预训练目标；
-- Transformer、现代注意力、MoE；
-- Scaling、Instruction Tuning、RLHF/DPO/RLVR；
-- Reasoning、Multimodality；
-- Post-Transformer、SSM、RWKV、neural memory；
-- Diffusion Language Models。
+数学 / 概率 → Tokenization / Data → Transformer / MoE → Scaling → Post-training → Reasoning → Multimodality → Post-Transformer → Diffusion LM。
 
 入口：[`教材-book/README.md`](教材-book/README.md)
 
-## 2. 系统工程主线
+## 2. 系统工程
 
-研究“理论上的模型怎样在真实硬件上训练与服务”：
+GPU / HBM / Kernel → Distributed Training → FlashAttention → KV Cache → Serving / Scheduling / Runtime / Compiler。
 
-- 数值精度与训练稳定性；
-- GPU / HBM / SRAM / Tensor Core；
-- DP / TP / PP / EP、ZeRO、FSDP、NCCL；
-- FlashAttention；
-- KV Cache、Paged KV、Prefix Cache；
-- Continuous Batching、Speculative Decoding；
-- Runtime、Serving、Scheduler、Compiler。
+## 3. 智能体系统
 
-## 3. 智能体主线
-
-研究“模型怎样进入环境、持续行动并完成真实任务”：
-
-- Tool Use 与 Environment；
-- Planning、Reflection、Verification、Recovery；
-- Memory 与 Context Management；
-- Coding Agent；
-- Browser / Computer Use；
-- Multi-Agent；
-- MCP / A2A 等协议与互操作；
-- Agent Evaluation / Safety；
-- Agentic RL。
+Tool / Environment → Planning → Memory → Verification → Coding → Browser / Computer → Protocols → Multi-Agent → Agentic RL。
 
 入口：[`智能体-agent/README.md`](智能体-agent/README.md)
+
+## 4. OpenAI Codex 源码解剖
+
+OpenAI 已公开 `openai/codex` 的 CLI / agent harness / runtime 源码，所以 Coding Agent 不再只按论文和产品行为推测。本仓库新增独立的 Source Anatomy 课程，按官方源码建立：
+
+```text
+官方源码
+→ 行为契约 / 状态机
+→ clean-room 教学重写
+→ unit / protocol / behavioral parity
+→ gap report
+```
+
+入口：[`Codex源码解剖-codex-anatomy/README.md`](Codex源码解剖-codex-anatomy/README.md)  
+官方源码地图：[`参考文献-references/03-OpenAI-Codex官方源码索引-codex-source-map.md`](参考文献-references/03-OpenAI-Codex官方源码索引-codex-source-map.md)
+
+**边界**：这里直接研究的是公开的 Codex CLI / harness / runtime；不能因此声称 frontier Codex 模型权重、训练 recipe 或 OpenAI 全部云端生产基础设施已经开源。
 
 ---
 
@@ -79,23 +67,22 @@ Reasoning / Diffusion   Scheduling / Compiler    Multi-Agent / Agentic RL
 
 | 路径 | 作用 |
 |---|---|
-| [`教材-book/`](教材-book/) | **模型科学与系统工程教材正文** |
-| [`智能体-agent/`](智能体-agent/) | **智能体独立主线** |
-| [`代码-code/`](代码-code/) | **从零实现代码与终极工程** |
-| [`原始论文-paper-notes/`](原始论文-paper-notes/) | **Paper Card + Claim Ledger：逐篇核验原始主张、公式、实验与后续证据** |
-| [`参考文献-references/`](参考文献-references/) | 原论文、官方技术报告、代码、Model/System Card 的证据地图 |
+| [`教材-book/`](教材-book/) | 模型科学与系统工程正文 |
+| [`智能体-agent/`](智能体-agent/) | Agent 通识独立主线 |
+| [`Codex源码解剖-codex-anatomy/`](Codex源码解剖-codex-anatomy/) | **OpenAI Codex 官方源码 → clean-room 重建 → parity** |
+| [`代码-code/`](代码-code/) | 从零实现代码与终极工程 |
+| [`原始论文-paper-notes/`](原始论文-paper-notes/) | Paper/Source Card + Claim Ledger |
+| [`参考文献-references/`](参考文献-references/) | 原论文、官方源码、规范、Model/System Card 的证据地图 |
 | [`附录-appendices/`](附录-appendices/) | 数学、MiniGPT、后训练数学等附录 |
-| [`图表-figures/`](图表-figures/) | 作者重绘的数据流、机制图、时间线 |
-| [`工具-scripts/`](工具-scripts/) | 数学排版、来源审计、链接审计、教材维护工具 |
-| [`学习地图-MAP.md`](学习地图-MAP.md) | **Theory ↔ Code ↔ Paper ↔ Test 三向/四向索引** |
-| [`质量看板-QUALITY.md`](质量看板-QUALITY.md) | **全书成熟度与缺口审计** |
-| [`.github/`](.github/) | 自动测试、真实 parity、证据与链接审计 |
+| [`图表-figures/`](图表-figures/) | 作者重绘机制图、数据流、时间线 |
+| [`工具-scripts/`](工具-scripts/) | 数学、来源、链接与教材维护工具 |
+| [`学习地图-MAP.md`](学习地图-MAP.md) | Theory ↔ Code ↔ Paper ↔ Test 索引 |
+| [`质量看板-QUALITY.md`](质量看板-QUALITY.md) | 全书成熟度与缺口审计 |
+| [`.github/`](.github/) | 自动测试、真实 parity、内容审计 |
 
 ---
 
-# 三、教材正文总览
-
-当前主干已经覆盖：
+# 三、模型与系统教材正文
 
 | 篇 | 主题 |
 |---|---|
@@ -118,188 +105,142 @@ Reasoning / Diffusion   Scheduling / Compiler    Multi-Agent / Agentic RL
 | 16 | 硬件、Kernel 与基础设施 |
 | 17 | 闭源前沿模型与证据边界 |
 | 18 | 从零构建 Astra-class / Codex-class 系统 |
-| 19 | **Post-Transformer：SSM、Mamba、RWKV、Neural Memory 与混合架构** |
-| 20 | **Diffusion Language Models：非自回归语言建模** |
+| 19 | Post-Transformer：SSM、Mamba、RWKV、Neural Memory、Hybrid |
+| 20 | Diffusion Language Models |
 
 详细目录：[`教材-book/README.md`](教材-book/README.md)
 
 ---
 
-# 四、智能体课程总览
+# 四、Agent 与 Codex 课程
 
-| 模块 | 主题 |
-|---|---|
-| A1 | 智能体第一性原理 |
-| A2 | Tool Use 与 Environment |
-| A3 | Planning、Reflection、Verification、Recovery |
-| A4 | Memory 与 Context Management |
-| A5 | Coding Agent |
-| A6 | Multi-Agent 与协调 |
-| A7 | Agent Evaluation / Safety |
-| A8 | Agentic RL |
-| A9 | **MCP、A2A 与 Agent Protocols** |
-| A10 | **Browser / Computer Use 与 GUI Agent** |
+Agent 通识已经覆盖 A1–A10：Foundations、Tools、Planning、Memory、Coding Agent、Multi-Agent、Evaluation/Safety、Agentic RL、MCP/A2A、Browser/Computer Use。
 
-入口：[`智能体-agent/README.md`](智能体-agent/README.md)
+Codex 源码解剖当前覆盖 C00–C07：
+
+```text
+C00 官方仓库地图
+C01 Agent Loop：Task / Turn / Sampling / Tool Follow-up
+C02 Session / Thread / Event / App Server
+C03 Tools / Exec / Patch / Approval / Sandbox
+C04 AGENTS.md / Context / Compaction / Memory
+C05 MCP / App Server / Interoperability
+C06 Multi-Agent / Agent Graph / Worktree
+C07 Clean-room MiniCodex / Parity
+```
+
+对应 Source Card：[`原始论文-paper-notes/2025-2026-OpenAI-Codex-Harness.md`](原始论文-paper-notes/2025-2026-OpenAI-Codex-Harness.md)
 
 ---
 
 # 五、终极代码工程
 
-核心工程：
-
-[`代码-code/从零构建Astra与Codex级系统/`](代码-code/从零构建Astra与Codex级系统/)
-
-目前已经从零实现并自动测试：
+入口：[`代码-code/从零构建Astra与Codex级系统/`](代码-code/从零构建Astra与Codex级系统/)
 
 ```text
-UTF-8 Byte Tokenizer / BPE
-        ↓
-Embedding + RMSNorm + RoPE
-        ↓
-Causal GQA + SwiGLU
-        ↓
-Decoder-only Transformer
-        ↓
-Raw Safetensors / Public Checkpoint Mapping
-        ↓
-KV Cache / Prefill / Decode
-        ↓
-Sampling / Structured Tool Call
-        ↓
-Filesystem / Shell / Git / Repo Map / Edit
-        ↓
-Agent Loop / Memory / Planning / Verification
-        ↓
-Minimal MCP / Coding Agent / Worktree / Coordinator
+Byte Tokenizer / BPE
+→ RMSNorm / RoPE / GQA / SwiGLU
+→ Decoder-only Transformer
+→ Raw Safetensors / Public Checkpoint Mapping
+→ KV Cache / Prefill / Decode / Sampling
+→ Structured Tool Runtime
+→ Filesystem / Shell / Git / Edit / Repo Map
+→ Agent Loop / Planning / Memory / Verification
+→ Minimal MCP
+→ Codex-style Turn / Approval / Event Harness
+→ Coding Agent / Worktree / Coordinator
+→ [next] durable Thread / Sandbox / App Server / Agent Graph
+→ [next] Browser / Computer Use
+→ [next] Astra-class general agent
 ```
 
-## 已跨过的两个关键门槛
+## 已跨过的三个关键门槛
 
-### 1. 真实公开 checkpoint parity
+### 1. 真实公开模型 checkpoint parity
 
-`HuggingFaceTB/SmolLM2-135M` 的 raw public weights 已直接加载到我们自己写的 Transformer runtime，并在固定输入、CPU float32、HF eager reference 下得到：
+`HuggingFaceTB/SmolLM2-135M` raw weights → 我们自己的 Transformer runtime，在受测 CPU float32 / HF eager reference 条件下：
 
 ```json
-{
-  "max_abs": 0.0,
-  "mean_abs": 0.0,
-  "argmax_agreement": 1.0
-}
+{"max_abs": 0.0, "mean_abs": 0.0, "argmax_agreement": 1.0}
 ```
 
-这证明当前受测配置不是“一个看起来像 Llama 的 toy model”，而能数值复现真实公开 Llama-family checkpoint 的 forward。
+### 2. Minimal MCP
 
-### 2. Minimal MCP 已从零实现
+已经从零实现 JSON-RPC 教学 envelope、`server/discover`、`tools/list`、`tools/call`、ToolRegistry adapter、in-process transport 与 tests。
 
-当前已有教学子集：
+### 3. MiniCodex clean-room v1
+
+新增 `codex_harness.py`，直接把从 OpenAI 官方公开 `Task / Turn / tool follow-up / approval / event` 契约提炼成独立 Python 状态机。当前自动测试覆盖：
 
 ```text
-JSON-RPC 2.0
-→ server/discover
-→ tools/list
-→ tools/call
-→ ToolRegistry adapter
-→ in-process transport
-→ client
-→ tests
+tool → observation → follow-up → final
+approval deny → tool body never executes
+approval allow → tool executes
+model-step limit → explicit TURN_STOPPED
 ```
 
-下一批关键里程碑：
-
-1. SDPA / FlashAttention parity；
-2. Paged KV / Prefix Cache / Continuous Batching / Speculative Decoding；
-3. MCP stdio/HTTP/auth + minimal A2A；
-4. tree-sitter / LSP / semantic patch；
-5. permission manager + sandbox；
-6. Browser / Computer Use；
-7. parallel worktree workers + reviewer/merge；
-8. SWE-bench / WebArena / OSWorld-style eval。
+注意：当前 `SandboxPolicy` 只是状态契约，**没有冒充真实 OS sandbox**；强制隔离仍是下一阶段独立 subsystem。
 
 ---
 
-# 六、Source-First：每个重要结论回到原始资料
+# 六、Source-First 证据链
 
 最高写作规范：[`教材-book/00-教材方法论与证据标准-source-first.md`](教材-book/00-教材方法论与证据标准-source-first.md)
 
-统一原始资料地图：
+主要证据地图：
 
 - [`参考文献-references/00-原始资料总索引-primary-sources.md`](参考文献-references/00-原始资料总索引-primary-sources.md)
 - [`参考文献-references/01-智能体原始资料-agent-sources.md`](参考文献-references/01-智能体原始资料-agent-sources.md)
 - [`参考文献-references/02-PostTransformer与扩散语言模型原始资料.md`](参考文献-references/02-PostTransformer与扩散语言模型原始资料.md)
+- [`参考文献-references/03-OpenAI-Codex官方源码索引-codex-source-map.md`](参考文献-references/03-OpenAI-Codex官方源码索引-codex-source-map.md)
 
-更深一层是 [`原始论文-paper-notes/`](原始论文-paper-notes/)：核心论文开始建立 Paper Card 与稳定 Claim ID，用于记录“原论文到底声称什么、证据在哪里、后续是否修正”。第一张完整卡片已经覆盖 2017 Transformer。
-
-正文区分：
+全书要求：
 
 ```text
-原始工作声称什么
+原始论文 / 官方规范 / 官方源码
         ↓
-原始公式 / 代码 / 实验是什么
+Claim / Mechanism
         ↓
-后续复现是否支持
+数学 / State / Data Flow
         ↓
-哪些结论被修正
+我们的 clean-room 源码
         ↓
-今天较稳健的理解是什么
+Unit / Parity / Reproduction
+        ↓
+Limitations / Gap
 ```
-
-对闭源模型则明确写“公开证据支持到哪里”，不把社区猜测伪装成架构事实。
 
 ---
 
 # 七、自动化质量证据
 
-当前仓库自动化已经包括：
+当前 Fast CPU CI 最新已真实通过：
 
 ```text
-Fast CPU CI
-├─ 26 tests passed
-└─ Ruff correctness lint passed
-
-Real Checkpoint Parity
-└─ SmolLM2-135M logits exact parity in tested setting
-
-Content Audit
-├─ 35 textbook/agent chapters audited for primary-source coverage
-├─ source report uploaded as artifact
-├─ 60 Markdown files audited
-└─ internal links PASS
-
-Math Normalization
-└─ GitHub MathJax compatibility auto-fix
+30 passed, 1 warning
+Ruff correctness lint: All checks passed
 ```
+
+同时保留真实 SmolLM2 checkpoint parity、Source-First coverage audit、严格内部 Markdown link audit 与 MathJax normalization。
 
 质量总看板：[`质量看板-QUALITY.md`](质量看板-QUALITY.md)  
 跨层学习地图：[`学习地图-MAP.md`](学习地图-MAP.md)
 
 ---
 
-# 八、学习标准
+# 八、学习与毕业标准
 
-任何核心概念最终都要求能经过五层：
+每个核心机制都走：
 
 ```text
-Understand → Calculate → Implement → Reproduce → Research
+Understand
+→ Calculate / Formalize
+→ Implement
+→ Reproduce / Parity
+→ Attack / Research
 ```
 
-例如 KV Cache 不是“知道能加速”就算学完，而是应该做到：
-
-1. 推导缓存 tensor shape 和显存占用；
-2. 写 full recomputation；
-3. 写 incremental decode；
-4. 做 logits parity；
-5. 再研究 paged KV、prefix cache 与 production serving。
-
-智能体同理：
-
-> “我完成了任务”不是证据；真实 environment observation 与 verifier 才是证据。
-
----
-
-# 九、最终毕业标准
-
-给一个空目录，不依赖 LangChain 等 Agent 高层框架，也不把模型核心藏进 `AutoModelForCausalLM`，能够逐层构建：
+最终给一个空目录，不依赖 LangChain 等高层 Agent framework，也不把模型核心藏进 `AutoModelForCausalLM`，能够逐层构建：
 
 ```text
 Tokenizer
@@ -307,15 +248,14 @@ Tokenizer
 → Weight Loader
 → Inference Engine
 → Structured Generation
+→ Thread / Turn / Event Runtime
 → Tool / Protocol Runtime
-→ Context / Memory
-→ Planning / Verification
+→ Approval / Enforced Sandbox
+→ Context / Memory / Compaction / Resume
 → Coding Agent
+→ MCP / App Server / Multi-Agent / Worktree
 → Browser / Computer Agent
-→ Multi-Agent Runtime
-→ Evaluation
+→ Evaluation / Verification
 ```
 
-并且能解释每一层的数学、数据流、源码、原始论文、实验与系统代价。
-
-这才是本项目的终点。
+并能解释每一层的数学、数据流、状态机、源码、一手资料、实验和系统代价。对于 Coding Agent，还要求能与 `openai/codex` 的**公开可验证 harness 行为**逐项对照；然后再扩展到 Astra-class general agent。

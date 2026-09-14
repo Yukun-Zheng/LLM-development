@@ -1,12 +1,6 @@
 name: Localize repository file tree
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'scripts/localize_file_tree.py'
-      - '.github/workflows/localize-file-tree.yml'
   workflow_dispatch:
 
 permissions:
@@ -16,20 +10,20 @@ jobs:
   localize:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: 检出仓库 / Check out repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Python
+      - name: 配置 Python / Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Rename files and update links
-        run: python scripts/localize_file_tree.py
+      - name: 中文化文件树 / Localize file tree
+        run: python '工具-scripts/文件树中文化-localize_file_tree.py'
 
-      - name: Commit localized tree
+      - name: 提交变更 / Commit localized tree
         shell: bash
         run: |
           if git diff --quiet && git diff --cached --quiet; then

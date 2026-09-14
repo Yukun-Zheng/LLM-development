@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Normalize LaTeX delimiters for GitHub-flavored Markdown.
+r"""Normalize LaTeX delimiters for GitHub-flavored Markdown.
 
 The textbook is authored in Markdown and rendered directly on GitHub. GitHub's
 native math syntax uses `$...$` for inline math and `$$...$$` for display math.
@@ -30,7 +30,7 @@ FENCE_RE = re.compile(r"^(?P<indent>\s*)(?P<fence>`{3,}|~{3,})")
 
 
 def _single_line_display_math(line: str) -> str:
-    """Convert same-line \[ ... \] to $$ ... $$ outside code fences."""
+    r"""Convert same-line \[ ... \] to $$ ... $$ outside code fences."""
     # Keep this conservative: do not span newlines and require both delimiters.
     return re.sub(r"\\\[(.+?)\\\]", r"$$\1$$", line)
 

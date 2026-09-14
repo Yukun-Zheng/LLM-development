@@ -26,11 +26,22 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: 代码-code/从零构建Astra与Codex级系统/pyproject.toml
+
+      - name: 安装 CPU PyTorch / Install CPU PyTorch
+        run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: 安装教学运行时 / Install runtime
         working-directory: 代码-code/从零构建Astra与Codex级系统
-        run: pip install -e '.[dev]'
+        run: |
+          python -m pip install pytest ruff
+          python -m pip install -e . --no-deps
 
       - name: 运行单元测试 / Run tests
         working-directory: 代码-code/从零构建Astra与Codex级系统
         run: pytest
+
+      - name: Ruff
+        working-directory: 代码-code/从零构建Astra与Codex级系统
+        run: ruff check src tests examples

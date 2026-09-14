@@ -16,7 +16,7 @@
 当前数学规范化器会自动处理：
 
 - LaTeX / GitHub 数学定界符兼容；
-- `\operatorname{...}` 等 GitHub MathJax 不兼容宏；
+- `\mathrm{...}` 等 GitHub MathJax 不兼容宏；
 - 数学环境中的 `<`、`>`、`<=`、`>=`；
 - fenced code block（Python、Mermaid、shell、text 等）保持原样，不进行误替换。
 

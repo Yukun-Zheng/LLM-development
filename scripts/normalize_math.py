@@ -3,9 +3,10 @@ r"""Normalize textbook math for GitHub-flavored Markdown.
 
 The textbook is authored in Markdown and rendered directly on GitHub. GitHub's
 math renderer supports `$...$` for inline math and `$$...$$` for display math,
-but it does not accept every LaTeX macro that a full TeX installation would.
+but its Markdown/HTML preprocessing and math sanitizer are not identical to a
+full TeX installation.
 
-This normalizer therefore performs two compatibility passes outside fenced code
+This normalizer therefore performs compatibility passes outside fenced code
 blocks:
 
 1. Normalize math delimiters
@@ -15,6 +16,16 @@ blocks:
 2. Rewrite known GitHub-incompatible macros
    `\operatorname{foo}` -> `\mathrm{foo}`
    `\operatorname*{foo}` -> `\mathrm{foo}`
+
+3. Rewrite raw angle relations *inside math only*
+   `<=` -> `\le`
+   `>=` -> `\ge`
+   `<`  -> `\lt`
+   `>`  -> `\gt`
+
+The third pass is important for expressions such as `x_{<t}`. Raw angle
+brackets can interact badly with GitHub's Markdown/HTML preprocessing and lead
+to misleading MathJax errors such as "Extra open brace or missing close brace".
 
 Fenced code blocks (Mermaid, Python, shell, text, fenced math examples, etc.) are
 left untouched so literal examples and source code are never rewritten.
@@ -37,10 +48,14 @@ ROOT = Path(__file__).resolve().parents[1]
 # Match an opening/closing fenced-code marker after optional indentation.
 FENCE_RE = re.compile(r"^(?P<indent>\s*)(?P<fence>`{3,}|~{3,})")
 
-# GitHub rejects \operatorname in Markdown math.  \mathrm gives us the same
-# upright visual treatment needed for names such as softmax, Var, MHA, FFN,
-# Attention, Concat, KL, etc.  The optional star covers \operatorname* too.
+# GitHub rejects \operatorname in Markdown math. \mathrm gives the upright
+# visual treatment needed for names such as softmax, Var, MHA, FFN, Attention,
+# Concat, KL, etc. The optional star covers \operatorname* too.
 OPERATORNAME_RE = re.compile(r"\\operatorname\*?\{([^{}]+)\}")
+
+# Same-line GitHub math spans. Display spans are processed before inline spans.
+DISPLAY_MATH_RE = re.compile(r"\$\$(.+?)\$\$")
+INLINE_MATH_RE = re.compile(r"(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)")
 
 
 def _single_line_display_math(line: str) -> tuple[str, int]:
@@ -58,6 +73,46 @@ def _github_compatible_macros(line: str) -> tuple[str, int]:
     return OPERATORNAME_RE.subn(r"\\mathrm{\1}", line)
 
 
+def _safe_relations(fragment: str) -> tuple[str, int]:
+    r"""Replace raw angle relations in one math fragment with TeX commands."""
+    count = 0
+
+    # Do two-character relations first so <= is not converted into \lt =.
+    fragment, n = re.subn(r"(?<!\\)<=", r"\\le ", fragment)
+    count += n
+    fragment, n = re.subn(r"(?<!\\)>=", r"\\ge ", fragment)
+    count += n
+
+    fragment, n = re.subn(r"(?<!\\)<", r"\\lt ", fragment)
+    count += n
+    fragment, n = re.subn(r"(?<!\\)>", r"\\gt ", fragment)
+    count += n
+
+    return fragment, count
+
+
+def _rewrite_same_line_math_relations(line: str) -> tuple[str, int]:
+    """Rewrite angle relations only inside same-line $...$ / $$...$$ spans."""
+    replacements = 0
+
+    def replace_display(match: re.Match[str]) -> str:
+        nonlocal replacements
+        content, count = _safe_relations(match.group(1))
+        replacements += count
+        return f"$${content}$$"
+
+    line = DISPLAY_MATH_RE.sub(replace_display, line)
+
+    def replace_inline(match: re.Match[str]) -> str:
+        nonlocal replacements
+        content, count = _safe_relations(match.group(1))
+        replacements += count
+        return f"${content}$"
+
+    line = INLINE_MATH_RE.sub(replace_inline, line)
+    return line, replacements
+
+
 def normalize_markdown(text: str) -> tuple[str, int]:
     """Return normalized Markdown and the number of replacements."""
     lines = text.splitlines(keepends=True)
@@ -65,6 +120,7 @@ def normalize_markdown(text: str) -> tuple[str, int]:
     in_fence = False
     fence_char = ""
     fence_len = 0
+    in_display_math = False
     replacements = 0
 
     for line in lines:
@@ -90,20 +146,28 @@ def normalize_markdown(text: str) -> tuple[str, int]:
             out.append(line)
             continue
 
-        # Preserve indentation and newline style for display delimiters that
-        # occupy their own line. GitHub renders `$$` cleanly as a block.
         newline = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
         body = line[: -len(newline)] if newline else line
         stripped = body.strip()
         indent = body[: len(body) - len(body.lstrip())]
 
+        # Convert standalone LaTeX display delimiters while tracking whether
+        # subsequent lines are inside display math.
         if stripped == r"\[":
             out.append(f"{indent}$${newline}")
+            in_display_math = True
             replacements += 1
             continue
         if stripped == r"\]":
             out.append(f"{indent}$${newline}")
+            in_display_math = False
             replacements += 1
+            continue
+
+        # Existing GitHub display-math delimiters also toggle the state.
+        if stripped == "$$":
+            in_display_math = not in_display_math
+            out.append(line)
             continue
 
         converted, count = _single_line_display_math(line)
@@ -114,6 +178,16 @@ def normalize_markdown(text: str) -> tuple[str, int]:
 
         converted, count = _github_compatible_macros(converted)
         replacements += count
+
+        if in_display_math:
+            # Every character on this line belongs to the display formula.
+            converted, count = _safe_relations(converted)
+            replacements += count
+        else:
+            # Outside display math, touch angle brackets only inside explicit
+            # same-line inline/display math spans; prose and HTML stay intact.
+            converted, count = _rewrite_same_line_math_relations(converted)
+            replacements += count
 
         out.append(converted)
 

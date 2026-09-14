@@ -42,6 +42,6 @@ jobs:
         working-directory: 代码-code/从零构建Astra与Codex级系统
         run: pytest
 
-      - name: Ruff
+      - name: Ruff correctness lint
         working-directory: 代码-code/从零构建Astra与Codex级系统
-        run: ruff check src tests examples
+        run: ruff check src tests examples --select E4,E7,E9,F

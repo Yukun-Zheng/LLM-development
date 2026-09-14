@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Adapters for numerical parity against public real checkpoints.
 
 The first target is HuggingFaceTB/SmolLM2-135M because it is a compact,
@@ -7,10 +5,12 @@ Apache-2.0 Llama-family model whose public config matches the mechanisms already
 implemented in this repository: RMSNorm, non-interleaved Llama RoPE, GQA,
 SwiGLU, tied embeddings, and bias-free projections.
 
-This module does not use AutoModel to implement our forward pass.  It maps raw
-public safetensors into DecoderOnlyTransformer.  A reference AutoModel is used
+This module does not use AutoModel to implement our forward pass. It maps raw
+public safetensors into DecoderOnlyTransformer. A reference AutoModel is used
 only by the parity script as an independent oracle.
 """
+
+from __future__ import annotations
 
 import json
 import re

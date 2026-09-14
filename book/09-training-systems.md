@@ -8,22 +8,22 @@
 
 假设一个模型有：
 
-\[
+$$
 P\text{ parameters}.
-\]
+$$
 
 BF16 权重仅占：
 
-\[
+$$
 2P\text{ bytes}.
-\]
+$$
 
 所以 70B 模型权重理论上约：
 
-\[
+$$
 70\times10^9\times2
 =140\text{ GB}.
-\]
+$$
 
 但训练时还需要：
 
@@ -41,17 +41,17 @@ BF16 权重仅占：
 | BF16 parameter | 2 |
 | BF16/FP16 gradient | 2 |
 | FP32 master parameter | 4 |
-| Adam first moment \(m\) | 4 |
-| Adam second moment \(v\) | 4 |
+| Adam first moment $m$ | 4 |
+| Adam second moment $v$ | 4 |
 | 合计 | ~16 |
 
 不同框架和 optimizer 实现会不同，因此 **16 bytes/parameter 只是典型粗估，不是固定定律**。
 
 70B × 16 bytes：
 
-\[
+$$
 \approx1.12\text{ TB},
-\]
+$$
 
 还没算 activation。
 
@@ -78,19 +78,19 @@ flowchart LR
 
 ### Forward
 
-\[
+$$
 x_l\rightarrow x_{l+1}.
-\]
+$$
 
 ### Backward
 
 需要：
 
-\[
+$$
 \frac{\partial L}{\partial x_l},
 \qquad
 \frac{\partial L}{\partial W_l}.
-\]
+$$
 
 为了算这些梯度，很多 forward intermediate activations 必须被保留。
 
@@ -122,23 +122,23 @@ batch size = 1024
 
 若：
 
-\[
+$$
 B_{micro}=2,
-\]
+$$
 
-\[
+$$
 N_{DP}=64,
-\]
+$$
 
-\[
+$$
 G=8,
-\]
+$$
 
 则：
 
-\[
+$$
 B_{global}=2\times64\times8=1024.
-\]
+$$
 
 ---
 
@@ -155,15 +155,15 @@ GPU3: model θ + batch3
 
 各自计算 gradient：
 
-\[
+$$
 g_0,g_1,g_2,g_3.
-\]
+$$
 
 然后 all-reduce：
 
-\[
+$$
 g=\frac14(g_0+g_1+g_2+g_3).
-\]
+$$
 
 每个 worker 使用同一个聚合 gradient 更新，所以权重保持一致。
 
@@ -214,11 +214,11 @@ gradients:   sharded
 optimizer:   sharded
 ```
 
-如果 DP group 有 \(N\) 个 GPU，理想状态下这些状态的单卡内存可以近似降低到：
+如果 DP group 有 $N$ 个 GPU，理想状态下这些状态的单卡内存可以近似降低到：
 
-\[
+$$
 \frac1N.
-\]
+$$
 
 实际还受 buffers、all-gather、fragmentation 等影响。
 
@@ -250,9 +250,9 @@ Backward 类似地通过 reduce-scatter 聚合并分片 gradients。
 
 大规模系统几乎一直在做：
 
-\[
+$$
 \text{memory}\leftrightarrow\text{communication}\leftrightarrow\text{compute}
-\]
+$$
 
 的交换。
 
@@ -262,42 +262,42 @@ Backward 类似地通过 reduce-scatter 聚合并分片 gradients。
 
 考虑线性层：
 
-\[
+$$
 y=xW,
 \qquad
 W\in\mathbb R^{d_{in}\times d_{out}}.
-\]
+$$
 
-如果 \(W\) 太大，可以按列切：
+如果 $W$ 太大，可以按列切：
 
-\[
+$$
 W=[W_1,W_2].
-\]
+$$
 
 那么：
 
-\[
+$$
 y=[xW_1,xW_2].
-\]
+$$
 
 每张 GPU 计算一部分 output features。
 
 也可以按行切：
 
-\[
+$$
 W=
 \begin{bmatrix}
 W_1\\W_2
 \end{bmatrix},
 \quad
 x=[x_1,x_2],
-\]
+$$
 
 则：
 
-\[
+$$
 y=x_1W_1+x_2W_2,
-\]
+$$
 
 最后需要 all-reduce 求和。
 
@@ -369,16 +369,16 @@ microbatch 1:          stage0 → stage1 → stage2 → stage3
 
 经典组合：
 
-\[
+$$
 N_{GPU}
 =N_{DP}\times N_{TP}\times N_{PP}.
-\]
+$$
 
 例如：
 
-\[
+$$
 1024=32\times8\times4.
-\]
+$$
 
 即：
 
@@ -388,9 +388,9 @@ N_{GPU}
 
 现代 MoE/长上下文还会加入：
 
-\[
+$$
 N_{EP}, N_{CP}, N_{SP}.
-\]
+$$
 
 因此真实训练 topology 可能是五维甚至更多并行维度。
 
@@ -404,17 +404,17 @@ Sequence Parallelism 将 sequence dimension 上的一部分计算/activation 分
 
 Context Parallelism 则更直接针对超长 context：
 
-\[
+$$
 T=T_1+T_2+\cdots+T_N.
-\]
+$$
 
 不同 GPU 负责不同 token 区间，再使用 ring / all-gather 等方式完成 attention 所需信息交换。
 
 当：
 
-\[
+$$
 T=1M,
-\]
+$$
 
 sequence 本身已经足够大，不能再认为“只切模型参数就够了”。
 
@@ -434,9 +434,9 @@ router 后 token 根据 destination expert 做 all-to-all dispatch。
 
 因此 MoE training 的瓶颈经常不是 FLOPs，而是：
 
-\[
+$$
 \text{all-to-all bandwidth}.
-\]
+$$
 
 现代 MoE 系统会大量使用：
 
@@ -483,9 +483,9 @@ other nodes
 
 activation 规模粗略随：
 
-\[
+$$
 B\times T\times L\times d
-\]
+$$
 
 增长。
 
@@ -520,11 +520,11 @@ compute gradient
 
 所以：
 
-\[
+$$
 \text{memory}\downarrow,
 \qquad
 \text{compute}\uparrow.
-\]
+$$
 
 在大模型训练中，这通常是非常划算的交换。
 
@@ -586,27 +586,27 @@ tensor = tensor.to(fp8)
 
 Adam：
 
-\[
+$$
 m_t=\beta_1m_{t-1}+(1-\beta_1)g_t,
-\]
+$$
 
-\[
+$$
 v_t=\beta_2v_{t-1}+(1-\beta_2)g_t^2.
-\]
+$$
 
 更新近似：
 
-\[
+$$
 \theta_{t+1}
 =
 \theta_t-\eta\frac{\hat m_t}{\sqrt{\hat v_t}+\epsilon}.
-\]
+$$
 
 每个参数需要保存两组 moments：
 
-\[
+$$
 m,v.
-\]
+$$
 
 所以 optimizer state 很大。
 

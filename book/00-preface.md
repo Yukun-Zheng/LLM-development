@@ -29,19 +29,19 @@ flowchart TB
 
 预训练最常见的目标仍是自回归语言建模：
 
-\[
+$$
 \mathcal{L}_{\text{LM}}
 = -\sum_{t=1}^{T}\log p_\theta(x_t\mid x_{<t}).
-\]
+$$
 
 但“今天的大模型”并不只经历这一项损失。一个现代模型的生命周期往往包含：
 
-\[
+$$
 \text{Pretrain}
 \rightarrow \text{SFT}
 \rightarrow \text{Preference Optimization}
 \rightarrow \text{RL / RLVR / Agentic RL}.
-\]
+$$
 
 因此，问“这个模型是什么架构”往往还不够；**post-training recipe** 已经成为决定模型行为的重要部分。
 
@@ -129,9 +129,9 @@ flowchart LR
 
 于是必须区分：
 
-\[
+$$
 \text{Model capability}\neq \text{System capability}.
-\]
+$$
 
 一个 coding benchmark 的提高，可能来自更强 base model，也可能来自更好的检索、更长的运行时间、更优的 agent loop、更高的 token budget 或更多次尝试。若不控制这些变量，排名很容易被误读。
 
@@ -167,11 +167,11 @@ InstructGPT 论文中，1.3B 参数模型的输出在人类偏好评测上可以
 
 ### 0.3.1　训练后模型真的变了
 
-例如 SFT、DPO、RL 后，参数 \(\theta\) 发生更新：
+例如 SFT、DPO、RL 后，参数 $\theta$ 发生更新：
 
-\[
+$$
 \theta \leftarrow \theta - \eta\nabla_\theta \mathcal{L}.
-\]
+$$
 
 这是最直观的“学习”。
 
@@ -181,11 +181,11 @@ GPT‑3 将 in-context learning 推到主流视野：给定 prompt 中的若干�
 
 形式上：
 
-\[
+$$
 p_\theta(y\mid x, D_{\text{demo}})
-\]
+$$
 
-中的 \(\theta\) 没有变化，但条件上下文 \(D_{\text{demo}}\) 改变了分布。
+中的 $\theta$ 没有变化，但条件上下文 $D_{\text{demo}}$ 改变了分布。
 
 这就是为什么“模型在 prompt 里学会一个任务”与“模型参数被训练了”必须区分。
 
@@ -193,16 +193,16 @@ p_\theta(y\mid x, D_{\text{demo}})
 
 RAG、工具调用、搜索、代码执行、memory 都属于此类。系统能力可以写成一个交互过程：
 
-\[
+$$
 (s_t, o_t) \xrightarrow{\pi_\theta} a_t
 \xrightarrow{\text{environment}} o_{t+1}.
-\]
+$$
 
-此时我们研究的不再只是 \(p(y\mid x)\)，而是一个策略在环境中的轨迹：
+此时我们研究的不再只是 $p(y\mid x)$，而是一个策略在环境中的轨迹：
 
-\[
+$$
 \tau=(o_0,a_0,o_1,a_1,\ldots,o_T).
-\]
+$$
 
 这一步正是从 chatbot 走向 agent 的概念跃迁。
 
@@ -241,9 +241,9 @@ RAG、工具调用、搜索、代码执行、memory 都属于此类。系统能�
 
 因此：
 
-\[
+$$
 \text{context window} \not\Rightarrow \text{effective context utilization}.
-\]
+$$
 
 Gemini 1.5 在 2024 年将 1M token 长上下文推入主流产品讨论，并报告了在长序列 needle-in-a-haystack 等测试上的结果；Google 也明确指出其架构采用 MoE。[Google, 2024](https://blog.google/innovation-and-ai/products/google-gemini-next-generation-model-february-2024/)
 
@@ -276,12 +276,12 @@ Transformer 公式如果没有 tensor shape，很容易停留在符号层。
 
 设：
 
-- batch size：\(B\)
-- 序列长度：\(T\)
-- hidden size：\(d\)
-- attention head 数：\(h\)
-- head dimension：\(d_h=d/h\)
-- vocabulary：\(|V|\)
+- batch size：$B$
+- 序列长度：$T$
+- hidden size：$d$
+- attention head 数：$h$
+- head dimension：$d_h=d/h$
+- vocabulary：$|V|$
 
 一个 decoder-only 模型的基本数据流：
 

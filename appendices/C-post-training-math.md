@@ -8,11 +8,11 @@
 
 预训练主要优化 next-token negative log-likelihood：
 
-\[
+$$
 \mathcal L_{\mathrm{pretrain}}
 =-\mathbb E_{x\sim\mathcal D}
 \sum_t\log\pi_\theta(x_t\mid x_{<t}).
-\]
+$$
 
 它学习“互联网/语料中什么文本更可能出现”。但用户真正希望的是：
 
@@ -30,12 +30,12 @@
 
 # C.2　SFT：最简单也最重要的后训练
 
-给定 prompt \(x\) 和高质量回答 \(y=(y_1,\ldots,y_T)\)，SFT 仍然是交叉熵：
+给定 prompt $x$ 和高质量回答 $y=(y_1,\ldots,y_T)$，SFT 仍然是交叉熵：
 
-\[
+$$
 \mathcal L_{\mathrm{SFT}}
 =-\sum_{t=1}^{T}\log \pi_\theta(y_t\mid x,y_{<t}).
-\]
+$$
 
 与预训练的区别主要不在数学形式，而在**数据分布和意图**：
 
@@ -58,15 +58,15 @@ InstructGPT 的经典训练流程见：Ouyang et al., 2022, https://arxiv.org/ab
 
 典型偏好样本：
 
-\[
+$$
 (x,y_w,y_l),
-\]
+$$
 
 其中：
 
-- \(x\)：prompt；
-- \(y_w\)：winner / preferred response；
-- \(y_l\)：loser / dispreferred response。
+- $x$：prompt；
+- $y_w$：winner / preferred response；
+- $y_l$：loser / dispreferred response。
 
 标注者不必写出完美答案，只需要判断哪个更好。这通常比从零撰写专家答案更容易扩展。
 
@@ -76,28 +76,28 @@ InstructGPT 的经典训练流程见：Ouyang et al., 2022, https://arxiv.org/ab
 
 经典 RLHF 先训练 reward model：
 
-\[
+$$
 r_\phi(x,y)\in\mathbb R.
-\]
+$$
 
 常见 Bradley–Terry 形式：
 
-\[
+$$
 P(y_w\succ y_l\mid x)
 =
 \sigma\left(
  r_\phi(x,y_w)-r_\phi(x,y_l)
 \right).
-\]
+$$
 
 因此 reward-model loss：
 
-\[
+$$
 \mathcal L_{RM}
 =-\log\sigma\left(
  r_\phi(x,y_w)-r_\phi(x,y_l)
 \right).
-\]
+$$
 
 直觉：只要求 preferred response 的 reward 比 rejected response 高，而不是要求绝对分数有某种物理意义。
 
@@ -112,7 +112,7 @@ P(y_w\succ y_l\mid x)
 
 一个常见抽象形式：
 
-\[
+$$
 \max_\pi
 \mathbb E_{x\sim\mathcal D,\,y\sim\pi(\cdot|x)}
 [r_\phi(x,y)]
@@ -121,7 +121,7 @@ P(y_w\succ y_l\mid x)
 \left[
 \pi(\cdot|x)\|\pi_{ref}(\cdot|x)
 \right].
-\]
+$$
 
 第一项：提高 reward。
 
@@ -137,7 +137,7 @@ P(y_w\succ y_l\mid x)
 
 PPO 的经典 clipped surrogate objective：
 
-\[
+$$
 L^{CLIP}(\theta)
 =
 \mathbb E_t
@@ -147,16 +147,16 @@ L^{CLIP}(\theta)
  \operatorname{clip}(r_t(\theta),1-\epsilon,1+\epsilon)\hat A_t
 \right)
 \right],
-\]
+$$
 
 其中 probability ratio：
 
-\[
+$$
 r_t(\theta)
 =
 \frac{\pi_\theta(a_t\mid s_t)}
 {\pi_{\theta_{old}}(a_t\mid s_t)}.
-\]
+$$
 
 在 LLM 中可以把：
 
@@ -177,7 +177,7 @@ DPO 从 KL-regularized RLHF 的最优 policy 关系出发，把隐式 reward 写
 
 经典 DPO loss：
 
-\[
+$$
 \mathcal L_{DPO}(\theta)
 = -\mathbb E_{(x,y_w,y_l)}
 \log\sigma\Bigg(
@@ -188,28 +188,28 @@ DPO 从 KL-regularized RLHF 的最优 policy 关系出发，把隐式 reward 写
 \log\frac{\pi_\theta(y_l|x)}{\pi_{ref}(y_l|x)}
 \Big]
 \Bigg).
-\]
+$$
 
 定义：
 
-\[
+$$
 \Delta_\theta
 =
 \log\pi_\theta(y_w|x)-\log\pi_\theta(y_l|x),
-\]
+$$
 
-\[
+$$
 \Delta_{ref}
 =
 \log\pi_{ref}(y_w|x)-\log\pi_{ref}(y_l|x),
-\]
+$$
 
 则：
 
-\[
+$$
 \mathcal L_{DPO}
 =-\log\sigma[\beta(\Delta_\theta-\Delta_{ref})].
-\]
+$$
 
 直观上：
 
@@ -245,26 +245,26 @@ DPO 主要适合已有离线 preference pair 的场景。在线 RL 的优势在�
 
 GRPO（Group Relative Policy Optimization）在 DeepSeekMath 中被系统提出并用于数学推理训练。核心思想之一是：针对同一个 prompt 采样一组输出，使用组内 reward 的相对位置估计 advantage，从而避免 PPO 中额外训练与 policy 同规模的 critic/value model。
 
-对同一问题 \(q\) 采样：
+对同一问题 $q$ 采样：
 
-\[
+$$
 \{o_1,o_2,\ldots,o_G\}\sim\pi_{old}(\cdot|q).
-\]
+$$
 
 获得 reward：
 
-\[
+$$
 r_1,r_2,\ldots,r_G.
-\]
+$$
 
 一个最直观的 group-relative 标准化 advantage：
 
-\[
+$$
 \hat A_i
 =
 \frac{r_i-\operatorname{mean}(r_1,\ldots,r_G)}
 {\operatorname{std}(r_1,\ldots,r_G)+\epsilon}.
-\]
+$$
 
 然后仍使用 importance ratio / clipping 约束更新幅度，并通常加入 KL regularization。
 
@@ -301,13 +301,13 @@ Reasoning 模型时代的关键变化，是大量任务存在便宜、可靠、�
 
 例如数学任务：
 
-\[
+$$
 r(y)=
 \begin{cases}
 1,&\operatorname{answer}(y)=a^*\\
 0,&\text{otherwise}
 \end{cases}
-\]
+$$
 
 相比 learned reward model，这种 reward 的优势是“标准更硬”，不那么容易因为 reward model 主观偏差而漂移；但它也有明显边界：大量真实任务并没有廉价的自动 verifier。
 
@@ -323,9 +323,9 @@ DeepSeek-R1 是 reasoning RL 路线中的关键公开案例之一。R1-Zero 展�
 
 只看最终结果：
 
-\[
+$$
 r=r(y_{final}).
-\]
+$$
 
 优点：标注简单、目标明确。
 
@@ -335,9 +335,9 @@ r=r(y_{final}).
 
 对中间步骤提供反馈：
 
-\[
+$$
 r_t=r(s_t,a_t).
-\]
+$$
 
 理论上可改善 credit assignment，但需要可靠地判断“中间一步是否真的正确”，成本和偏差都可能很高。
 
@@ -359,12 +359,12 @@ r_t=r(s_t,a_t).
 
 但“更长”绝不自动等于“更聪明”：模型也可能产生冗余循环、伪反思和无效 token。评测必须同时看：
 
-\[
+$$
 \text{accuracy},\quad
 \text{tokens},\quad
 \text{latency},\quad
 \text{cost}.
-\]
+$$
 
 只比较最终 benchmark 而不比较 test-time compute，是 reasoning 模型时代很容易产生误导的做法。
 
@@ -374,20 +374,20 @@ r_t=r(s_t,a_t).
 
 KL regularization 常写：
 
-\[
+$$
 D_{KL}(\pi_\theta\|\pi_{ref}).
-\]
+$$
 
 它不是“让模型永远不变化”，而是在说：
 
 > 在 reward 信号可能有噪声、不完整或可被利用时，不要让 policy 为追逐 reward 而无约束地跑到极端分布。
 
-若 \(\beta\) 太大：
+若 $\beta$ 太大：
 
 - policy 太保守；
 - 学不到新行为。
 
-若 \(\beta\) 太小：
+若 $\beta$ 太小：
 
 - policy 可能过度优化 reward；
 - 语言质量、泛化或安全能力下降。
@@ -400,9 +400,9 @@ D_{KL}(\pi_\theta\|\pi_{ref}).
 
 如果训练目标是：
 
-\[
+$$
 \max_\pi \mathbb E[r(y)],
-\]
+$$
 
 那么模型会优化 **reward function 实际写下来的东西**，而不是设计者脑中真正想要的东西。
 
@@ -446,7 +446,7 @@ D_{KL}(\pi_\theta\|\pi_{ref}).
 
 把整个过程抽象成一句话：
 
-\[
+$$
 \text{pretraining prior}
 +
 \text{behavioral supervision}
@@ -456,7 +456,7 @@ D_{KL}(\pi_\theta\|\pi_{ref}).
 \text{regularization}
 \rightarrow
 \text{new policy}.
-\]
+$$
 
 预训练提供巨大行为先验；后训练不是从零“创造智能”，而是在已有模型分布上重塑哪些轨迹更容易出现。
 
@@ -475,49 +475,49 @@ loser : y_l
 
 reference model：
 
-\[
+$$
 \log\pi_{ref}(y_w|x)=-4.0,
 \qquad
 \log\pi_{ref}(y_l|x)=-3.5.
-\]
+$$
 
 它原本反而更偏好 loser：
 
-\[
+$$
 \Delta_{ref}=-4.0-(-3.5)=-0.5.
-\]
+$$
 
 当前 policy：
 
-\[
+$$
 \log\pi_\theta(y_w|x)=-3.0,
 \qquad
 \log\pi_\theta(y_l|x)=-3.2.
-\]
+$$
 
 于是：
 
-\[
+$$
 \Delta_\theta=-3.0-(-3.2)=0.2.
-\]
+$$
 
 相对 improvement：
 
-\[
+$$
 \Delta_\theta-\Delta_{ref}=0.7.
-\]
+$$
 
-若 \(\beta=1\)，DPO 目标中的 sigmoid 输入为 0.7：
+若 $\beta=1$，DPO 目标中的 sigmoid 输入为 0.7：
 
-\[
+$$
 \sigma(0.7)\approx0.668.
-\]
+$$
 
 loss：
 
-\[
+$$
 -\log(0.668)\approx0.403.
-\]
+$$
 
 如果 policy 进一步提高 winner 相对 loser 的优势，loss 继续下降。
 
@@ -541,9 +541,9 @@ loss：
 
 只解析最终 `Answer:` 字段：
 
-\[
+$$
 r=\mathbb{1}[\hat a=a^*].
-\]
+$$
 
 ### 对照
 

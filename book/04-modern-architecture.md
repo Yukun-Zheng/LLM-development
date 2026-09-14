@@ -24,13 +24,13 @@ flowchart TD
 
 用公式表示 Pre-Norm block：
 
-\[
+$$
 H'=H+\operatorname{Attn}(\operatorname{Norm}(H)),
-\]
+$$
 
-\[
+$$
 H''=H'+\operatorname{FFN}(\operatorname{Norm}(H')).
-\]
+$$
 
 与原始 Transformer 相比，现代 LLM 常见变化包括：
 
@@ -50,38 +50,38 @@ H''=H'+\operatorname{FFN}(\operatorname{Norm}(H')).
 
 # 2　LayerNorm 到 RMSNorm：究竟省掉了什么？
 
-LayerNorm 对一个 token 的 hidden vector \(x\in\mathbb R^d\) 计算：
+LayerNorm 对一个 token 的 hidden vector $x\in\mathbb R^d$ 计算：
 
-\[
+$$
 \mu=\frac1d\sum_{i=1}^d x_i,
-\]
+$$
 
-\[
+$$
 \sigma^2=\frac1d\sum_i(x_i-\mu)^2,
-\]
+$$
 
-\[
+$$
 \operatorname{LN}(x)_i
 =\gamma_i\frac{x_i-\mu}{\sqrt{\sigma^2+\epsilon}}+\beta_i.
-\]
+$$
 
 RMSNorm 删除了显式均值中心化，使用均方根：
 
-\[
+$$
 \operatorname{RMS}(x)
 =\sqrt{\frac1d\sum_i x_i^2+\epsilon},
-\]
+$$
 
-\[
+$$
 \operatorname{RMSNorm}(x)_i
 =\gamma_i\frac{x_i}{\operatorname{RMS}(x)}.
-\]
+$$
 
 因此它不做：
 
-\[
+$$
 x_i-\mu.
-\]
+$$
 
 RMSNorm 的原论文认为 re-centering invariance 并非 LayerNorm 成功的必要条件，并报告了计算效率优势。[Zhang & Sennrich, 2019](https://arxiv.org/abs/1910.07467)
 
@@ -89,26 +89,26 @@ RMSNorm 的原论文认为 re-centering invariance 并非 LayerNorm 成功的必
 
 设：
 
-\[
+$$
 x=[3,4].
-\]
+$$
 
-忽略 \(\epsilon\)，且 \(\gamma=[1,1]\)。
+忽略 $\epsilon$，且 $\gamma=[1,1]$。
 
 则：
 
-\[
+$$
 \operatorname{RMS}(x)
 =\sqrt{\frac{9+16}{2}}
 =\sqrt{12.5}.
-\]
+$$
 
 所以：
 
-\[
+$$
 \operatorname{RMSNorm}(x)
 =\frac{[3,4]}{\sqrt{12.5}}.
-\]
+$$
 
 注意它保留了向量的整体方向，只把尺度规整到稳定范围。
 
@@ -118,21 +118,21 @@ x=[3,4].
 
 Post-Norm：
 
-\[
+$$
 y=\operatorname{Norm}(x+F(x)).
-\]
+$$
 
 Pre-Norm：
 
-\[
+$$
 y=x+F(\operatorname{Norm}(x)).
-\]
+$$
 
 Pre-Norm 中 residual path 更接近恒等映射：
 
-\[
+$$
 y=x+\text{small correction}.
-\]
+$$
 
 对非常深的网络，这通常更利于梯度传播和训练稳定性。
 
@@ -144,37 +144,37 @@ y=x+\text{small correction}.
 
 原始 FFN：
 
-\[
+$$
 \operatorname{FFN}(x)=W_2\operatorname{ReLU}(W_1x).
-\]
+$$
 
 现代 LLM 常使用 gated linear unit 变体。
 
 Swish / SiLU：
 
-\[
+$$
 \operatorname{SiLU}(x)=x\sigma(x).
-\]
+$$
 
 SwiGLU 可以写成：
 
-\[
+$$
 \operatorname{SwiGLU}(x)
 =
 \operatorname{SiLU}(xW_g)\odot(xW_u),
-\]
+$$
 
 再 down-project：
 
-\[
+$$
 \operatorname{FFN}(x)
 =
 \left[
 \operatorname{SiLU}(xW_g)\odot(xW_u)
 \right]W_d.
-\]
+$$
 
-其中 \(\odot\) 为逐元素乘法。
+其中 $\odot$ 为逐元素乘法。
 
 ```text
 x [B,T,d]
@@ -197,11 +197,11 @@ GLU 变体在 Transformer 中的系统研究见 [Shazeer, 2020](https://arxiv.or
 
 Self-attention 的内容相似度：
 
-\[
+$$
 q_i^\top k_j
-\]
+$$
 
-本身只关心向量内容，不天然包含 \(i,j\) 的相对顺序。
+本身只关心向量内容，不天然包含 $i,j$ 的相对顺序。
 
 一个理想的位置机制最好让 attention score 同时知道：
 
@@ -217,60 +217,60 @@ RoPE（Rotary Position Embedding）正是现代 decoder-only LLM 中最有影响
 
 先只看二维向量：
 
-\[
+$$
 x=
 \begin{bmatrix}
 x_1\\x_2
 \end{bmatrix}.
-\]
+$$
 
 二维旋转矩阵：
 
-\[
+$$
 R(\theta)=
 \begin{bmatrix}
 \cos\theta&-\sin\theta\\
 \sin\theta&\cos\theta
 \end{bmatrix}.
-\]
+$$
 
-位置 \(m\) 的 query 被旋转：
+位置 $m$ 的 query 被旋转：
 
-\[
+$$
 q_m'=R(m\theta)q_m.
-\]
+$$
 
-位置 \(n\) 的 key：
+位置 $n$ 的 key：
 
-\[
+$$
 k_n'=R(n\theta)k_n.
-\]
+$$
 
 它们点积：
 
-\[
+$$
 (q_m')^\top k_n'
 =q_m^\top R(m\theta)^TR(n\theta)k_n.
-\]
+$$
 
 因为旋转矩阵满足：
 
-\[
+$$
 R(a)^TR(b)=R(b-a),
-\]
+$$
 
 所以：
 
-\[
+$$
 (q_m')^\top k_n'
 =q_m^\top R((n-m)\theta)k_n.
-\]
+$$
 
 关键出现了：
 
-\[
+$$
 n-m.
-\]
+$$
 
 也就是说，绝对位置经过旋转后，在 query-key 点积中自然产生了**相对位置信息**。
 
@@ -286,13 +286,13 @@ n-m.
 (x0,x1), (x2,x3), ..., (x_{d-2},x_{d-1})
 ```
 
-每一对使用不同频率 \(\theta_i\) 旋转。
+每一对使用不同频率 $\theta_i$ 旋转。
 
 典型频率：
 
-\[
+$$
 \theta_i=10000^{-2i/d}.
-\]
+$$
 
 于是不同维度对应不同“位置波长”。
 
@@ -314,15 +314,15 @@ relative-position-aware attention score
 
 如果模型训练时主要见过：
 
-\[
+$$
 0\le pos < 4096,
-\]
+$$
 
 测试突然使用：
 
-\[
+$$
 pos=100000,
-\]
+$$
 
 旋转相位进入训练中没有覆盖的区域。
 
@@ -341,11 +341,11 @@ Position Interpolation 代表工作见 [Chen et al., 2023](https://arxiv.org/abs
 
 但要再次强调：
 
-\[
+$$
 \text{可接受长输入}
 \neq
 \text{真正会利用长输入}.
-\]
+$$
 
 ---
 
@@ -365,24 +365,24 @@ V heads: h
 
 设：
 
-- batch \(B\)
-- context length \(T\)
-- layers \(L\)
-- KV heads \(h_{kv}\)
-- head dim \(d_h\)
-- 每元素字节数 \(s\)
+- batch $B$
+- context length $T$
+- layers $L$
+- KV heads $h_{kv}$
+- head dim $d_h$
+- 每元素字节数 $s$
 
 KV Cache 大致：
 
-\[
+$$
 M_{KV}
 \approx
 2BLTh_{kv}d_hs.
-\]
+$$
 
 前面的 2 对应 K 与 V。
 
-所以减少 \(h_{kv}\) 会直接降低 cache。
+所以减少 $h_{kv}$ 会直接降低 cache。
 
 ---
 
@@ -398,9 +398,9 @@ V heads : 1
 
 即：
 
-\[
+$$
 h_{kv}=1.
-\]
+$$
 
 它大幅减少 KV Cache 和 decode 时读取 K/V 的内存带宽。相关工作见 [Shazeer, 2019](https://arxiv.org/abs/1911.02150)。
 
@@ -412,9 +412,9 @@ h_{kv}=1.
 
 Grouped-Query Attention（GQA）设置：
 
-\[
+$$
 1<h_{kv}<h_q.
-\]
+$$
 
 例如：
 
@@ -465,17 +465,17 @@ step 4: The robot picked up
 
 历史 token 的 K/V 在 causal Transformer 中不会因为未来 token 到来而变化，因此可以缓存。
 
-第 \(t\) 步只新算：
+第 $t$ 步只新算：
 
-\[
+$$
 K_t,V_t,
-\]
+$$
 
 然后与缓存：
 
-\[
+$$
 K_{1:t-1},V_{1:t-1}
-\]
+$$
 
 拼起来。
 
@@ -530,25 +530,25 @@ for just one/few new tokens
 
 普通 attention：
 
-\[
+$$
 S=QK^T,
-\]
+$$
 
-\[
+$$
 P=\operatorname{softmax}(S),
-\]
+$$
 
-\[
+$$
 O=PV.
-\]
+$$
 
-最朴素实现会把巨大的 \(S,P\in\mathbb R^{T\times T}\) 写入高带宽显存 HBM，再读回来。
+最朴素实现会把巨大的 $S,P\in\mathbb R^{T\times T}$ 写入高带宽显存 HBM，再读回来。
 
 而 GPU 片上 SRAM 更快但更小。
 
 FlashAttention 的核心思想是：
 
-> **通过 tiling，把 Q/K/V 分块搬进片上内存，在块内完成 attention 计算，避免完整 \(T\times T\) score/probability matrix 反复写入 HBM。**
+> **通过 tiling，把 Q/K/V 分块搬进片上内存，在块内完成 attention 计算，避免完整 $T\times T$ score/probability matrix 反复写入 HBM。**
 
 [Dao et al., 2022](https://arxiv.org/abs/2205.14135)
 
@@ -574,11 +574,11 @@ FlashAttention **不是近似 attention**。
 
 这是一条重要的系统原则：
 
-\[
+$$
 \text{same mathematical function}
 \not\Rightarrow
 \text{same hardware cost}.
-\]
+$$
 
 ---
 
@@ -586,20 +586,20 @@ FlashAttention **不是近似 attention**。
 
 softmax 看起来需要先知道全行最大值：
 
-\[
+$$
 \operatorname{softmax}(x_i)
 =
 \frac{e^{x_i-m}}
 {\sum_j e^{x_j-m}},
 \quad m=\max_jx_j.
-\]
+$$
 
 似乎必须先把整行都算完。
 
 实际上可以分块维护：
 
-- 当前最大值 \(m\)；
-- 当前归一化和 \(l\)；
+- 当前最大值 $m$；
+- 当前归一化和 $l$；
 - 当前加权输出 accumulator。
 
 当新块最大值更大时，对旧 accumulator 做重缩放。
@@ -610,21 +610,21 @@ softmax 看起来需要先知道全行最大值：
 
 ---
 
-# 16　FlashAttention 不会消除 \(O(T^2)\) 计算复杂度
+# 16　FlashAttention 不会消除 $O(T^2)$ 计算复杂度
 
 标准 full attention 仍需计算所有 query-key pair：
 
-\[
+$$
 T^2.
-\]
+$$
 
 FlashAttention 主要减少 IO complexity 与中间显存使用。
 
-因此当 \(T\) 从：
+因此当 $T$ 从：
 
-\[
+$$
 8K\rightarrow1M,
-\]
+$$
 
 即使 kernel 很优化，quadratic attention 的总计算仍会成为巨大负担。
 
@@ -643,13 +643,14 @@ FlashAttention 主要减少 IO complexity 与中间显存使用。
 
 # 17　Sliding Window Attention：局部化换复杂度
 
-若每个 token 只关注前面的 \(w\) 个 token：
+若每个 token 只关注前面的 $w$ 个 token：
 
-\[
-O(T^2)ightarrow O(Tw).
-\]
+$$
+O(T^2)
+ightarrow O(Tw).
+$$
 
-当 \(w\ll T\) 时节省巨大。
+当 $w\ll T$ 时节省巨大。
 
 Mistral 7B 就使用 Sliding Window Attention，并结合 GQA 等设计。[Jiang et al., 2023](https://arxiv.org/abs/2310.06825)
 
@@ -665,35 +666,35 @@ Mistral 7B 就使用 Sliding Window Attention，并结合 GQA 等设计。[Jiang
 
 设：
 
-\[
+$$
 B=2,T=4096,d=4096,
-\]
+$$
 
-\[
+$$
 h_q=32,h_{kv}=8,d_h=128.
-\]
+$$
 
 输入：
 
-\[
+$$
 X:[2,4096,4096].
-\]
+$$
 
 Q：
 
-\[
+$$
 [2,4096,32\times128]
 \rightarrow
 [2,32,4096,128].
-\]
+$$
 
 K/V：
 
-\[
+$$
 [2,4096,8\times128]
 \rightarrow
 [2,8,4096,128].
-\]
+$$
 
 RoPE：
 
@@ -710,21 +711,21 @@ GQA 共享：
 
 逻辑 attention output：
 
-\[
+$$
 [2,32,4096,128].
-\]
+$$
 
 concat：
 
-\[
+$$
 [2,4096,4096].
-\]
+$$
 
 output projection 后仍：
 
-\[
+$$
 [2,4096,4096].
-\]
+$$
 
 所以从 block 外面看，shape 没变；优化都发生在内部表示与存储方式中。
 
@@ -734,31 +735,31 @@ output projection 后仍：
 
 若忽略 bias，标准 MHA：
 
-\[
+$$
 W_Q,W_K,W_V,W_O\in\mathbb R^{d\times d}.
-\]
+$$
 
 约：
 
-\[
+$$
 4d^2
-\]
+$$
 
 参数。
 
-普通 FFN 若 expansion 为 \(4d\)：
+普通 FFN 若 expansion 为 $4d$：
 
-\[
+$$
 W_1:d\rightarrow4d,
 \qquad
 W_2:4d\rightarrow d,
-\]
+$$
 
 约：
 
-\[
+$$
 8d^2.
-\]
+$$
 
 所以经典 Transformer 中 FFN 往往比 attention projection 占更多参数。
 
@@ -808,10 +809,10 @@ W_2:4d\rightarrow d,
 1. 现代 decoder-only block 通常采用 Pre-Norm，并广泛使用 RMSNorm、RoPE 与 gated FFN。
 2. RMSNorm 删除了 LayerNorm 的 re-centering，只按 root-mean-square 归一化尺度。
 3. SwiGLU 引入 multiplicative gating，现代 LLM 常用它替代 ReLU FFN。
-4. RoPE 通过对 Q/K 旋转，使点积自然依赖相对位置 \(n-m\)。
+4. RoPE 通过对 Q/K 旋转，使点积自然依赖相对位置 $n-m$。
 5. KV Cache 避免自回归生成时重复计算历史 K/V，却产生显存与带宽压力。
 6. MQA/GQA 通过减少 KV heads 显著降低 KV Cache；GQA 是质量与效率的常用折中。
-7. FlashAttention 主要优化 IO，而不是改变 attention 数学定义，也不会把 full attention 的 \(O(T^2)\) 计算变成线性。
+7. FlashAttention 主要优化 IO，而不是改变 attention 数学定义，也不会把 full attention 的 $O(T^2)$ 计算变成线性。
 8. 长上下文能力不能只看支持的 max token；还必须看训练长度、位置外推、有效检索和计算成本。
 9. 理解现代 LLM 架构时，最有效的方法之一就是追踪每个 tensor 的 shape 和每一步需要读写多少内存。
 
@@ -823,27 +824,27 @@ W_2:4d\rightarrow d,
 
 取：
 
-\[
+$$
 q=[1,0],\quad k=[1,0],
-\]
+$$
 
-令 \(\theta=\pi/6\)，分别计算位置 \(m=1,n=3\) 时旋转后的点积，并验证它只与 \(n-m\) 的相对角度有关。
+令 $\theta=\pi/6$，分别计算位置 $m=1,n=3$ 时旋转后的点积，并验证它只与 $n-m$ 的相对角度有关。
 
 ### 练习 2：KV Cache 估算
 
 设：
 
-- \(L=32\)
-- \(T=32768\)
-- \(d_h=128\)
-- BF16，即 \(s=2\) bytes
-- \(B=1\)
+- $L=32$
+- $T=32768$
+- $d_h=128$
+- BF16，即 $s=2$ bytes
+- $B=1$
 
 分别计算：
 
-\[
+$$
 h_{kv}=32,8,1
-\]
+$$
 
 时理论 KV Cache 大小。
 

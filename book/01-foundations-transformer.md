@@ -8,17 +8,17 @@
 
 语言天然是序列。给定 token 序列
 
-\[
+$$
 x_1,x_2,\ldots,x_T,
-\]
+$$
 
-我们希望模型在位置 \(t\) 形成一个状态 \(h_t\)，使它包含之前信息。最朴素的循环神经网络写作：
+我们希望模型在位置 $t$ 形成一个状态 $h_t$，使它包含之前信息。最朴素的循环神经网络写作：
 
-\[
+$$
 h_t=\phi(W_xx_t+W_hh_{t-1}+b).
-\]
+$$
 
-这条式子的直觉非常自然：当前位置的信息 \(x_t\) 与上一时刻的记忆 \(h_{t-1}\) 合并，形成新记忆。
+这条式子的直觉非常自然：当前位置的信息 $x_t$ 与上一时刻的记忆 $h_{t-1}$ 合并，形成新记忆。
 
 问题也埋在这里：**时间依赖被强制串行化。**
 
@@ -33,7 +33,7 @@ flowchart LR
     X4[x4] --> H4
 ```
 
-计算 \(h_4\) 之前必须先得到 \(h_3\)，得到 \(h_3\) 前又必须得到 \(h_2\)。这使序列维度上的并行训练受限。
+计算 $h_4$ 之前必须先得到 $h_3$，得到 $h_3$ 前又必须得到 $h_2$。这使序列维度上的并行训练受限。
 
 另一方面，长期依赖需要梯度跨许多时间步传播。若反向传播中的 Jacobian 连乘长期小于 1，就容易形成 vanishing gradient；长期大于 1，则可能 exploding gradient。LSTM/GRU 通过门控机制缓和这一问题，却没有取消串行依赖。
 
@@ -57,7 +57,7 @@ Decoder RNN/LSTM
 我 喜欢 机器人 。
 ```
 
-这里有一个非常明显的瓶颈：**整句话的信息要被压进一个固定向量 \(c\)**。
+这里有一个非常明显的瓶颈：**整句话的信息要被压进一个固定向量 $c$**。
 
 ---
 
@@ -67,25 +67,25 @@ Bahdanau 等人在 2014 年直接指出：将整段源序列压入固定长度�
 
 假设 encoder 得到：
 
-\[
+$$
 h_1,h_2,\ldots,h_T.
-\]
+$$
 
-当 decoder 生成第 \(i\) 个词时，不再只拿一个固定的 \(c\)，而是计算：
+当 decoder 生成第 $i$ 个词时，不再只拿一个固定的 $c$，而是计算：
 
-\[
+$$
 e_{ij}=a(s_{i-1},h_j),
-\]
+$$
 
-\[
+$$
 \alpha_{ij}=\frac{\exp(e_{ij})}{\sum_k\exp(e_{ik})},
-\]
+$$
 
-\[
+$$
 c_i=\sum_j\alpha_{ij}h_j.
-\]
+$$
 
-注意这里的 \(\alpha_{ij}\) 是一个**内容相关的动态权重**。
+注意这里的 $\alpha_{ij}$ 是一个**内容相关的动态权重**。
 
 例如翻译：
 
@@ -121,39 +121,39 @@ Transformer 的真正历史价值不只是“效果好”，而是让序列建�
 
 设输入矩阵：
 
-\[
+$$
 X\in\mathbb{R}^{T\times d}.
-\]
+$$
 
 线性投影：
 
-\[
+$$
 Q=XW_Q,\quad K=XW_K,\quad V=XW_V.
-\]
+$$
 
-若单头维度为 \(d_k\)，则
+若单头维度为 $d_k$，则
 
-\[
+$$
 Q,K\in\mathbb{R}^{T\times d_k},\qquad V\in\mathbb{R}^{T\times d_v}.
-\]
+$$
 
 attention score：
 
-\[
+$$
 S=\frac{QK^\top}{\sqrt{d_k}}.
-\]
+$$
 
 再做行方向 softmax：
 
-\[
+$$
 A=\operatorname{softmax}(S).
-\]
+$$
 
 最终：
 
-\[
+$$
 O=AV.
-\]
+$$
 
 把它放进 shape：
 
@@ -173,39 +173,39 @@ A            [T, T]
 O            [T, dv]
 ```
 
-最值得注意的是 \([T,T]\)：
+最值得注意的是 $[T,T]$：
 
 > 每个位置都能直接与所有位置建立一跳关系。
 
-RNN 中从位置 1 把信息传到位置 \(T\) 需要经过约 \(T\) 次状态转移；full self-attention 的路径长度可以是 1。
+RNN 中从位置 1 把信息传到位置 $T$ 需要经过约 $T$ 次状态转移；full self-attention 的路径长度可以是 1。
 
 ---
 
-## 3.2　为什么要除以 \(\sqrt{d_k}\)
+## 3.2　为什么要除以 $\sqrt{d_k}$
 
 假设 query 与 key 的每个分量近似独立、均值 0、方差 1。
 
 内积：
 
-\[
+$$
 q\cdot k=\sum_{i=1}^{d_k}q_ik_i.
-\]
+$$
 
-其方差会随 \(d_k\) 增长，约为：
+其方差会随 $d_k$ 增长，约为：
 
-\[
+$$
 \operatorname{Var}(q\cdot k)\propto d_k.
-\]
+$$
 
 若不缩放，维度大时 score 的绝对值会很大，softmax 很容易进入极尖锐区域：
 
-\[
+$$
 \operatorname{softmax}([0,1,20])\approx[0,0,1],
-\]
+$$
 
 导致梯度变差。
 
-除以 \(\sqrt{d_k}\) 使 score 的尺度更稳定。
+除以 $\sqrt{d_k}$ 使 score 的尺度更稳定。
 
 ---
 
@@ -213,7 +213,7 @@ q\cdot k=\sum_{i=1}^{d_k}q_ik_i.
 
 设两个 token 的二维向量已经被投影成：
 
-\[
+$$
 Q=
 \begin{bmatrix}
 1&0\\
@@ -231,39 +231,39 @@ V=
 2&0\\
 0&4
 \end{bmatrix}.
-\]
+$$
 
 首先：
 
-\[
+$$
 QK^\top=
 \begin{bmatrix}
 1&1\\
 0&1
 \end{bmatrix}.
-\]
+$$
 
-因为 \(d_k=2\)：
+因为 $d_k=2$：
 
-\[
+$$
 S=\frac{1}{\sqrt2}
 \begin{bmatrix}
 1&1\\
 0&1
 \end{bmatrix}.
-\]
+$$
 
 第一行两个 score 一样，因此 softmax 后约为：
 
-\[
+$$
 [0.5,0.5].
-\]
+$$
 
 于是第一个 token 的输出：
 
-\[
+$$
 o_1=0.5[2,0]+0.5[0,4]=[1,2].
-\]
+$$
 
 这不是“把另一个词复制过来”，而是**根据相关性对 value 做动态线性组合**。
 
@@ -273,17 +273,17 @@ o_1=0.5[2,0]+0.5[0,4]=[1,2].
 
 单头 attention 只有一套相似性空间。Multi-Head Attention（MHA）将 hidden dimension 分成多个子空间：
 
-\[
+$$
 \operatorname{head}_i=
 \operatorname{Attention}(XW_i^Q,XW_i^K,XW_i^V).
-\]
+$$
 
 再拼接：
 
-\[
+$$
 \operatorname{MHA}(X)=
 \operatorname{Concat}(\operatorname{head}_1,\ldots,\operatorname{head}_h)W^O.
-\]
+$$
 
 在 batch 形式中：
 
@@ -309,33 +309,33 @@ output                [B,T,d]
 
 # 5　Causal Mask：GPT 与普通双向 Self-Attention 的关键分界
 
-若目标是预测下一个 token，位置 \(t\) 不能偷看未来：
+若目标是预测下一个 token，位置 $t$ 不能偷看未来：
 
-\[
+$$
 p(x_t\mid x_1,\ldots,x_{t-1}).
-\]
+$$
 
 因此 decoder-only Transformer 使用 causal mask：
 
-\[
+$$
 M_{ij}=
 \begin{cases}
 0,&j\le i\\
 -\infty,&j>i.
 \end{cases}
-\]
+$$
 
 attention 变成：
 
-\[
+$$
 A=\operatorname{softmax}\left(
 \frac{QK^\top}{\sqrt{d_k}}+M
 \right).
-\]
+$$
 
 四个 token 时，mask 类似：
 
-\[
+$$
 M=
 \begin{bmatrix}
 0&-\infty&-\infty&-\infty\\
@@ -343,7 +343,7 @@ M=
 0&0&0&-\infty\\
 0&0&0&0
 \end{bmatrix}.
-\]
+$$
 
 图示：
 
@@ -362,23 +362,23 @@ q=4     ✓   ✓   ✓   ✓
 
 # 6　位置：Attention 本身不知道顺序
 
-如果只计算 \(QK^\top\)，self-attention 对 token 排列具有置换等变性质。换句话说，它天然知道“有哪些 token”，却不天然知道“谁在前谁在后”。
+如果只计算 $QK^\top$，self-attention 对 token 排列具有置换等变性质。换句话说，它天然知道“有哪些 token”，却不天然知道“谁在前谁在后”。
 
 原 Transformer 使用 sinusoidal positional encoding：
 
-\[
+$$
 PE_{(pos,2i)}=\sin\left(pos/10000^{2i/d}\right),
-\]
+$$
 
-\[
+$$
 PE_{(pos,2i+1)}=\cos\left(pos/10000^{2i/d}\right).
-\]
+$$
 
 再与 token embedding 相加：
 
-\[
+$$
 H_0=E_{token}+E_{position}.
-\]
+$$
 
 后来 LLM 主流会逐步转向 RoPE 等方式；我们在 Part IV 专门推导。
 
@@ -388,11 +388,11 @@ H_0=E_{token}+E_{position}.
 
 每个 Transformer block 通常还包含逐 token 的前馈网络：
 
-\[
+$$
 \operatorname{FFN}(x)=W_2\sigma(W_1x+b_1)+b_2.
-\]
+$$
 
-原 Transformer 用 ReLU，hidden expansion 通常把维度从 \(d\) 放大到 \(d_{ff}\)，再投影回来。
+原 Transformer 用 ReLU，hidden expansion 通常把维度从 $d$ 放大到 $d_{ff}$，再投影回来。
 
 ```text
 [B,T,d]
@@ -418,23 +418,23 @@ H_0=E_{token}+E_{position}.
 
 经典结构有 residual connection：
 
-\[
+$$
 y=x+F(x).
-\]
+$$
 
 它提供近似 identity path，使深层网络更易优化。
 
 原 Transformer 常写作 Post-LN：
 
-\[
+$$
 y=\operatorname{LN}(x+F(x)).
-\]
+$$
 
 后来很多 LLM 更偏好 Pre-Norm：
 
-\[
+$$
 y=x+F(\operatorname{Norm}(x)).
-\]
+$$
 
 Pre-Norm 通常更利于深网络稳定训练。现代 LLM 还大量使用 RMSNorm；详见 Part IV。
 
@@ -487,9 +487,9 @@ cross-attention 中：
 
 RNN 在序列方向上存在严格依赖：
 
-\[
+$$
 h_t=f(h_{t-1},x_t).
-\]
+$$
 
 self-attention 在训练时可以一次对整段序列计算 Q/K/V 和 score matrix。
 
@@ -497,21 +497,21 @@ self-attention 在训练时可以一次对整段序列计算 Q/K/V 和 score mat
 
 ## 10.2　长距离路径短
 
-RNN 从 token 1 到 token \(T\) 的信息传递路径大致随 \(T\) 增长；full attention 是直接连接。
+RNN 从 token 1 到 token $T$ 的信息传递路径大致随 $T$ 增长；full attention 是直接连接。
 
-## 10.3　代价：\(T^2\)
+## 10.3　代价：$T^2$
 
 标准 attention 的 score matrix：
 
-\[
+$$
 QK^\top\in\mathbb{R}^{T\times T}.
-\]
+$$
 
 因此计算与中间存储会随序列长度快速增长：
 
-\[
+$$
 O(T^2).
-\]
+$$
 
 这一缺陷在 2017 年不是最主要的问题，却会在 128K、1M context 时代成为核心矛盾，催生 FlashAttention、sparse attention、linear attention、hybrid architecture 等大量工作。
 
@@ -535,9 +535,9 @@ Autoregressive LM pretraining
 
 预训练目标：
 
-\[
+$$
 L_1(U)=\sum_i\log P(u_i\mid u_{i-k},\ldots,u_{i-1};\Theta).
-\]
+$$
 
 随后在下游有标签任务上加入任务目标。
 
@@ -597,9 +597,9 @@ GPT‑2 的论文标题就是《Language Models are Unsupervised Multitask Learn
 
 它仍然做一个极其朴素的事情：
 
-\[
+$$
 \max_\theta \sum_t \log p_\theta(x_t\mid x_{<t}).
-\]
+$$
 
 变化主要来自：
 
@@ -621,9 +621,9 @@ GPT‑3 会把这个问题推到新的尺度。
 
 decoder-only 的优势更多来自一个极具扩展性的统一接口：
 
-\[
+$$
 \text{任意上下文 tokens}\rightarrow\text{继续预测 tokens}.
-\]
+$$
 
 分类可以写成生成：
 
@@ -673,26 +673,26 @@ label : I      love   robots  EOS
 
 若 logits：
 
-\[
+$$
 Z\in\mathbb{R}^{B\times T\times |V|},
-\]
+$$
 
 标签：
 
-\[
+$$
 y\in\mathbb{N}^{B\times T}.
-\]
+$$
 
 每个位置做 cross entropy：
 
-\[
+$$
 \mathcal L
 =-\frac1{BT}\sum_{b,t}
 \log\frac{\exp Z_{b,t,y_{b,t}}}
 {\sum_v\exp Z_{b,t,v}}.
-\]
+$$
 
-这意味着一段长度 \(T\) 的文本，一次 forward 可以同时提供约 \(T\) 个 next-token training targets。
+这意味着一段长度 $T$ 的文本，一次 forward 可以同时提供约 $T$ 个 next-token training targets。
 
 训练时是并行的：
 
@@ -728,38 +728,38 @@ robots
 
 # 16　Softmax 与 Cross-Entropy：模型究竟“学”了什么
 
-最后一层把 hidden state \(h_t\in\mathbb R^d\) 投影到词表：
+最后一层把 hidden state $h_t\in\mathbb R^d$ 投影到词表：
 
-\[
+$$
 z_t=W_{vocab}h_t+b.
-\]
+$$
 
 得到：
 
-\[
+$$
 z_t\in\mathbb R^{|V|}.
-\]
+$$
 
 softmax：
 
-\[
+$$
 p(v\mid x_{\le t})
 =\frac{e^{z_v}}{\sum_j e^{z_j}}.
-\]
+$$
 
-若正确下一个 token 为 \(y\)，loss：
+若正确下一个 token 为 $y$，loss：
 
-\[
+$$
 \ell=-\log p(y\mid x_{\le t}).
-\]
+$$
 
 假设模型给正确 token 的概率从 0.1 提高到 0.8：
 
-\[
+$$
 -\log 0.1\approx2.303,
 \qquad
 -\log 0.8\approx0.223.
-\]
+$$
 
 训练不断提高真实语料中正确 continuation 的概率。
 
@@ -775,17 +775,17 @@ p(v\mid x_{\le t})
 
 这是一个必须谨慎回答的问题。
 
-假设文本来自某个潜在世界状态 \(z\)：
+假设文本来自某个潜在世界状态 $z$：
 
-\[
+$$
 z\rightarrow x_1,x_2,\ldots,x_T.
-\]
+$$
 
 为了很好地预测：
 
-\[
+$$
 p(x_t\mid x_{<t}),
-\]
+$$
 
 模型往往需要隐式估计对未来有帮助的潜在因素，例如：
 
@@ -799,13 +799,13 @@ p(x_t\mid x_{<t}),
 
 从信息论直觉看，如果某个潜变量能显著减少未来 token 的条件熵：
 
-\[
+$$
 H(X_t\mid X_{<t},Z)
 <
 H(X_t\mid X_{<t}),
-\]
+$$
 
-那么学习某种关于 \(Z\) 的内部表示可能有助于降低语言建模 loss。
+那么学习某种关于 $Z$ 的内部表示可能有助于降低语言建模 loss。
 
 但要注意三个边界：
 
@@ -846,9 +846,9 @@ flowchart LR
 3. Transformer 把 attention 变为主干，极大提升训练并行性，并缩短长距离依赖路径。
 4. Self-attention 的核心是：
 
-\[
+$$
 \operatorname{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V.
-\]
+$$
 
 5. GPT 使用 causal mask，因此适合自回归生成；BERT 使用双向 encoder，更适合理解与表示任务。
 6. GPT‑1 建立“生成式预训练 + 下游适配”范式；GPT‑2 展示更多无需任务特定训练的行为。
@@ -861,14 +861,14 @@ flowchart LR
 
 ### 练习 1：手算 attention
 
-自行设定 \(T=3,d_k=2\) 的 Q/K/V，完整计算：
+自行设定 $T=3,d_k=2$ 的 Q/K/V，完整计算：
 
-\[
+$$
 QK^\top\rightarrow /\sqrt{d_k}
 \rightarrow \text{causal mask}
 \rightarrow \text{softmax}
 \rightarrow AV.
-\]
+$$
 
 要求标出每一步 shape。
 

@@ -81,11 +81,11 @@ flowchart LR
 
 公式：
 
-\[
+$$
 \operatorname{Attention}(Q,K,V)
 =
 \operatorname{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}+M\right)V.
-\]
+$$
 
 **主要来源**：Vaswani et al., 2017, https://arxiv.org/abs/1706.03762
 
@@ -131,11 +131,11 @@ flowchart TD
 
 粗略地，对 dense Transformer：
 
-\[
+$$
 C\propto ND.
-\]
+$$
 
-但最终 loss 不只由 \(N,D,C\) 决定，还受数据质量、架构、优化器和训练稳定性影响。
+但最终 loss 不只由 $N,D,C$ 决定，还受数据质量、架构、优化器和训练稳定性影响。
 
 **主要来源**：Kaplan et al. (2020); Hoffmann et al. (2022)。
 
@@ -163,11 +163,11 @@ flowchart TB
 
 KV Cache 的每层规模可粗略理解为：
 
-\[
+$$
 O(B\cdot T\cdot h_{kv}\cdot d_h),
-\]
+$$
 
-因此降低 \(h_{kv}\) 可以显著减少 decode 阶段缓存。
+因此降低 $h_{kv}$ 可以显著减少 decode 阶段缓存。
 
 **主要来源**：Shazeer (2019); Ainslie et al. (2023)。
 
@@ -193,9 +193,9 @@ flowchart LR
 
 Top-k routing 的核心思想：
 
-\[
+$$
 \text{Total Parameters}\gg\text{Activated Parameters per Token}.
-\]
+$$
 
 真正的系统难点包括 expert load balance、all-to-all communication、capacity、routing stability 与 expert parallelism。
 
@@ -223,7 +223,7 @@ sequenceDiagram
     C->>M: reuse cached history
 ```
 
-没有 KV Cache 时，生成第 \(t\) 个 token 会重复计算之前所有 token 的 K/V；有 cache 后，历史 K/V 被复用，但显存占用随上下文长度增长。
+没有 KV Cache 时，生成第 $t$ 个 token 会重复计算之前所有 token 的 K/V；有 cache 后，历史 K/V 被复用，但显存占用随上下文长度增长。
 
 **主要来源**：标准 Transformer 自回归推理；现代 serving 系统文献，尤其 vLLM / PagedAttention。
 

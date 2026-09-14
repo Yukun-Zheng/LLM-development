@@ -90,10 +90,10 @@ LLaMA 继续了 Chinchilla 后的核心问题：
 
 真正值得学的是：
 
-\[
+$$
 \text{capability}
 =f(N,D,\text{data quality},\text{architecture},\text{recipe},\text{post-training}).
-\]
+$$
 
 参数量只是其中一个变量。
 
@@ -154,15 +154,15 @@ Mistral 7B 采用：
 
 假设模型参数：
 
-\[
+$$
 W\in\mathbb R^{d_{out}\times d_{in}}.
-\]
+$$
 
 Full Fine-Tuning 会更新所有：
 
-\[
+$$
 \theta_1,\theta_2,\ldots,\theta_N.
-\]
+$$
 
 对于一个 70B 模型，训练内存不只是 70B 个权重。
 
@@ -189,45 +189,45 @@ LoRA（Low-Rank Adaptation）是最重要的 PEFT 方法之一。[Hu et al., 202
 
 原权重：
 
-\[
+$$
 W_0\in\mathbb R^{d_{out}\times d_{in}}.
-\]
+$$
 
 Full FT：
 
-\[
+$$
 W=W_0+\Delta W.
-\]
+$$
 
 LoRA 假设更新可以低秩分解：
 
-\[
+$$
 \Delta W=BA,
-\]
+$$
 
 其中：
 
-\[
+$$
 A\in\mathbb R^{r\times d_{in}},
-\]
+$$
 
-\[
+$$
 B\in\mathbb R^{d_{out}\times r},
-\]
+$$
 
 而：
 
-\[
+$$
 r\ll \min(d_{in},d_{out}).
-\]
+$$
 
 所以 forward：
 
-\[
+$$
 y=W_0x+BAx.
-\]
+$$
 
-训练时冻结 \(W_0\)，只更新 \(A,B\)。
+训练时冻结 $W_0$，只更新 $A,B$。
 
 ---
 
@@ -235,35 +235,35 @@ y=W_0x+BAx.
 
 假设：
 
-\[
+$$
 d_{in}=d_{out}=4096.
-\]
+$$
 
 完整矩阵参数：
 
-\[
+$$
 4096^2=16,777,216.
-\]
+$$
 
 若 LoRA rank：
 
-\[
+$$
 r=16,
-\]
+$$
 
 则训练参数：
 
-\[
+$$
 16\times4096+4096\times16
 =131,072.
-\]
+$$
 
 比例：
 
-\[
+$$
 \frac{131072}{16777216}
 \approx0.78\%.
-\]
+$$
 
 只对这一矩阵而言，训练参数不到 1%。
 
@@ -277,9 +277,9 @@ LoRA 论文受到一个观察启发：模型 adaptation 需要的有效更新可
 
 换句话说，虽然：
 
-\[
+$$
 W\in\mathbb R^{4096\times4096},
-\]
+$$
 
 但任务从“通用模型”变成“某个特定行为”时，不一定需要任意改变 1600 多万个自由度。
 
@@ -287,7 +287,7 @@ W\in\mathbb R^{4096\times4096},
 
 > 基础模型已经拥有大部分表示，我们只需在参数空间里沿少数关键方向调整。
 
-这不是保证所有任务的最优 \(\Delta W\) 都严格低秩，而是一种极其成功的工程近似。
+这不是保证所有任务的最优 $\Delta W$ 都严格低秩，而是一种极其成功的工程近似。
 
 ---
 
@@ -295,10 +295,10 @@ W\in\mathbb R^{4096\times4096},
 
 常见 target modules：
 
-- \(W_Q\)
-- \(W_K\)
-- \(W_V\)
-- \(W_O\)
+- $W_Q$
+- $W_K$
+- $W_V$
+- $W_O$
 - FFN up/down/gate projections
 
 更少 target：
@@ -321,26 +321,26 @@ W\in\mathbb R^{4096\times4096},
 
 ---
 
-# 11　LoRA scaling：\(\alpha/r\) 是什么？
+# 11　LoRA scaling：$\alpha/r$ 是什么？
 
 实践中常写：
 
-\[
+$$
 W=W_0+\frac{\alpha}{r}BA.
-\]
+$$
 
 其中：
 
-- \(r\)：rank；
-- \(\alpha\)：LoRA scaling hyperparameter。
+- $r$：rank；
+- $\alpha$：LoRA scaling hyperparameter。
 
 它让更新幅度不必随 rank 线性变化。
 
 后续还有 rsLoRA、DoRA 等变体，试图改善不同 rank 下的 scaling 或把 magnitude/direction 分开学习，但核心思想仍来自：
 
-\[
+$$
 \Delta W\approx BA.
-\]
+$$
 
 ---
 
@@ -350,17 +350,17 @@ W=W_0+\frac{\alpha}{r}BA.
 
 70B 参数仅权重理论大小：
 
-\[
+$$
 70\times10^9\times2
 \approx140\text{ GB}.
-\]
+$$
 
 若能量化到 4-bit：
 
-\[
+$$
 70\times10^9\times0.5
 \approx35\text{ GB},
-\]
+$$
 
 还需额外 scale/metadata，因此实际略高。
 
@@ -368,20 +368,20 @@ W=W_0+\frac{\alpha}{r}BA.
 
 最简单 uniform quantization：
 
-\[
+$$
 q=\operatorname{round}\left(\frac{x-z}{s}\right),
-\]
+$$
 
 反量化：
 
-\[
+$$
 \hat x=sq+z.
-\]
+$$
 
 其中：
 
-- \(s\)：scale；
-- \(z\)：zero point。
+- $s$：scale；
+- $z$：zero point。
 
 ---
 
@@ -532,9 +532,9 @@ Double Quantization 再量化这些 quantization constants，从而继续减少�
 
 继续做 LM objective：
 
-\[
+$$
 -\log p(x_t|x_{<t}).
-\]
+$$
 
 数据可能换成领域 corpus。
 
@@ -570,12 +570,12 @@ LoRA 是**参数更新方式**，不是数据/训练目标。
 
 传统 logits distillation：
 
-\[
+$$
 \mathcal L_{KD}
 = D_{KL}\left(
  p_T(\cdot|x)\Vert p_S(\cdot|x)
 \right).
-\]
+$$
 
 现代 LLM 更常见的是生成式蒸馏：
 
@@ -665,9 +665,9 @@ flowchart TD
 4. Mistral 等工作强调 capability / latency / memory / cost 的 Pareto trade-off。
 5. LoRA 使用：
 
-\[
+$$
 \Delta W=BA,
-\]
+$$
 
 以低秩矩阵近似任务更新，大幅减少 trainable parameters。
 6. 量化通过低比特表示减少权重/activation/KV 的存储和带宽，但不同方案优化目标不同。
@@ -684,15 +684,15 @@ flowchart TD
 
 对：
 
-\[
+$$
 W\in\mathbb R^{8192\times8192},
-\]
+$$
 
 分别计算 rank：
 
-\[
+$$
 r=8,16,64,256
-\]
+$$
 
 时 LoRA 参数量及相对 full matrix 比例。
 

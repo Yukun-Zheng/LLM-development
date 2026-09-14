@@ -22,21 +22,21 @@
 
 # 2　Scaling Laws：把“堆模型”变成可估计的工程
 
-Kaplan 等人的 2020 年工作研究了语言模型 cross-entropy loss 与模型参数规模 \(N\)、数据规模 \(D\)、训练计算量 \(C\) 之间的关系，观察到在相当宽的范围内存在近似幂律趋势。[Kaplan et al., 2020](https://arxiv.org/abs/2001.08361)
+Kaplan 等人的 2020 年工作研究了语言模型 cross-entropy loss 与模型参数规模 $N$、数据规模 $D$、训练计算量 $C$ 之间的关系，观察到在相当宽的范围内存在近似幂律趋势。[Kaplan et al., 2020](https://arxiv.org/abs/2001.08361)
 
 可以用抽象形式写：
 
-\[
+$$
 L(N)\approx L_\infty + aN^{-\alpha},
-\]
+$$
 
-\[
+$$
 L(D)\approx L_\infty + bD^{-\beta},
-\]
+$$
 
-\[
+$$
 L(C)\approx L_\infty + cC^{-\gamma}.
-\]
+$$
 
 不要把这里的形式误解成物理定律。它是**经验标度规律**：在特定模型族、数据分布、训练 recipe 与规模范围内，loss 呈现近似平滑的幂律下降。
 
@@ -62,23 +62,23 @@ L(C)\approx L_\infty + cC^{-\gamma}.
 
 我们常说“scale up”，但至少有三种完全不同的扩大：
 
-\[
+$$
 N=\text{number of parameters},
-\]
+$$
 
-\[
+$$
 D=\text{number of training tokens},
-\]
+$$
 
-\[
+$$
 C=\text{training compute}.
-\]
+$$
 
-对 dense Transformer，一个常见的粗略估计是训练 FLOPs 与 \(ND\) 同阶：
+对 dense Transformer，一个常见的粗略估计是训练 FLOPs 与 $ND$ 同阶：
 
-\[
+$$
 C\propto ND,
-\]
+$$
 
 具体常数受 forward/backward、架构和实现影响。
 
@@ -151,19 +151,19 @@ Sentiment:
 
 关键是：
 
-\[
+$$
 \theta_{\text{before}}=\theta_{\text{after}}.
-\]
+$$
 
 参数没有更新。
 
 改变的是条件：
 
-\[
+$$
 p_\theta(y\mid x)
 \quad\rightarrow\quad
 p_\theta(y\mid D_{demo},x).
-\]
+$$
 
 这就是 in-context learning（ICL）最重要的表面现象。
 
@@ -201,17 +201,17 @@ Perform task
 
 发生在训练阶段：
 
-\[
+$$
 \theta\leftarrow\theta-\eta\nabla_\theta L.
-\]
+$$
 
 ### 快适应
 
 发生在 forward pass 内：
 
-\[
+$$
 h_{1:T}=f_\theta(x_{1:T}).
-\]
+$$
 
 模型没有改权重，却在 activation 中根据上下文形成暂时策略。
 
@@ -229,19 +229,19 @@ Xie 等人的理论工作提出：如果预训练文档由某些潜在概念生�
 
 抽象地：
 
-\[
+$$
 z\sim p(z),
-\]
+$$
 
-\[
+$$
 (x_i,y_i)\sim p(x,y\mid z).
-\]
+$$
 
 给几个 demonstration 后，模型相当于形成：
 
-\[
+$$
 p(z\mid D_{demo}),
-\]
+$$
 
 再据此预测新样本。
 
@@ -306,9 +306,9 @@ Task definition → express as tokens → model adapts in context
 
 它本质是在改变模型条件概率中的 conditioning context：
 
-\[
+$$
 p_\theta(y\mid \underbrace{x_{instruction},x_{examples},x_{context}}_{prompt}).
-\]
+$$
 
 格式、顺序、示例、角色设定都会改变隐藏状态，因此影响后续 token distribution。
 
@@ -370,25 +370,25 @@ Llama 3 把 vocabulary 扩展到 128K，并在官方模型卡中说明其预训�
 
 若平均 token negative log-likelihood 为：
 
-\[
+$$
 L=-\frac1T\sum_t\log p(x_t\mid x_{<t}),
-\]
+$$
 
 perplexity 定义为：
 
-\[
+$$
 PPL=e^L.
-\]
+$$
 
-直觉上，如果模型每一步都像在“等概率从 \(k\) 个选项里猜”，PPL 大致像 \(k\)。
+直觉上，如果模型每一步都像在“等概率从 $k$ 个选项里猜”，PPL 大致像 $k$。
 
 例如：
 
-\[
+$$
 L=\log 10
 \Rightarrow
 PPL=10.
-\]
+$$
 
 但不要把 perplexity 直接等价为聊天质量：
 
@@ -459,7 +459,7 @@ flowchart LR
 新直觉：预算增加 → 参数 N 与训练数据 D 都必须合理扩张
 ```
 
-在 Chinchilla 的经验拟合区域内，compute-optimal 的 \(N\) 与 \(D\) 都会随 compute 增长，而不是把绝大部分新增预算只放到参数数目。
+在 Chinchilla 的经验拟合区域内，compute-optimal 的 $N$ 与 $D$ 都会随 compute 增长，而不是把绝大部分新增预算只放到参数数目。
 
 ---
 
@@ -492,23 +492,23 @@ LLaMA 2023 年明确强调在给定推理预算下的模型规模选择，并训
 
 假设训练计算粗略满足：
 
-\[
+$$
 C=kND.
-\]
+$$
 
 预算固定：
 
-\[
+$$
 C=C_0.
-\]
+$$
 
 那么：
 
-\[
+$$
 D=\frac{C_0}{kN}.
-\]
+$$
 
-把 \(N\) 提高 10 倍，就意味着在其他条件不变时只能使用约 1/10 的 token 数。
+把 $N$ 提高 10 倍，就意味着在其他条件不变时只能使用约 1/10 的 token 数。
 
 所以不能问：
 
@@ -540,27 +540,27 @@ D=\frac{C_0}{kN}.
 
 例如假设生成一个 5 步答案，每一步正确率都从：
 
-\[
+$$
 0.6\rightarrow0.7\rightarrow0.8\rightarrow0.9.
-\]
+$$
 
 若 benchmark 只有“五步全对才算 1”，整体成功率约：
 
-\[
+$$
 0.6^5=0.078,
-\]
+$$
 
-\[
+$$
 0.7^5=0.168,
-\]
+$$
 
-\[
+$$
 0.8^5=0.328,
-\]
+$$
 
-\[
+$$
 0.9^5=0.590.
-\]
+$$
 
 底层每一步只是在平滑提高，最终 exact-match 却看起来像“突然能做了”。
 
@@ -588,9 +588,9 @@ GPT‑3 证明了 scale + ICL 的巨大潜力，同时暴露一个关键缺陷�
 
 最大化：
 
-\[
+$$
 \log p_\theta(x_t\mid x_{<t})
-\]
+$$
 
 只要求模型拟合这些文本分布，而没有一个变量明确说：
 
@@ -658,17 +658,17 @@ flowchart TD
 
 假设：
 
-\[
+$$
 C=6ND.
-\]
+$$
 
-固定 \(C=6\times10^{21}\)，分别取：
+固定 $C=6\times10^{21}$，分别取：
 
-\[
+$$
 N=10^9,10^{10},10^{11}.
-\]
+$$
 
-计算对应 \(D\)，讨论三个方案的潜在优缺点。
+计算对应 $D$，讨论三个方案的潜在优缺点。
 
 ### 练习 2：ICL 与 Fine-tuning 的差别
 

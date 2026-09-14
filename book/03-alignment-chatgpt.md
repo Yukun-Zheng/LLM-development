@@ -8,10 +8,10 @@
 
 预训练语言模型优化的是：
 
-\[
+$$
 \mathcal L_{\text{LM}}
 =-\sum_t\log p_\theta(x_t\mid x_{<t}).
-\]
+$$
 
 这个目标只要求：**真实语料里的下一个 token 概率尽可能高。**
 
@@ -55,17 +55,17 @@ A: 点击这里查看更多……
 
 Instruction tuning 的基本数据形式是：
 
-\[
+$$
 (x_{instruction},x_{input},y_{response}).
-\]
+$$
 
 训练仍然可以是普通 cross-entropy：
 
-\[
+$$
 \mathcal L_{\text{SFT}}
 =-\sum_{t\in \text{response}}
 \log p_\theta(y_t\mid x,y_{<t}).
-\]
+$$
 
 也就是说，**SFT（Supervised Fine-Tuning）本身并不神秘**。它仍然是在做 teacher forcing，只不过数据分布从“互联网原始文本”变成了“人类希望助手如何响应指令”的示范。
 
@@ -159,56 +159,56 @@ flowchart TD
 
 # 6　Reward Model：把人类排序变成一个标量函数
 
-设 prompt 为 \(x\)，两个回答为：
+设 prompt 为 $x$，两个回答为：
 
-\[
+$$
 y_w=\text{preferred / winner},
-\]
+$$
 
-\[
+$$
 y_l=\text{less preferred / loser}.
-\]
+$$
 
 Reward Model 输出标量：
 
-\[
+$$
 r_\phi(x,y)\in\mathbb R.
-\]
+$$
 
 常用 Bradley–Terry / logistic preference 模型：
 
-\[
+$$
 P(y_w\succ y_l\mid x)
 =
 \sigma\big(r_\phi(x,y_w)-r_\phi(x,y_l)\big).
-\]
+$$
 
 其中：
 
-\[
+$$
 \sigma(z)=\frac1{1+e^{-z}}.
-\]
+$$
 
 训练 loss：
 
-\[
+$$
 \mathcal L_{RM}
 =-\log\sigma\left(
  r_\phi(x,y_w)-r_\phi(x,y_l)
 \right).
-\]
+$$
 
 如果 preferred answer 的 reward 比 rejected answer 高很多：
 
-\[
+$$
 r_w-r_l\gg0,
-\]
+$$
 
 则：
 
-\[
+$$
 \sigma(r_w-r_l)\rightarrow1,
-\]
+$$
 
 loss 变小。
 
@@ -224,9 +224,9 @@ loss 变小。
 
 因此：
 
-\[
+$$
 \text{Reward Model}\neq\text{ground truth utility}.
-\]
+$$
 
 这是后面 reward hacking 的根源之一。
 
@@ -238,30 +238,30 @@ loss 变小。
 
 - state：当前 prompt + 已生成 token；
 - action：选择下一个 token；
-- policy：语言模型 \(\pi_\theta\)；
+- policy：语言模型 $\pi_\theta$；
 - episode：直到 EOS；
 - reward：完整回答经 RM 打分。
 
 形式上：
 
-\[
+$$
 s_t=(x,y_{<t}),
-\]
+$$
 
-\[
+$$
 a_t=y_t,
-\]
+$$
 
-\[
+$$
 \pi_\theta(a_t\mid s_t)
 =p_\theta(y_t\mid x,y_{<t}).
-\]
+$$
 
 最终得到：
 
-\[
+$$
 r_\phi(x,y_{1:T}).
-\]
+$$
 
 于是可以用 policy-gradient 方法优化语言模型。
 
@@ -273,15 +273,15 @@ PPO（Proximal Policy Optimization）最初由 Schulman 等人在 2017 年提出
 
 定义新旧策略概率比：
 
-\[
+$$
 r_t(\theta)=
 \frac{\pi_\theta(a_t\mid s_t)}
 {\pi_{\theta_{old}}(a_t\mid s_t)}.
-\]
+$$
 
 clipped objective 的核心形式：
 
-\[
+$$
 L^{CLIP}(\theta)
 =
 \mathbb E_t\left[
@@ -290,7 +290,7 @@ L^{CLIP}(\theta)
  \operatorname{clip}(r_t(\theta),1-\epsilon,1+\epsilon)A_t
 \right)
 \right].
-\]
+$$
 
 直觉：
 
@@ -304,15 +304,15 @@ L^{CLIP}(\theta)
 
 如果只最大化 Reward Model：
 
-\[
+$$
 \max_\theta \mathbb E[r_\phi(x,y)],
-\]
+$$
 
 模型会寻找一切能骗高分的方法，而不是保持自然语言质量。
 
 于是 RLHF 常加入 reference model 约束：
 
-\[
+$$
 R(x,y)
 =
  r_\phi(x,y)
@@ -323,7 +323,7 @@ D_{KL}\left(
 \Vert
 \pi_{ref}(\cdot\mid x)
 \right).
-\]
+$$
 
 直觉上：
 
@@ -332,7 +332,7 @@ D_{KL}\left(
 第二项：别离原来那个会说正常语言的模型太远
 ```
 
-\(\beta\) 控制两者 trade-off。
+$\beta$ 控制两者 trade-off。
 
 这是一条贯穿后训练时代的思想：
 
@@ -342,19 +342,19 @@ D_{KL}\left(
 
 # 10　Reward Hacking：优化代理指标的经典危险
 
-只要真正目标 \(U\) 无法直接观测，我们就会构造 proxy reward：
+只要真正目标 $U$ 无法直接观测，我们就会构造 proxy reward：
 
-\[
+$$
 \hat U=r_\phi.
-\]
+$$
 
 然后优化：
 
-\[
+$$
 \max_\pi \mathbb E_\pi[\hat U].
-\]
+$$
 
-如果 \(\hat U\) 与真正目标在训练分布上相关，但分布外存在漏洞，强优化会把策略推向漏洞。
+如果 $\hat U$ 与真正目标在训练分布上相关，但分布外存在漏洞，强优化会把策略推向漏洞。
 
 这与 Goodhart's law 的直觉一致：
 
@@ -382,9 +382,9 @@ InstructGPT 的核心实验之一非常反直觉：
 
 它说明：
 
-\[
+$$
 \text{parameter count}\not\equiv\text{user-perceived quality}.
-\]
+$$
 
 基础能力与行为对齐是两个不同维度。
 
@@ -473,9 +473,9 @@ DPO 就从这里出现。
 
 2023 年 Direct Preference Optimization（DPO）提出：在特定 KL-regularized reward maximization 假设下，最优 policy 与 reward 之间存在闭式关系，因此可以直接从 preference pairs 优化 policy，而不需要显式 reward model 和 RL rollout。[Rafailov et al., 2023](https://arxiv.org/abs/2305.18290)
 
-对 preference pair \((x,y_w,y_l)\)，DPO loss 常写为：
+对 preference pair $(x,y_w,y_l)$，DPO loss 常写为：
 
-\[
+$$
 \mathcal L_{DPO}(\theta)
 = -\mathbb E\left[
 \log\sigma\left(
@@ -487,7 +487,7 @@ DPO 就从这里出现。
 \right]
 \right)
 \right].
-\]
+$$
 
 看上去很复杂，但核心只是一句：
 
@@ -495,19 +495,19 @@ DPO 就从这里出现。
 
 定义：
 
-\[
+$$
 \Delta_w=\log\pi_\theta(y_w|x)-\log\pi_{ref}(y_w|x),
-\]
+$$
 
-\[
+$$
 \Delta_l=\log\pi_\theta(y_l|x)-\log\pi_{ref}(y_l|x).
-\]
+$$
 
 DPO 希望：
 
-\[
+$$
 \Delta_w>\Delta_l.
-\]
+$$
 
 也就是：
 
@@ -593,9 +593,9 @@ ORPO 则提出把 instruction tuning 与 preference optimization 更紧密地合
 
 这些方法的共同背景是：
 
-\[
+$$
 \text{human feedback}
-\]
+$$
 
 并不只有一种数据形态：
 
@@ -667,9 +667,9 @@ Agentic RL
 
 因此：
 
-\[
+$$
 \text{aligned model}\not\Rightarrow\text{safe deployed system}.
-\]
+$$
 
 当模型可以浏览网页、运行代码、写文件、操作账户后，系统安全问题会比单纯“生成一段文本”复杂得多。
 
@@ -704,9 +704,9 @@ flowchart TD
 3. RLHF 将人类偏好通过 Reward Model 变成可优化信号。
 4. Reward Model 常用 pairwise logistic loss：
 
-\[
+$$
 -\log\sigma(r_w-r_l).
-\]
+$$
 
 5. PPO 通过 clipped policy update 控制一次更新不要过大；RLHF 还常使用 KL penalty 保持策略接近 reference model。
 6. Reward Model 是 human preference 的代理，不是“真理函数”，因此存在 reward hacking。
@@ -723,15 +723,15 @@ flowchart TD
 
 若：
 
-\[
+$$
 r_w=2.0,\quad r_l=0.5,
-\]
+$$
 
 计算：
 
-\[
+$$
 -\log\sigma(r_w-r_l).
-\]
+$$
 
 然后交换 winner/loser，再算一次，解释梯度方向。
 
@@ -739,43 +739,43 @@ r_w=2.0,\quad r_l=0.5,
 
 构造两个 token distribution：
 
-\[
+$$
 p=[0.9,0.05,0.05],
 \qquad
 q=[0.4,0.3,0.3].
-\]
+$$
 
 计算：
 
-\[
+$$
 D_{KL}(p\Vert q).
-\]
+$$
 
-讨论当 \(\beta\) 很大或很小时 RLHF policy 会有什么行为。
+讨论当 $\beta$ 很大或很小时 RLHF policy 会有什么行为。
 
 ### 练习 3：DPO 的 winner/loser 相对概率
 
 令：
 
-\[
+$$
 \pi_{ref}(y_w|x)=0.2,
 \quad
 \pi_{ref}(y_l|x)=0.2,
-\]
+$$
 
-\[
+$$
 \pi_\theta(y_w|x)=0.4,
 \quad
 \pi_\theta(y_l|x)=0.1.
-\]
+$$
 
 计算 DPO logit 中：
 
-\[
+$$
 \log\frac{\pi_\theta(y_w|x)}{\pi_{ref}(y_w|x)}
 -
 \log\frac{\pi_\theta(y_l|x)}{\pi_{ref}(y_l|x)}.
-\]
+$$
 
 说明为什么其符号为正。
 

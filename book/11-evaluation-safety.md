@@ -20,21 +20,21 @@
 
 不存在一个单一数字可以完整概括：
 
-\[
+$$
 \text{General Intelligence}=87.3.
-\]
+$$
 
 任何 benchmark 都是在有限任务分布：
 
-\[
+$$
 D_{eval}
-\]
+$$
 
 上估计某个 performance functional：
 
-\[
+$$
 \hat P=rac1N\sum_{i=1}^N m(f(x_i),y_i).
-\]
+$$
 
 因此第一步永远是：
 
@@ -46,15 +46,15 @@ D_{eval}
 
 语言模型 loss：
 
-\[
+$$
 L=-\frac1T\sum_t\log p(x_t|x_{<t}).
-\]
+$$
 
 perplexity：
 
-\[
+$$
 PPL=e^L.
-\]
+$$
 
 它适合：
 
@@ -129,9 +129,9 @@ HumanEval 给自然语言 function specification，模型生成 Python function�
 
 代码任务的一大优势：
 
-\[
+$$
 \text{execution}\rightarrow\text{objective signal}.
-\]
+$$
 
 这既适合 evaluation，也适合 RLVR。
 
@@ -147,16 +147,16 @@ HumanEval 给自然语言 function specification，模型生成 Python function�
 
 # 7　pass@k：为什么代码 benchmark 经常不是单次成功率？
 
-每道题采样 \(n\) 个程序，其中 \(c\) 个正确。
+每道题采样 $n$ 个程序，其中 $c$ 个正确。
 
-从中随机选 \(k\) 个，至少一个正确的无偏估计常写：
+从中随机选 $k$ 个，至少一个正确的无偏估计常写：
 
-\[
+$$
 \text{pass@k}
 =1-\frac{\binom{n-c}{k}}{\binom nk}.
-\]
+$$
 
-当 \(k\) 增大，pass@k 必然提高。
+当 $k$ 增大，pass@k 必然提高。
 
 因此：
 
@@ -226,11 +226,11 @@ parallel agents
 
 最好再报告：
 
-\[
+$$
 \text{success / dollar},
 \quad
 \text{success / minute}.
-\]
+$$
 
 ---
 
@@ -258,9 +258,9 @@ parallel agents
 
 因此：
 
-\[
+$$
 \text{NIAH success}\not\Rightarrow\text{full long-context reasoning}.
-\]
+$$
 
 ---
 
@@ -292,9 +292,9 @@ parallel agents
 
 如果测试题：
 
-\[
+$$
 (x_i,y_i)
-\]
+$$
 
 曾直接出现在 pretraining data 中，模型可能只是 memorization。
 
@@ -401,9 +401,9 @@ A / B / tie
 
 但：
 
-\[
+$$
 \text{verbosity}\neq\text{correctness}.
-\]
+$$
 
 一种控制方法：
 
@@ -423,27 +423,27 @@ reasoning model 时代尤其要防止：
 
 准确率：
 
-\[
+$$
 \hat p=rac{c}{N}.
-\]
+$$
 
 粗略标准误：
 
-\[
+$$
 SE\approx\sqrt{\frac{\hat p(1-\hat p)}{N}}.
-\]
+$$
 
 若：
 
-\[
+$$
 N=100,\quad p=0.8,
-\]
+$$
 
 则：
 
-\[
+$$
 SE\approx0.04.
-\]
+$$
 
 4 个百分点量级。
 
@@ -468,15 +468,15 @@ SE\approx0.04.
 
 语言模型优化：
 
-\[
+$$
 \max p_\theta(y|x),
-\]
+$$
 
 并没有一个内置机制保证：
 
-\[
+$$
 y\in\text{real-world facts}.
-\]
+$$
 
 如果模型没有可靠证据，它仍必须给下一个 token 分布。
 
@@ -497,15 +497,15 @@ TruthfulQA 就是早期专门研究模型模仿人类常见错误/误解的 benc
 
 理想系统应区分：
 
-\[
+$$
 \text{I know}
-\]
+$$
 
 与：
 
-\[
+$$
 \text{I am guessing}.
-\]
+$$
 
 但 token probability 并不能直接当作 epistemic uncertainty。
 
@@ -522,15 +522,15 @@ TruthfulQA 就是早期专门研究模型模仿人类常见错误/误解的 benc
 
 真正的 deployment 目标往往不是最大 accuracy，而是：
 
-\[
+$$
 \text{maximize useful coverage}
-\]
+$$
 
 subject to：
 
-\[
+$$
 \text{error rate}<\epsilon.
-\]
+$$
 
 ---
 
@@ -554,13 +554,13 @@ Agent 时代增加：
 
 因此风险随 action capability 上升：
 
-\[
+$$
 \text{bad text}
 \rightarrow
 \text{bad recommendation}
 \rightarrow
 \text{bad external action}.
-\]
+$$
 
 后者的真实世界成本更高。
 
@@ -620,15 +620,15 @@ sudo root
 
 权限集合：
 
-\[
+$$
 P_{agent}
-\]
+$$
 
 应尽量满足：
 
-\[
+$$
 P_{agent}=P_{minimum\ required}.
-\]
+$$
 
 模型越强，也越不能跳过传统 security engineering。
 
@@ -665,10 +665,10 @@ P_{agent}=P_{minimum\ required}.
 
 这不是因为模型“一定会犯错”，而是风险管理：
 
-\[
+$$
 \text{Expected Risk}
 =P(\text{failure})\times\text{Impact}.
-\]
+$$
 
 即使失败概率很低，高 impact 也值得加控制。
 
@@ -730,28 +730,28 @@ Our model beats X by 3.2 points
 
 现实部署不是单目标：
 
-\[
+$$
 \max \text{accuracy}
-\]
+$$
 
 而更像：
 
-\[
+$$
 \max(
 \text{accuracy},
 \text{speed},
 \text{reliability},
 \text{safety}
 )
-\]
+$$
 
 同时最小化：
 
-\[
+$$
 \text{cost},
 \text{latency},
 \text{energy}.
-\]
+$$
 
 所以一个 90 分、成本 1 美元的模型，与 88 分、成本 0.01 美元的模型，谁“更好”取决于应用。
 
@@ -800,9 +800,9 @@ Our model beats X by 3.2 points
 
 令：
 
-\[
+$$
 n=100,c=20.
-\]
+$$
 
 计算 pass@1、pass@5、pass@10，并解释为什么模型参数完全没变，分数却明显提高。
 

@@ -10,19 +10,19 @@
 
 如果把 2020 年 GPT‑3 的典型接口写成：
 
-\[
+$$
 \text{prompt}\rightarrow\text{text completion},
-\]
+$$
 
 2022 年 ChatGPT 变成：
 
-\[
+$$
 \text{conversation}\rightarrow\text{aligned response},
-\]
+$$
 
 而 2026 年的 frontier system 更像：
 
-\[
+$$
 \text{goal}
 \rightarrow
 \text{reason}
@@ -35,21 +35,21 @@
 \rightarrow\cdots
 \rightarrow
 \text{finished work}.
-\]
+$$
 
 因此研究对象从一个条件概率模型：
 
-\[
+$$
 p_\theta(y\mid x)
-\]
+$$
 
 逐渐扩大为一个长程闭环系统：
 
-\[
+$$
 \pi_\theta(a_t\mid o_{\le t},a_{<t},m_t),
-\]
+$$
 
-其中 \(m_t\) 还可能包含外部 memory、检索结果、文件状态和工具执行历史。
+其中 $m_t$ 还可能包含外部 memory、检索结果、文件状态和工具执行历史。
 
 ```mermaid
 flowchart LR
@@ -116,17 +116,17 @@ reasoning_effort = low / medium / high / max
 
 可以把推理看成优化：
 
-\[
+$$
 \max_{c(x)}\ \mathbb E[U(x,c)]
-\]
+$$
 
 subject to：
 
-\[
+$$
 \mathbb E[\operatorname{Cost}(c)]\le B,
-\]
+$$
 
-其中 \(c(x)\) 是为输入 \(x\) 分配的计算预算。
+其中 $c(x)$ 是为输入 $x$ 分配的计算预算。
 
 真正困难的问题不是：
 
@@ -144,33 +144,33 @@ subject to：
 
 设任务难度潜变量：
 
-\[
+$$
 d(x).
-\]
+$$
 
 理想系统应该学：
 
-\[
+$$
 c^*(x)=f(d(x),\text{risk},\text{deadline},\text{cost}).
-\]
+$$
 
 简单问题：
 
-\[
+$$
 c^*(x)\approx\text{small}.
-\]
+$$
 
 难数学/复杂代码：
 
-\[
+$$
 c^*(x)\approx\text{large}.
-\]
+$$
 
 高风险操作则可能需要：
 
-\[
+$$
 c^*(x)=\text{reasoning}+	ext{verification}+	ext{human approval}.
-\]
+$$
 
 所以未来“thinking model”的核心不只是会想，而是**会管理自己的计算**。
 
@@ -182,9 +182,9 @@ c^*(x)=\text{reasoning}+	ext{verification}+	ext{human approval}.
 
 但这不代表：
 
-\[
+$$
 1M\text{ context}=1M\text{ useful memory}.
-\]
+$$
 
 一个百万上下文系统必须同时解决：
 
@@ -222,15 +222,15 @@ Agent 运行几百轮后，会积累：
 
 如果全部原样塞进上下文：
 
-\[
+$$
 T\uparrow\uparrow,
-\]
+$$
 
 但有效信号密度：
 
-\[
+$$
 \rho_{useful}=\frac{\text{task-relevant tokens}}{T}
-\]
+$$
 
 可能不断下降。
 
@@ -260,9 +260,9 @@ current working context
 
 但在 1M context 与大规模 agent trajectory 下：
 
-\[
+$$
 O(T^2)
-\]
+$$
 
 越来越难忽略。
 
@@ -329,39 +329,39 @@ trillion-scale total parameters
 
 例如 Kimi K3：
 
-\[
+$$
 N_{total}=2.8T,
-\]
+$$
 
-\[
+$$
 N_{active}=104B,
-\]
+$$
 
 active ratio：
 
-\[
+$$
 \frac{104}{2800}\approx3.7\%.
-\]
+$$
 
 Qwen3.8‑2.4T‑A95B：
 
-\[
+$$
 \frac{95}{2400}\approx4.0\%.
-\]
+$$
 
 DeepSeek‑V4‑Pro：
 
-\[
+$$
 \frac{49}{1600}\approx3.1\%.
-\]
+$$
 
 这表明 scaling 越来越追求：
 
-\[
+$$
 \text{large representational capacity}
 +
 \text{small active compute fraction}.
-\]
+$$
 
 但系统代价转移到了：
 
@@ -377,15 +377,15 @@ DeepSeek‑V4‑Pro：
 
 Dense 模型中：
 
-\[
+$$
 C_{token}\propto N_{total}.
-\]
+$$
 
 Sparse MoE 中更接近：
 
-\[
+$$
 C_{token}\propto N_{shared}+N_{selected\ experts}+N_{attention}.
-\]
+$$
 
 因此今天看到：
 
@@ -419,11 +419,11 @@ Text LLM
 
 2026 年系统目标更接近：
 
-\[
+$$
 \text{text}+\text{image}+\text{audio}+\text{video}+\text{UI state}
 \rightarrow
 \text{shared reasoning / action system}.
-\]
+$$
 
 Google I/O 2026 公开 Gemini Omni，强调多种输入模态与生成/编辑；Kimi K3 则公开 native vision 与长上下文；OpenAI 当前旗舰模型也把图像输入、computer use 与 end-to-end work 放入统一 API/产品能力中。[Google I/O 2026](https://blog.google/innovation-and-ai/technology/developers-tools/google-io-2026-collection/)、[MoonshotAI/Kimi-K3](https://github.com/MoonshotAI/Kimi-K3)、[OpenAI API](https://developers.openai.com/api/docs/models)
 
@@ -462,17 +462,17 @@ agentic RL
 
 策略优化对象不再只是最终回答：
 
-\[
+$$
 r(x,y),
-\]
+$$
 
 而是整个 trajectory：
 
-\[
+$$
 R(\tau),
 \quad
 \tau=(o_0,a_0,o_1,a_1,\ldots,o_T).
-\]
+$$
 
 这会引入传统 LLM 训练没有的难题：
 
@@ -510,9 +510,9 @@ model generates
 
 如果训练 GPU 同步等环境：
 
-\[
+$$
 \text{GPU idle time}\uparrow.
-\]
+$$
 
 所以未来 RL infrastructure 更像分布式在线系统：
 
@@ -545,7 +545,7 @@ GLM‑5 官方强调其 `slime` 异步 RL infrastructure；Kimi K3 公开资料�
 
 这使能力分解更清楚：
 
-\[
+$$
 \text{Final capability}
 =
 F(
@@ -556,7 +556,7 @@ F(
 \text{tool training},
 \text{inference budget}
 ).
-\]
+$$
 
 因此模型版本号的变化不必对应新的基础架构。
 
@@ -583,7 +583,7 @@ Kimi K3 公开 MXFP4 weights / MXFP8 activations 的 QAT 配置，就是“训�
 
 这是一种 co-design：
 
-\[
+$$
 \text{Architecture}
 \leftrightarrow
 \text{Training precision}
@@ -591,7 +591,7 @@ Kimi K3 公开 MXFP4 weights / MXFP8 activations 的 QAT 配置，就是“训�
 \text{Serving kernel}
 \leftrightarrow
 \text{Hardware}.
-\]
+$$
 
 ---
 
@@ -667,9 +667,9 @@ Anthropic 则用另一种产品机制：Fable 5.1 与 Mythos 5.1 为相同 under
 
 相反，能力提高后：
 
-\[
+$$
 P(\text{successful action}|\text{bad instruction})
-\]
+$$
 
 也可能提高。
 
@@ -703,23 +703,23 @@ artifact / patch / task completion
 
 此时评价变量增加：
 
-\[
+$$
 \text{success},
 \text{time},
 \text{cost},
 \text{tool calls},
 \text{human intervention},
 \text{recovery rate}.
-\]
+$$
 
 所以最终指标很可能是：
 
-\[
+$$
 \text{Useful Work Rate}
 =
 \frac{\text{successful verified work}}
 {\text{time}\times\text{cost}}.
-\]
+$$
 
 这比“单题准确率”更接近真实 agent productivity。
 
@@ -786,7 +786,7 @@ Agent 虽然可以把新知识写进 external memory，但权重并不会像人�
 
 需要：
 
-\[
+$$
 \text{write policy}
 +
 \text{compression}
@@ -796,7 +796,7 @@ Agent 虽然可以把新知识写进 external memory，但权重并不会像人�
 \text{revision}
 +
 \text{forgetting}.
-\]
+$$
 
 真正难的是记忆治理，而不是数据库容量。
 
@@ -806,19 +806,19 @@ Agent 虽然可以把新知识写进 external memory，但权重并不会像人�
 
 文本模型可以拟合大量世界规律，但：
 
-\[
+$$
 \text{predictive correlation}\neq\text{causal intervention model}.
-\]
+$$
 
 Agent/robotics 会逼迫模型面对：
 
-> “如果我采取动作 \(a\)，环境状态会怎样变化？”
+> “如果我采取动作 $a$，环境状态会怎样变化？”
 
 即：
 
-\[
+$$
 p(s_{t+1}|s_t,a_t).
-\]
+$$
 
 这与纯语言 continuation 有本质不同的监督结构。
 
@@ -858,15 +858,15 @@ perception
 
 RL 中这是：
 
-\[
+$$
 \text{long-horizon credit assignment}.
-\]
+$$
 
 仅给最终 reward：
 
-\[
+$$
 r_T=0
-\]
+$$
 
 的信息密度太低。
 
@@ -916,11 +916,11 @@ static decode  → persistent system state
 
 所以“后 Transformer”最可能先表现为：
 
-\[
+$$
 \text{Transformer-like residual computation graph}
 +
 \text{new memory/routing/attention/state mechanisms}.
-\]
+$$
 
 而不是简单把所有组件一次全部删掉。
 

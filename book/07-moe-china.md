@@ -14,9 +14,9 @@ Dense Transformer 的一个基本特点是：
 
 如果把 FFN 规模从：
 
-\[
+$$
 N\rightarrow 10N,
-\]
+$$
 
 每个 token 的计算量也会显著增加。
 
@@ -38,47 +38,47 @@ Mixture-of-Experts（MoE）就是为这种稀疏条件计算服务的核心架�
 
 普通 FFN：
 
-\[
+$$
 y=E(x).
-\]
+$$
 
-MoE 有 \(N\) 个 experts：
+MoE 有 $N$ 个 experts：
 
-\[
+$$
 E_1,E_2,\ldots,E_N.
-\]
+$$
 
-Router 根据 token hidden state \(x\) 产生 logits：
+Router 根据 token hidden state $x$ 产生 logits：
 
-\[
+$$
 z=W_rx.
-\]
+$$
 
 再得到 routing score：
 
-\[
+$$
 p_i=\operatorname{softmax}(z)_i.
-\]
+$$
 
-只选择 top-\(k\) experts：
+只选择 top-$k$ experts：
 
-\[
+$$
 \mathcal T(x)=\operatorname{TopK}(p,k).
-\]
+$$
 
 输出：
 
-\[
+$$
 y=
 \sum_{i\in\mathcal T(x)}
 \tilde p_iE_i(x).
-\]
+$$
 
 若：
 
-\[
+$$
 N=128,\quad k=8,
-\]
+$$
 
 那么一个 token 只经过 8 个 routed experts，而不是全部 128 个。
 
@@ -102,15 +102,15 @@ Activated per token:   22B
 
 因此两个成本不同：
 
-\[
+$$
 \text{memory capacity}
 \propto N_{total},
-\]
+$$
 
-\[
+$$
 \text{per-token compute}
 \propto N_{active}.
-\]
+$$
 
 MoE 的核心收益可以概括为：
 
@@ -155,18 +155,18 @@ Expert 7 : ██████████████████████
 
 早期常增加 auxiliary loss，让 routing distribution 更均衡：
 
-\[
+$$
 \mathcal L
 =
 \mathcal L_{LM}
 +\lambda\mathcal L_{balance}.
-\]
+$$
 
 问题是：
 
 > 辅助均衡目标可能与主语言建模目标冲突。
 
-如果 \(\lambda\) 太大，router 为了“平均分流”而不再选择最适合 token 的专家。
+如果 $\lambda$ 太大，router 为了“平均分流”而不再选择最适合 token 的专家。
 
 DeepSeek-V3 后来把 **auxiliary-loss-free load balancing** 推到主流讨论，正是在处理这个矛盾。[DeepSeek-AI, 2024](https://arxiv.org/abs/2412.19437)
 
@@ -207,11 +207,11 @@ GPU5 token → GPU0 expert
 
 因此：
 
-\[
+$$
 \text{Sparse FLOPs}
 \not\Rightarrow
 \text{automatically fast wall-clock time}.
-\]
+$$
 
 ---
 
@@ -377,36 +377,36 @@ MLA（Multi-head Latent Attention）提出更激进的问题：
 
 > **K/V 是否可以先压到一个低维 latent，再在计算时恢复/吸收到投影矩阵里？**
 
-概念化地，普通 attention 对当前 token hidden state \(h_t\)：
+概念化地，普通 attention 对当前 token hidden state $h_t$：
 
-\[
+$$
 k_t=W_Kh_t,
 \qquad
 v_t=W_Vh_t.
-\]
+$$
 
 MLA 先做低秩压缩：
 
-\[
+$$
 c_t^{KV}=W^{DKV}h_t,
-\]
+$$
 
 其中：
 
-\[
+$$
 c_t^{KV}\in\mathbb R^{d_c},
 \qquad d_c\ll h_{kv}d_h.
-\]
+$$
 
 再由 latent 产生 content key/value：
 
-\[
+$$
 k_t^C=W^{UK}c_t^{KV},
-\]
+$$
 
-\[
+$$
 v_t^C=W^{UV}c_t^{KV}.
-\]
+$$
 
 位置相关 RoPE 部分另行处理。
 
@@ -437,11 +437,11 @@ DeepSeekMoE 强调更细粒度的 experts，并引入 shared experts 与 routed 
 
 可以抽象成：
 
-\[
+$$
 y=E_{shared}(x)
 +
 \sum_{i\in TopK}g_iE_i^{routed}(x).
-\]
+$$
 
 直觉：
 
@@ -465,16 +465,16 @@ y=E_{shared}(x)
 
 DeepSeek‑V3 技术报告给出的核心规模：
 
-\[
+$$
 671B\text{ total},
 \qquad37B\text{ activated/token}.
-\]
+$$
 
 预训练约：
 
-\[
+$$
 14.8T\text{ tokens}.
-\]
+$$
 
 [DeepSeek-AI, 2024](https://arxiv.org/abs/2412.19437)
 
@@ -495,9 +495,9 @@ DeepSeek‑V3 技术报告给出的核心规模：
 
 传统方法：
 
-\[
+$$
 \mathcal L=\mathcal L_{LM}+\lambda\mathcal L_{balance}.
-\]
+$$
 
 DeepSeek‑V3 采用的核心思想是：
 
@@ -505,26 +505,26 @@ DeepSeek‑V3 采用的核心思想是：
 
 可以概念化成：
 
-\[
+$$
 s_i(x)=r_i(x)+b_i,
-\]
+$$
 
 其中：
 
-- \(r_i(x)\)：token 与 expert 的原始 affinity；
-- \(b_i\)：为平衡负载调整的 bias。
+- $r_i(x)$：token 与 expert 的原始 affinity；
+- $b_i$：为平衡负载调整的 bias。
 
-若 expert \(i\) 长期过载：
+若 expert $i$ 长期过载：
 
-\[
+$$
 b_i\downarrow.
-\]
+$$
 
 若长期欠载：
 
-\[
+$$
 b_i\uparrow.
-\]
+$$
 
 这样主语言建模目标不用直接承受很大的 balance penalty。
 
@@ -534,16 +534,16 @@ b_i\uparrow.
 
 标准 LM：
 
-\[
+$$
 h_t\rightarrow x_{t+1}.
-\]
+$$
 
 MTP 希望让同一表示同时承担更多未来预测任务：
 
-\[
+$$
 h_t\rightarrow
 x_{t+1},x_{t+2},\ldots,x_{t+k}.
-\]
+$$
 
 它可以提供更密集的训练信号，并可能提升模型对局部未来结构的表示。
 
@@ -622,19 +622,19 @@ Moonshot AI 的 Kimi 系列早期以长上下文产品得到广泛关注；Kimi 
 
 技术报告给出：
 
-\[
+$$
 1T\text{ total parameters},
-\]
+$$
 
-\[
+$$
 32B\text{ activated parameters}.
-\]
+$$
 
 预训练：
 
-\[
+$$
 15.5T\text{ tokens}.
-\]
+$$
 
 并提出 **MuonClip** optimizer：在 Muon 的基础上加入 QK-clip，目标之一是解决大规模训练 instability。
 
@@ -659,16 +659,16 @@ GLM‑4.5（2025）的技术报告把模型定位为 ARC foundation model：Agen
 
 报告规模：
 
-\[
+$$
 355B\text{ total},
 \qquad32B\text{ active}.
-\]
+$$
 
 预训练约：
 
-\[
+$$
 23T\text{ tokens}.
-\]
+$$
 
 并支持：
 
@@ -688,16 +688,16 @@ GLM‑4.5（2025）的技术报告把模型定位为 ARC foundation model：Agen
 
 截至 2026-09-14，GLM‑5 官方仓库公开描述的基础 GLM‑5 规模为：
 
-\[
+$$
 744B\text{ total},
 \qquad40B\text{ active}.
-\]
+$$
 
 预训练数据约：
 
-\[
+$$
 28.5T\text{ tokens}.
-\]
+$$
 
 并公开使用 DeepSeek Sparse Attention（DSA）与异步 RL infrastructure `slime`，目标是提高 RL training throughput。[Z.ai, GLM‑5 official repository](https://github.com/zai-org/GLM-5)
 
@@ -836,11 +836,11 @@ MLA
 
 ### 参数
 
-\[
+$$
 N_{total}=?
 \qquad
 N_{active}=?
-\]
+$$
 
 ### Routing
 
@@ -901,9 +901,9 @@ N_{active}=?
 
 计算下列模型每 token 的 active ratio：
 
-\[
+$$
 \frac{N_{active}}{N_{total}}.
-\]
+$$
 
 - 235B-A22B；
 - 671B-A37B；

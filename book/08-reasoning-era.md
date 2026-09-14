@@ -12,11 +12,11 @@
 
 例如：
 
-\[
+$$
 \text{条件 A}+\text{条件 B}
 \rightarrow\text{中间结论 C}
 \rightarrow\text{答案 D}.
-\]
+$$
 
 这是任务属性。
 
@@ -81,15 +81,15 @@ A: 先用 23-7=16，再加 5 得 21，所以答案是 21。
 
 一个最终答案 token 必须一次完成很多隐含计算：
 
-\[
+$$
 x\rightarrow y.
-\]
+$$
 
 而允许 intermediate tokens 后：
 
-\[
+$$
 x\rightarrow z_1\rightarrow z_2\rightarrow\cdots\rightarrow y.
-\]
+$$
 
 每个中间 token 都可以成为新的 working state。
 
@@ -117,9 +117,9 @@ Kojima 等人在 2022 年发现，即使没有 few-shot reasoning examples，仅
 
 标准 greedy decoding：
 
-\[
+$$
 y^*=\arg\max_y p(y|x).
-\]
+$$
 
 Self-Consistency 改成：
 
@@ -143,11 +143,11 @@ majority → 42
 
 这第一次非常直观地展示：
 
-\[
+$$
 \text{more inference compute}
 \Rightarrow
 \text{better accuracy}
-\]
+$$
 
 即使模型参数完全不变。
 
@@ -157,24 +157,24 @@ majority → 42
 
 假设单次采样正确概率为：
 
-\[
+$$
 p=0.6.
-\]
+$$
 
 若独立采样 5 次，多数正确概率为：
 
-\[
+$$
 P(\ge3\text{ correct})
 =
 \sum_{k=3}^5
 \binom5k p^k(1-p)^{5-k}.
-\]
+$$
 
 数值约：
 
-\[
+$$
 0.683.
-\]
+$$
 
 这只是一个极简独立模型。真实 LLM samples 高度相关，所以收益会更小、更复杂。
 
@@ -188,21 +188,22 @@ P(\ge3\text{ correct})
 
 如果有 100 个候选解：
 
-\[
+$$
 y_1,\ldots,y_{100},
-\]
+$$
 
 我们可以训练 verifier：
 
-\[
-v_\phi(x,y_i)ightarrow score.
-\]
+$$
+v_\phi(x,y_i)
+ightarrow score.
+$$
 
 再选：
 
-\[
+$$
 y^*=\arg\max_i v_\phi(x,y_i).
-\]
+$$
 
 早期数学工作已经显示 learned verifier 能提高语言模型数学解题性能。[Cobbe et al., 2021](https://arxiv.org/abs/2110.14168)
 
@@ -243,9 +244,9 @@ flowchart LR
 
 对每个中间 step 评分：
 
-\[
+$$
 r_1,r_2,\ldots,r_T.
-\]
+$$
 
 这样反馈更密集，但需要高质量 step-level supervision。
 
@@ -286,24 +287,24 @@ OpenAI 在 2024 年 9 月公开 o1，并明确报告：
 
 这非常重要，因为传统 scaling 主要讨论：
 
-\[
+$$
 N,D,C_{pretrain}.
-\]
+$$
 
 现在又增加：
 
-\[
+$$
 C_{RL},
 \qquad
 C_{test}.
-\]
+$$
 
 于是能力函数更像：
 
-\[
+$$
 \text{Capability}
 =f(N,D,C_{pretrain},C_{posttrain},C_{test}).
-\]
+$$
 
 这不是严格理论式，而是理解时代变化的概念模型。
 
@@ -317,7 +318,7 @@ C_{test}.
 
 ### 10.2　Best-of-N
 
-独立生成 \(N\) 个答案，再选最高分。
+独立生成 $N$ 个答案，再选最高分。
 
 ### 10.3　Majority / Self-Consistency
 
@@ -361,21 +362,21 @@ OpenAI 在 o1 研究发布中公开过：
 
 ### pass@1
 
-\[
+$$
 \text{一次运行多强？}
-\]
+$$
 
 ### consensus@64
 
-\[
+$$
 \text{64 倍左右采样预算下，多数票多强？}
-\]
+$$
 
 ### rerank@1000
 
-\[
+$$
 \text{巨大搜索 + scoring budget 下，系统上限多高？}
-\]
+$$
 
 若把这些分数直接横向排序，就隐藏了 inference compute。
 
@@ -391,9 +392,9 @@ OpenAI 在 o1 研究发布中公开过：
 
 数学：
 
-\[
+$$
 \boxed{42}
-\]
+$$
 
 可以自动检查 final answer。
 
@@ -409,13 +410,13 @@ unit tests pass / fail
 
 可以定义：
 
-\[
+$$
 r(x,y)=
 \begin{cases}
 1,&\text{verifier says correct}\\
 0,&\text{otherwise}.
 \end{cases}
-\]
+$$
 
 或更细粒度的测试通过率。
 
@@ -431,9 +432,9 @@ DeepSeekMath 在 2024 年提出 Group Relative Policy Optimization（GRPO）。[
 
 PPO 通常需要 value/critic 估计 advantage：
 
-\[
+$$
 A_t=R_t-V(s_t).
-\]
+$$
 
 对 LLM 来说，critic 本身可能又是一个大模型，显存昂贵。
 
@@ -443,45 +444,45 @@ GRPO 的核心思想是：
 
 设一个 prompt 采样：
 
-\[
+$$
 o_1,o_2,\ldots,o_G,
-\]
+$$
 
 reward：
 
-\[
+$$
 r_1,r_2,\ldots,r_G.
-\]
+$$
 
 组均值：
 
-\[
+$$
 \bar r=\frac1G\sum_i r_i.
-\]
+$$
 
 标准差：
 
-\[
+$$
 s_r=\sqrt{\frac1G\sum_i(r_i-\bar r)^2+\epsilon}.
-\]
+$$
 
 简化的 group-relative advantage：
 
-\[
+$$
 A_i=\frac{r_i-\bar r}{s_r}.
-\]
+$$
 
 高于组平均：
 
-\[
+$$
 A_i>0,
-\]
+$$
 
 低于组平均：
 
-\[
+$$
 A_i<0.
-\]
+$$
 
 然后使用类似 PPO 的 clipped policy-ratio objective，并配合 KL regularization。
 
@@ -617,11 +618,11 @@ Small student model
 
 因此：
 
-\[
+$$
 \text{distilled reasoning behavior}
 \neq
 \text{same learning dynamics as teacher RL}.
-\]
+$$
 
 ---
 
@@ -679,19 +680,19 @@ short decode
 
 所以理想系统应该根据任务动态分配：
 
-\[
+$$
 C_{test}(x).
-\]
+$$
 
 即：
 
-\[
+$$
 \text{easy input}\rightarrow\text{small budget},
-\]
+$$
 
-\[
+$$
 \text{hard input}\rightarrow\text{large budget}.
-\]
+$$
 
 这实际上是一个 **adaptive computation** 问题。
 
@@ -705,9 +706,9 @@ C_{test}(x).
 
 一个危险的 shortcut：
 
-\[
+$$
 \text{longer CoT}\Rightarrow\text{better reasoning}.
-\]
+$$
 
 这并不成立。
 
@@ -721,16 +722,16 @@ C_{test}(x).
 
 一个更有意义的量是：
 
-\[
+$$
 \text{accuracy per unit compute}.
-\]
+$$
 
 例如：
 
-\[
+$$
 \frac{\Delta\text{Success Rate}}
 {\Delta\text{Inference FLOPs / latency / tokens}}.
-\]
+$$
 
 reasoning research 最终必须进入 **compute efficiency**，否则只会无限延长输出。
 
@@ -829,15 +830,15 @@ user-facing concise explanation
 
 在科学研究中必须区分：
 
-\[
+$$
 \text{latent/internal computation}
-\]
+$$
 
 与：
 
-\[
+$$
 \text{displayed rationale}.
-\]
+$$
 
 ---
 
@@ -865,9 +866,9 @@ think again
 
 这时 reward 不再只是“最终数学答案对不对”，而是：
 
-\[
+$$
 R(\tau)
-\]
+$$
 
 对整条环境轨迹打分。
 
@@ -904,23 +905,23 @@ pretraining -----→
 
 过去主要向右：
 
-\[
+$$
 C_{pretrain}\uparrow.
-\]
+$$
 
 现在同时：
 
-\[
+$$
 C_{RL}\uparrow,
 \qquad
 C_{test}\uparrow.
-\]
+$$
 
 未来 Agent 还会增加：
 
-\[
+$$
 C_{environment}\uparrow,
-\]
+$$
 
 即更多工具、模拟、搜索和真实环境交互。
 
@@ -968,23 +969,23 @@ C_{environment}\uparrow,
 
 ### 练习 1：Self-Consistency
 
-设单样本正确率 \(p=0.55\)。计算 3、5、9 个独立样本多数票正确率。再解释为什么真实 LLM 的结果通常低于独立假设预测。
+设单样本正确率 $p=0.55$。计算 3、5、9 个独立样本多数票正确率。再解释为什么真实 LLM 的结果通常低于独立假设预测。
 
 ### 练习 2：GRPO 手算
 
 一组 4 个答案 reward：
 
-\[
+$$
 [1,1,0,0].
-\]
+$$
 
 计算均值、标准差与 normalized group advantages。
 
 再用：
 
-\[
+$$
 [1,0.8,0.7,0.6]
-\]
+$$
 
 重复一次，观察 relative signal 的变化。
 

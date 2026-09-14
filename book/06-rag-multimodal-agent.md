@@ -8,9 +8,9 @@
 
 预训练把大量统计规律压缩进参数：
 
-\[
+$$
 \theta\leftarrow\operatorname{Train}(D).
-\]
+$$
 
 但参数记忆天然存在问题：
 
@@ -23,11 +23,11 @@
 
 于是形成另一种范式：
 
-\[
+$$
 \text{Model parameters}
 +
 \text{external memory / retrieval}.
-\]
+$$
 
 ---
 
@@ -64,34 +64,34 @@ flowchart LR
 
 设 encoder：
 
-\[
+$$
 f_\phi(x)\in\mathbb R^d.
-\]
+$$
 
 query embedding：
 
-\[
+$$
 q=f_\phi(x_q),
-\]
+$$
 
 文档 embedding：
 
-\[
+$$
 d_i=f_\phi(x_i).
-\]
+$$
 
 常见相似度：
 
-\[
+$$
 \operatorname{cos}(q,d_i)
 =\frac{q^Td_i}{\|q\|\|d_i\|}.
-\]
+$$
 
 或者直接 inner product：
 
-\[
+$$
 s_i=q^Td_i.
-\]
+$$
 
 向量检索的关键假设是：
 
@@ -107,9 +107,9 @@ s_i=q^Td_i.
 
 query、document 分别编码：
 
-\[
+$$
 q=f(x_q),\qquad d=f(x_d).
-\]
+$$
 
 文档 embedding 可以预计算。
 
@@ -174,13 +174,13 @@ RAG 质量常常不是“LLM 不够强”，而是：
 
 # 6　Approximate Nearest Neighbor：为什么不用暴力算所有向量？
 
-若有 \(N\) 个文档向量，每次 query 都算：
+若有 $N$ 个文档向量，每次 query 都算：
 
-\[
+$$
 q^Td_i,\quad i=1,\ldots,N,
-\]
+$$
 
-成本随 \(N\) 线性增长。
+成本随 $N$ 线性增长。
 
 ANN 索引如 HNSW、IVF 等牺牲少量 exactness，换取更快搜索。
 
@@ -210,21 +210,21 @@ RAG 因而本质上也包含经典信息检索系统问题，并不是“LLM 前
 
 所以评价应该拆成：
 
-\[
+$$
 \text{retrieval recall@k},
-\]
+$$
 
-\[
+$$
 \text{reranker quality},
-\]
+$$
 
-\[
+$$
 \text{answer correctness},
-\]
+$$
 
-\[
+$$
 \text{faithfulness / citation correctness}.
-\]
+$$
 
 否则你无法知道该换 embedding model，还是该改 prompt / generator。
 
@@ -262,9 +262,9 @@ RAG 负责**选择外部信息**，长上下文负责**在更大的已选信息�
 
 现实世界的信号不仅是 token：
 
-\[
+$$
 \text{text},\text{image},\text{audio},\text{video},\text{action},\ldots
-\]
+$$
 
 多模态模型要解决两个基本问题：
 
@@ -277,29 +277,29 @@ RAG 负责**选择外部信息**，长上下文负责**在更大的已选信息�
 
 CLIP 使用大量 image-text pairs，训练 image encoder 与 text encoder，使匹配图文 embedding 相似，不匹配图文远离。[Radford et al., 2021](https://arxiv.org/abs/2103.00020)
 
-设 batch 中有 \(N\) 对：
+设 batch 中有 $N$ 对：
 
-\[
+$$
 (I_i,T_i).
-\]
+$$
 
 image embedding：
 
-\[
+$$
 v_i=f_{img}(I_i),
-\]
+$$
 
 text embedding：
 
-\[
+$$
 t_i=f_{txt}(T_i).
-\]
+$$
 
 相似度矩阵：
 
-\[
+$$
 S_{ij}=\frac{v_i^Tt_j}{\tau}.
-\]
+$$
 
 正确配对在对角线上：
 
@@ -334,15 +334,15 @@ flowchart LR
 
 如果视觉 encoder 输出：
 
-\[
+$$
 V\in\mathbb R^{N_v\times d_v},
-\]
+$$
 
 projector 映射到 LLM hidden size：
 
-\[
+$$
 P(V)\in\mathbb R^{N_v\times d_{llm}}.
-\]
+$$
 
 然后视觉 token 与文本 token 一起进入语言模型。
 
@@ -388,11 +388,11 @@ Gemini 1.0 则由 Google 描述为“built from the ground up to be multimodal�
 
 于是：
 
-\[
+$$
 \text{text prediction}
 \rightarrow
 \text{structured action prediction}.
-\]
+$$
 
 ---
 
@@ -410,11 +410,11 @@ Toolformer 探索了让语言模型自监督地学习调用搜索、计算器、
 
 模型必须学会一种 meta-decision：
 
-\[
+$$
 \text{answer directly}
 \quad\text{or}\quad
 \text{call tool}.
-\]
+$$
 
 ---
 
@@ -443,31 +443,31 @@ Answer: ...
 
 ---
 
-# 16　Agent：从 \(p(y|x)\) 变成一个闭环策略
+# 16　Agent：从 $p(y|x)$ 变成一个闭环策略
 
 Chatbot：
 
-\[
+$$
 x\rightarrow y.
-\]
+$$
 
 Agent：
 
-\[
+$$
 o_t\rightarrow a_t\rightarrow o_{t+1}\rightarrow a_{t+1}\ldots
-\]
+$$
 
 其中：
 
-- \(o_t\)：observation；
-- \(a_t\)：action；
+- $o_t$：observation；
+- $a_t$：action；
 - environment：浏览器、terminal、文件、游戏、机器人等。
 
 完整轨迹：
 
-\[
+$$
 \tau=(o_0,a_0,o_1,a_1,\ldots,o_T).
-\]
+$$
 
 这时评价单位也发生改变。
 
@@ -631,15 +631,15 @@ MCP servers
 
 若单步成功概率：
 
-\[
+$$
 p=0.98,
-\]
+$$
 
 100 步都正确的粗略概率：
 
-\[
+$$
 p^{100}=0.98^{100}\approx0.133.
-\]
+$$
 
 这当然是假设独立的极简模型，但直觉非常重要：
 
@@ -673,9 +673,9 @@ p^{100}=0.98^{100}\approx0.133.
 
 新阶段则开始把：
 
-\[
+$$
 (o_t,a_t,r_t)
-\]
+$$
 
 轨迹直接变成 post-training 数据，让模型学习：
 
@@ -702,7 +702,7 @@ Qwen3-Coder 系列也把可执行编码环境与 agentic RL 作为核心训练�
 5. CLIP 用对比学习对齐图像与文本；LLaVA 展示了 vision encoder + projector + LLM 的经典多模态路线。
 6. tool use 把输出 token 变成结构化外部动作。
 7. ReAct 让 reasoning / acting / observation 形成闭环。
-8. Agent 的研究对象从单次 \(p(y|x)\) 变成环境轨迹 \(\tau\)。
+8. Agent 的研究对象从单次 $p(y|x)$ 变成环境轨迹 $\tau$。
 9. Memory 必须明确写入、检索、验证和遗忘机制；“有长期记忆”本身不是技术描述。
 10. Prompt injection、权限控制和错误累积使 agent safety 成为系统工程问题。
 11. 新一代模型开始直接在 agent trajectories 上做训练和 RL，Agent 因而逐渐从 scaffold 进入 model post-training 本身。

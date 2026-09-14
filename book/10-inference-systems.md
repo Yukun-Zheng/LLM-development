@@ -42,9 +42,9 @@ flowchart LR
 
 设 input sequence length：
 
-\[
+$$
 T_{in}=32768.
-\]
+$$
 
 Transformer 可以并行处理这 32768 个位置，因此矩阵乘法尺寸很大：
 
@@ -64,7 +64,7 @@ GPU Tensor Cores 更容易获得高利用率。
 
 # 3　Decode：为什么生成一个 token 反而可能很低效？
 
-生成第 \(t\) 个 token：
+生成第 $t$ 个 token：
 
 ```text
 hidden [B,1,d]
@@ -82,9 +82,9 @@ huge weight matrices
 
 因此 decode 优化的核心经常不是峰值 FLOPs，而是：
 
-\[
+$$
 \text{bytes moved per generated token}.
-\]
+$$
 
 ---
 
@@ -92,9 +92,9 @@ huge weight matrices
 
 ## 4.1　TTFT：Time To First Token
 
-\[
+$$
 \text{用户发出请求}\rightarrow\text{看到第一个输出 token}
-\]
+$$
 
 主要受：
 
@@ -108,17 +108,17 @@ huge weight matrices
 
 Time Per Output Token / Inter-Token Latency：
 
-\[
+$$
 \text{相邻输出 token 的时间}.
-\]
+$$
 
 主要反映 decode speed。
 
 ## 4.3　Throughput
 
-\[
+$$
 \text{tokens / second}
-\]
+$$
 
 面向服务商整体效率。
 
@@ -134,40 +134,40 @@ P95 / P99 latency。
 
 每层保存历史 token 的 K/V：
 
-\[
+$$
 K,V\in
 \mathbb R^{B\times h_{kv}\times T\times d_h}.
-\]
+$$
 
 总 cache 粗估：
 
-\[
+$$
 M_{KV}
 =2BLTh_{kv}d_hs,
-\]
+$$
 
 其中：
 
 - 2：K + V；
-- \(L\)：层数；
-- \(s\)：每元素 bytes。
+- $L$：层数；
+- $s$：每元素 bytes。
 
 例如：
 
-\[
+$$
 L=80,\quad h_{kv}=8,\quad d_h=128,
-\]
+$$
 
-\[
+$$
 T=131072,\quad s=2.
-\]
+$$
 
 单序列理论 KV：
 
-\[
+$$
 2\times80\times8\times131072\times128\times2
 \approx42.9\text{ GB}.
-\]
+$$
 
 真实模型参数可能不同，但这个数量级说明：
 
@@ -179,21 +179,21 @@ T=131072,\quad s=2.
 
 MHA：
 
-\[
+$$
 h_{kv}=h_q.
-\]
+$$
 
 GQA：
 
-\[
+$$
 h_{kv}\ll h_q.
-\]
+$$
 
 直接让：
 
-\[
+$$
 M_{KV}\propto h_{kv}
-\]
+$$
 
 下降。
 
@@ -333,9 +333,9 @@ You are a coding assistant...
 
 如果每次重新 prefill：
 
-\[
+$$
 1000\times5000
-\]
+$$
 
 token 计算被浪费。
 
@@ -380,15 +380,15 @@ Prefix/Prompt Cache：
 
 如果 decode 是 memory-bandwidth bound，权重从 BF16：
 
-\[
+$$
 2\text{ bytes/param}
-\]
+$$
 
 降到 INT4：
 
-\[
+$$
 0.5\text{ bytes/param}
-\]
+$$
 
 理论上每 token 需要搬的权重 bytes 大幅下降。
 
@@ -460,9 +460,9 @@ stage0 → stage1 → stage2 → stage3
 
 一个：
 
-\[
+$$
 1T\text{-A32B}
-\]
+$$
 
 模型每 token 只算约 32B active parameters，不代表只需存 32B。
 
@@ -470,9 +470,9 @@ stage0 → stage1 → stage2 → stage3
 
 token routing 会触发：
 
-\[
+$$
 \text{all-to-all}.
-\]
+$$
 
 所以 MoE serving 的主要问题之一是：
 
@@ -532,9 +532,9 @@ rejected: cup
 
 若平均接受长度为：
 
-\[
+$$
 E[K_{accept}]>1,
-\]
+$$
 
 就减少了昂贵 target model 串行调用次数。
 
@@ -546,15 +546,15 @@ E[K_{accept}]>1,
 
 强 draft：
 
-\[
+$$
 acceptance\uparrow
-\]
+$$
 
 但：
 
-\[
+$$
 C_{draft}\uparrow.
-\]
+$$
 
 弱 draft：
 
@@ -562,10 +562,10 @@ C_{draft}\uparrow.
 
 最优点取决于：
 
-\[
+$$
 \frac{\text{accepted tokens}}
 {\text{draft cost}+\text{verification cost}}.
-\]
+$$
 
 这又是一个 systems Pareto problem。
 
@@ -587,29 +587,29 @@ Medusa 给 base model 增加多个 decoding heads，一次预测多个未来位�
 
 Logits：
 
-\[
+$$
 z_i.
-\]
+$$
 
 Temperature：
 
-\[
+$$
 p_i=
 \frac{\exp(z_i/T)}
 {\sum_j\exp(z_j/T)}.
-\]
+$$
 
-### \(T<1\)
+### $T<1$
 
 分布更尖锐。
 
-### \(T>1\)
+### $T>1$
 
 分布更平。
 
-Top-k：只保留最高的 \(k\) 个 token。
+Top-k：只保留最高的 $k$ 个 token。
 
-Top-p / nucleus：保留累计概率达到 \(p\) 的最小 token 集。[Holtzman et al., 2019](https://arxiv.org/abs/1904.09751)
+Top-p / nucleus：保留累计概率达到 $p$ 的最小 token 集。[Holtzman et al., 2019](https://arxiv.org/abs/1904.09751)
 
 这些参数影响：
 
@@ -656,18 +656,18 @@ Agent 模型还可能停止于：
 
 Grammar-constrained decoding 可以在每一步屏蔽违反 grammar 的 tokens：
 
-\[
+$$
 z_i=-\infty
 \quad\text{if token }i\text{ invalid under grammar}.
-\]
+$$
 
 这样输出在语法层面得到保证。
 
 但：
 
-\[
+$$
 \text{valid JSON}\neq\text{semantically correct arguments}.
-\]
+$$
 
 工具安全仍需 schema validation 和权限检查。
 
@@ -721,11 +721,11 @@ Disaggregation 后必须把 Prefill 生成的大量 KV Cache 传到 Decode worke
 
 因此是否分离必须根据：
 
-\[
+$$
 \text{compute saved}
 >
 \text{KV transfer overhead}.
-\]
+$$
 
 做系统评估。
 
@@ -735,9 +735,9 @@ Disaggregation 后必须把 Prefill 生成的大量 KV Cache 传到 Decode worke
 
 请求随机到达：
 
-\[
+$$
 \lambda(t).
-\]
+$$
 
 每个请求有：
 
@@ -757,19 +757,19 @@ Scheduler 要决定：
 
 目标不只是最大 tokens/s，还可能是：
 
-\[
+$$
 \max\text{goodput}
-\]
+$$
 
 subject to：
 
-\[
+$$
 TTFT<P99_{target},
-\]
+$$
 
-\[
+$$
 TPOT<P99_{target}.
-\]
+$$
 
 ---
 
@@ -807,18 +807,18 @@ fill GPU forever
 
 粗粒度 token serving cost：
 
-\[
+$$
 \text{cost/token}
 =
 \frac{\text{GPU cost per second}}
 {\text{effective tokens per second}}.
-\]
+$$
 
 但 agent 时代更有意义的是：
 
-\[
+$$
 \text{cost/successful task}.
-\]
+$$
 
 因为模型 A 可能：
 
@@ -895,11 +895,11 @@ flowchart TD
 
 分别取：
 
-\[
+$$
 T=8K,32K,128K,1M
-\]
+$$
 
-计算固定 \(L,h_{kv},d_h\) 下 KV Cache 的线性增长，并画图。
+计算固定 $L,h_{kv},d_h$ 下 KV Cache 的线性增长，并画图。
 
 ### 练习 2：TTFT 与 TPOT
 

@@ -49,9 +49,9 @@ self.stoi = {ch: i for i, ch in enumerate(self.itos)}
 
 于是：
 
-\[
+$$
 \text{text}\rightarrow (x_1,x_2,\ldots,x_T),\qquad x_t\in\{0,\ldots,V-1\}.
-\]
+$$
 
 真实 LLM 通常使用 BPE、SentencePiece、Unigram 或其变体，因为字符级 token 太细，序列会很长；单词级 token 又难以处理开放词表。GPT-2 使用 byte-level BPE，而后续大量模型继续沿用 subword/byte-aware tokenizer 的路线。
 
@@ -69,21 +69,21 @@ self.stoi = {ch: i for i, ch in enumerate(self.itos)}
 
 输入 token ids：
 
-\[
+$$
 X_{id}\in\mathbb{N}^{B\times T}.
-\]
+$$
 
 词嵌入矩阵：
 
-\[
+$$
 E\in\mathbb{R}^{V\times C}.
-\]
+$$
 
 查表后：
 
-\[
+$$
 X=E[X_{id}]\in\mathbb{R}^{B\times T\times C}.
-\]
+$$
 
 代码同时使用 learned positional embedding，使模型知道 token 的绝对位置。现代 LLM 更常使用 RoPE；这里保留 learned position embedding 是为了让“内容表示”和“位置信息”分开看得更清楚。
 
@@ -98,22 +98,22 @@ X=E[X_{id}]\in\mathbb{R}^{B\times T\times C}.
 
 代码实现：
 
-\[
+$$
 \operatorname{RMSNorm}(x)
 =
 \gamma\odot
 \frac{x}{\sqrt{\frac{1}{C}\sum_{i=1}^{C}x_i^2+\epsilon}}.
-\]
+$$
 
 与 LayerNorm 相比，RMSNorm 不减均值，只按 root mean square 缩放。教材采用 Pre-Norm：
 
-\[
+$$
 x' = x + \operatorname{Attention}(\operatorname{Norm}(x)),
-\]
+$$
 
-\[
+$$
 y = x' + \operatorname{MLP}(\operatorname{Norm}(x')).
-\]
+$$
 
 这样你能清楚看到 residual stream 是贯穿整个 Transformer 的“主干状态”，attention 与 MLP 更像不断写回主干的两个计算模块。
 
@@ -128,15 +128,15 @@ y = x' + \operatorname{MLP}(\operatorname{Norm}(x')).
 
 设输入：
 
-\[
+$$
 X\in\mathbb{R}^{B\times T\times C}.
-\]
+$$
 
 教材代码用一个线性层一次算出 Q/K/V：
 
-\[
+$$
 [Q,K,V]=XW_{QKV}.
-\]
+$$
 
 切分并 reshape：
 
@@ -152,26 +152,26 @@ X\in\mathbb{R}^{B\times T\times C}.
 
 其中：
 
-\[
+$$
 d_h=C/h.
-\]
+$$
 
 注意力分数：
 
-\[
+$$
 S=\frac{QK^\top}{\sqrt{d_h}}
 \in\mathbb{R}^{B\times h\times T\times T}.
-\]
+$$
 
-然后施加 causal mask：位置 \(t\) 不能读取 \(t+1,t+2,\ldots\)。
+然后施加 causal mask：位置 $t$ 不能读取 $t+1,t+2,\ldots$。
 
-\[
+$$
 A=\operatorname{softmax}(S+M),
-\]
+$$
 
-\[
+$$
 O=AV.
-\]
+$$
 
 整个最关键的数据流是：
 
@@ -193,9 +193,9 @@ V [B,h,T,dh] ────────────┘
 
 来源：Vaswani et al., 2017: https://arxiv.org/abs/1706.03762
 
-### 为什么除以 \(\sqrt{d_h}\)
+### 为什么除以 $\sqrt{d_h}$
 
-如果 Q、K 各维近似独立且方差为 1，则点积的方差会随 \(d_h\) 增长。直接把大方差 score 输入 softmax 容易进入过度尖锐区间。缩放项使 score 的尺度更稳定。
+如果 Q、K 各维近似独立且方差为 1，则点积的方差会随 $d_h$ 增长。直接把大方差 score 输入 softmax 容易进入过度尖锐区间。缩放项使 score 的尺度更稳定。
 
 ---
 
@@ -203,15 +203,15 @@ V [B,h,T,dh] ────────────┘
 
 语言模型训练的目标是：
 
-\[
+$$
 p(x_1,\ldots,x_T)=\prod_{t=1}^{T}p(x_t\mid x_{<t}).
-\]
+$$
 
-因此预测第 \(t\) 个位置时，模型只能看到过去。
+因此预测第 $t$ 个位置时，模型只能看到过去。
 
 教材中的 mask 是下三角矩阵：
 
-\[
+$$
 M=
 \begin{bmatrix}
 0&-\infty&-\infty&\cdots\\
@@ -219,7 +219,7 @@ M=
 0&0&0&\cdots\\
 \vdots&\vdots&\vdots&\ddots
 \end{bmatrix}.
-\]
+$$
 
 **必须亲自做的实验**：删除 causal mask 后训练。loss 往往会异常好看，因为网络可以偷看未来 token，但这样的模型不能作为自回归生成模型正常工作。
 
@@ -231,11 +231,11 @@ M=
 
 每个 Transformer block 还有逐 token 的前馈网络。教材采用：
 
-\[
+$$
 \operatorname{SwiGLU}(x)
 =
 W_{down}\left[\operatorname{SiLU}(W_gx)\odot(W_ux)\right].
-\]
+$$
 
 Attention 负责 token 间的信息交换；MLP/FFN 在每个位置上做非线性变换。二者在计算图中的角色不同。
 
@@ -250,21 +250,21 @@ Attention 负责 token 间的信息交换；MLP/FFN 在每个位置上做非线�
 
 最后一层隐藏状态：
 
-\[
+$$
 H\in\mathbb{R}^{B\times T\times C}.
-\]
+$$
 
 语言模型头：
 
-\[
+$$
 Z=HW_{vocab}\in\mathbb{R}^{B\times T\times V}.
-\]
+$$
 
 对每个位置：
 
-\[
+$$
 p(x_{t+1}\mid x_{\le t})=\operatorname{softmax}(Z_t).
-\]
+$$
 
 训练标签就是输入序列向右平移一位：
 
@@ -275,11 +275,11 @@ target:  [x1, x2, x3, x4]
 
 loss：
 
-\[
+$$
 \mathcal L
 =-\frac{1}{BT}\sum_{b,t}
 \log p_\theta(x_{b,t+1}\mid x_{b,\le t}).
-\]
+$$
 
 这就是“next-token prediction”的数学核心。
 
@@ -325,13 +325,13 @@ optimizer.step()
 
 `loss.backward()` 沿整张计算图计算：
 
-\[
+$$
 \frac{\partial\mathcal L}{\partial W_Q},
 \frac{\partial\mathcal L}{\partial W_K},
 \frac{\partial\mathcal L}{\partial W_V},
 \frac{\partial\mathcal L}{\partial W_{MLP}},
 \frac{\partial\mathcal L}{\partial E},\ldots
-\]
+$$
 
 注意：模型并没有被显式告知“语法”“事实”“推理规则”分别存在哪里。所有统计结构都通过优化 next-token likelihood 间接进入参数。
 
@@ -379,9 +379,9 @@ python code/minigpt.py --text path/to/corpus.txt --steps 5000
 
 其中 attention 的朴素复杂度随序列长度近似：
 
-\[
+$$
 O(T^2C).
-\]
+$$
 
 把 `T` 翻倍时观察显存和运行时间，是理解长上下文系统问题最直观的实验。
 

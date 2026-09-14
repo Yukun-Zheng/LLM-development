@@ -31,17 +31,39 @@ class RMSNorm(nn.Module):
         return normalized * self.weight
 
 
-def rotate_half(x: torch.Tensor) -> torch.Tensor:
-    x1 = x[..., ::2]
-    x2 = x[..., 1::2]
-    return torch.stack((-x2, x1), dim=-1).flatten(-2)
+def rotate_half(x: torch.Tensor, *, interleaved: bool) -> torch.Tensor:
+    """Rotate the last dimension for RoPE.
+
+    Two layouts are common in public implementations:
+    - interleaved=True: pair dimensions (0,1), (2,3), ...;
+    - interleaved=False: Llama/Hugging Face half-split layout.
+
+    Exposing this choice matters for real-checkpoint numerical parity.
+    """
+
+    if interleaved:
+        x1 = x[..., ::2]
+        x2 = x[..., 1::2]
+        return torch.stack((-x2, x1), dim=-1).flatten(-2)
+
+    half = x.shape[-1] // 2
+    x1 = x[..., :half]
+    x2 = x[..., half:]
+    return torch.cat((-x2, x1), dim=-1)
 
 
 class RotaryEmbedding(nn.Module):
     """RoPE applied to Q and K, shape [B, H, T, D]."""
 
-    def __init__(self, head_dim: int, theta: float = 10_000.0) -> None:
+    def __init__(
+        self,
+        head_dim: int,
+        theta: float = 10_000.0,
+        *,
+        interleaved: bool = False,
+    ) -> None:
         super().__init__()
+        self.interleaved = interleaved
         inv_freq = 1.0 / (
             theta ** (torch.arange(0, head_dim, 2, dtype=torch.float32) / head_dim)
         )
@@ -55,7 +77,12 @@ class RotaryEmbedding(nn.Module):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         # positions [T], inv_freq [D/2] -> angles [T, D/2]
         angles = torch.outer(positions.float(), self.inv_freq)
-        angles = torch.repeat_interleave(angles, 2, dim=-1)
+        if self.interleaved:
+            angles = torch.repeat_interleave(angles, 2, dim=-1)
+        else:
+            # Hugging Face Llama-style RoPE duplicates the frequency vector as
+            # [freqs, freqs] and rotate_half performs a half split.
+            angles = torch.cat((angles, angles), dim=-1)
         return angles.cos().to(dtype=dtype), angles.sin().to(dtype=dtype)
 
     def forward(
@@ -67,7 +94,10 @@ class RotaryEmbedding(nn.Module):
         cos, sin = self.cos_sin(positions, dtype=q.dtype)
         cos = cos[None, None, :, :]
         sin = sin[None, None, :, :]
-        return q * cos + rotate_half(q) * sin, k * cos + rotate_half(k) * sin
+        return (
+            q * cos + rotate_half(q, interleaved=self.interleaved) * sin,
+            k * cos + rotate_half(k, interleaved=self.interleaved) * sin,
+        )
 
 
 class GroupedQueryAttention(nn.Module):
@@ -82,7 +112,11 @@ class GroupedQueryAttention(nn.Module):
         self.k_proj = nn.Linear(h, config.num_kv_heads * d, bias=False)
         self.v_proj = nn.Linear(h, config.num_kv_heads * d, bias=False)
         self.o_proj = nn.Linear(config.num_heads * d, h, bias=False)
-        self.rope = RotaryEmbedding(d, config.rope_theta)
+        self.rope = RotaryEmbedding(
+            d,
+            config.rope_theta,
+            interleaved=config.rope_interleaved,
+        )
 
     def _reshape_q(self, x: torch.Tensor) -> torch.Tensor:
         b, t, _ = x.shape
@@ -125,7 +159,7 @@ class GroupedQueryAttention(nn.Module):
         scores = torch.matmul(q, k_for_q.transpose(-2, -1)) / math.sqrt(self.config.head_dim)
 
         # Query absolute positions are past_len..past_len+t-1; key positions are
-        # 0..T_total-1.  This works both for full prefill and one-token decode.
+        # 0..T_total-1. This works both for full prefill and one-token decode.
         total_len = k_for_q.shape[-2]
         q_pos = torch.arange(past_len, past_len + t, device=x.device)[:, None]
         k_pos = torch.arange(total_len, device=x.device)[None, :]

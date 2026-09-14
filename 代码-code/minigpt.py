@@ -13,10 +13,10 @@ It implements, with plain PyTorch:
 - autoregressive generation
 
 Run:
-    python code/minigpt.py
+    python 代码-code/minigpt.py
 
 Optional text corpus:
-    python code/minigpt.py --text path/to/corpus.txt --steps 5000
+    python 代码-code/minigpt.py --text path/to/corpus.txt --steps 5000
 
 Requirements:
     pip install torch

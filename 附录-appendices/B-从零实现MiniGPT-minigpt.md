@@ -1,6 +1,6 @@
 # 附录 B　从零实现 MiniGPT：把整本书压缩成一个可运行程序
 
-> 对应代码：[`code/minigpt.py`](../code/minigpt.py)  
+> 对应代码：[`代码-code/minigpt.py`](../代码-code/minigpt.py)  
 > 目标：不用 Transformers、Trainer、DeepSpeed 或 vLLM，只依赖 PyTorch，把 decoder-only Transformer 的训练与自回归推理完整串起来。
 
 ---
@@ -342,13 +342,13 @@ $$
 ## B.11　运行教材代码
 
 ```bash
-python code/minigpt.py
+python 代码-code/minigpt.py
 ```
 
 使用自己的语料：
 
 ```bash
-python code/minigpt.py --text path/to/corpus.txt --steps 5000
+python 代码-code/minigpt.py --text path/to/corpus.txt --steps 5000
 ```
 
 代码只要求 PyTorch。它是教学实现，不追求 production throughput。

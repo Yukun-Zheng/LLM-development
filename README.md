@@ -28,12 +28,12 @@
 
 | 路径 | 中文名称 | 用途 |
 |---|---|---|
-| [`book/`](book/) | **教材正文** | 从 Transformer 前传一直讲到 2026 年前沿 |
-| [`appendices/`](appendices/) | **附录** | 数学基础、MiniGPT、后训练数学推导 |
-| [`code/`](code/) | **教学代码** | 从零实现与可运行实验代码 |
-| [`figures/`](figures/) | **教材图谱与插图** | 机制图、数据流图、时间线 |
-| [`references/`](references/) | **参考文献与资料索引** | 原论文、官方技术报告、模型卡与官方资料 |
-| [`scripts/`](scripts/) | **教材维护脚本** | 数学公式兼容、排版与内容维护工具 |
+| [`教材-book/`](教材-book/) | **教材正文** | 从 Transformer 前传一直讲到 2026 年前沿 |
+| [`附录-appendices/`](附录-appendices/) | **附录** | 数学基础、MiniGPT、后训练数学推导 |
+| [`代码-code/`](代码-code/) | **教学代码** | 从零实现与可运行实验代码 |
+| [`图表-figures/`](图表-figures/) | **教材图谱与插图** | 机制图、数据流图、时间线 |
+| [`参考文献-references/`](参考文献-references/) | **参考文献与资料索引** | 原论文、官方技术报告、模型卡与官方资料 |
+| [`工具-scripts/`](工具-scripts/) | **教材维护脚本** | 数学公式兼容、排版与内容维护工具 |
 | [`.github/`](.github/) | **自动化工作流** | GitHub Actions 自动检查与格式规范化 |
 
 ---
@@ -42,23 +42,23 @@
 
 | 篇章 | 中文主题 | 关键英文术语 | 文件 |
 |---|---|---|---|
-| 导读 | 怎样用这本书真正学会大语言模型 | LLM Learning Guide | [`book/00-preface.md`](book/00-preface.md) |
-| 第一篇 | **从 Seq2Seq 到 Transformer：大模型真正的技术起点** | Seq2Seq, Attention, Transformer, GPT, BERT | [`book/01-foundations-transformer.md`](book/01-foundations-transformer.md) |
-| 第二篇 | **规模定律、GPT‑3、上下文学习与 Chinchilla** | Scaling Laws, GPT‑3, In-Context Learning, Compute-Optimal Training | [`book/02-scaling-gpt3.md`](book/02-scaling-gpt3.md) |
-| 第三篇 | **指令微调、对齐、RLHF、ChatGPT 与 DPO** | Instruction Tuning, Alignment, RLHF, Preference Optimization | [`book/03-alignment-chatgpt.md`](book/03-alignment-chatgpt.md) |
-| 第四篇 | **现代大模型架构组件** | RoPE, RMSNorm, SwiGLU, GQA, FlashAttention, KV Cache | [`book/04-modern-architecture.md`](book/04-modern-architecture.md) |
-| 第五篇 | **开源大模型革命与高效微调** | LLaMA, Mistral, LoRA, QLoRA, Quantization | [`book/05-open-source-efficient-ft.md`](book/05-open-source-efficient-ft.md) |
-| 第六篇 | **检索增强、多模态、工具调用与智能体** | RAG, Multimodality, Tool Use, Agent | [`book/06-rag-multimodal-agent.md`](book/06-rag-multimodal-agent.md) |
-| 第七篇 | **混合专家与中国大模型路线** | MoE, GLM, Qwen, DeepSeek, Kimi, MiniMax | [`book/07-moe-china.md`](book/07-moe-china.md) |
-| 第八篇 | **推理模型时代** | Chain-of-Thought, Test-Time Compute, RLVR, R1, Thinking Models | [`book/08-reasoning-era.md`](book/08-reasoning-era.md) |
-| 第九篇 | **大模型训练系统** | Data, ZeRO, FSDP, Megatron, Parallelism, Stability | [`book/09-training-systems.md`](book/09-training-systems.md) |
-| 第十篇 | **大模型推理与服务系统** | vLLM, PagedAttention, Continuous Batching, Speculative Decoding | [`book/10-inference-systems.md`](book/10-inference-systems.md) |
-| 第十一篇 | **评测、安全、幻觉与数据污染** | Evaluation, Safety, Hallucination, Contamination | [`book/11-evaluation-safety.md`](book/11-evaluation-safety.md) |
-| 第十二篇 | **2026 前沿：原生智能体、多模态、超长上下文与 Transformer 之后** | Native Agents, Multimodality, Long Context, Post-Transformer | [`book/12-frontier-2026.md`](book/12-frontier-2026.md) |
-| 附录 A | **数学基础：线性代数、概率、信息论与优化** | Math Foundations | [`appendices/A-math.md`](appendices/A-math.md) |
-| 附录 B | **从零实现 MiniGPT：训练与自回归推理** | MiniGPT Implementation | [`appendices/B-minigpt.md`](appendices/B-minigpt.md) |
-| 附录 C | **后训练数学：RLHF、DPO、GRPO、RLVR 推导速查** | Post-Training Mathematics | [`appendices/C-post-training-math.md`](appendices/C-post-training-math.md) |
-| 资料索引 | **时间线、术语表与核心论文索引** | Timeline, Glossary, References | [`references/README.md`](references/README.md) |
+| 导读 | 怎样用这本书真正学会大语言模型 | LLM Learning Guide | [`教材-book/00-导读-preface.md`](教材-book/00-导读-preface.md) |
+| 第一篇 | **从 Seq2Seq 到 Transformer：大模型真正的技术起点** | Seq2Seq, Attention, Transformer, GPT, BERT | [`教材-book/01-Transformer基础-foundations-transformer.md`](教材-book/01-Transformer基础-foundations-transformer.md) |
+| 第二篇 | **规模定律、GPT‑3、上下文学习与 Chinchilla** | Scaling Laws, GPT‑3, In-Context Learning, Compute-Optimal Training | [`教材-book/02-规模定律与GPT3-scaling-gpt3.md`](教材-book/02-规模定律与GPT3-scaling-gpt3.md) |
+| 第三篇 | **指令微调、对齐、RLHF、ChatGPT 与 DPO** | Instruction Tuning, Alignment, RLHF, Preference Optimization | [`教材-book/03-对齐与ChatGPT-alignment-chatgpt.md`](教材-book/03-对齐与ChatGPT-alignment-chatgpt.md) |
+| 第四篇 | **现代大模型架构组件** | RoPE, RMSNorm, SwiGLU, GQA, FlashAttention, KV Cache | [`教材-book/04-现代LLM架构-modern-architecture.md`](教材-book/04-现代LLM架构-modern-architecture.md) |
+| 第五篇 | **开源大模型革命与高效微调** | LLaMA, Mistral, LoRA, QLoRA, Quantization | [`教材-book/05-开源与高效微调-open-source-efficient-ft.md`](教材-book/05-开源与高效微调-open-source-efficient-ft.md) |
+| 第六篇 | **检索增强、多模态、工具调用与智能体** | RAG, Multimodality, Tool Use, Agent | [`教材-book/06-RAG多模态与智能体-rag-multimodal-agent.md`](教材-book/06-RAG多模态与智能体-rag-multimodal-agent.md) |
+| 第七篇 | **混合专家与中国大模型路线** | MoE, GLM, Qwen, DeepSeek, Kimi, MiniMax | [`教材-book/07-MoE与中国大模型-moe-china.md`](教材-book/07-MoE与中国大模型-moe-china.md) |
+| 第八篇 | **推理模型时代** | Chain-of-Thought, Test-Time Compute, RLVR, R1, Thinking Models | [`教材-book/08-推理模型时代-reasoning-era.md`](教材-book/08-推理模型时代-reasoning-era.md) |
+| 第九篇 | **大模型训练系统** | Data, ZeRO, FSDP, Megatron, Parallelism, Stability | [`教材-book/09-训练系统-training-systems.md`](教材-book/09-训练系统-training-systems.md) |
+| 第十篇 | **大模型推理与服务系统** | vLLM, PagedAttention, Continuous Batching, Speculative Decoding | [`教材-book/10-推理服务系统-inference-systems.md`](教材-book/10-推理服务系统-inference-systems.md) |
+| 第十一篇 | **评测、安全、幻觉与数据污染** | Evaluation, Safety, Hallucination, Contamination | [`教材-book/11-评测与安全-evaluation-safety.md`](教材-book/11-评测与安全-evaluation-safety.md) |
+| 第十二篇 | **2026 前沿：原生智能体、多模态、超长上下文与 Transformer 之后** | Native Agents, Multimodality, Long Context, Post-Transformer | [`教材-book/12-2026前沿-frontier-2026.md`](教材-book/12-2026前沿-frontier-2026.md) |
+| 附录 A | **数学基础：线性代数、概率、信息论与优化** | Math Foundations | [`附录-appendices/A-数学基础-math.md`](附录-appendices/A-数学基础-math.md) |
+| 附录 B | **从零实现 MiniGPT：训练与自回归推理** | MiniGPT Implementation | [`附录-appendices/B-从零实现MiniGPT-minigpt.md`](附录-appendices/B-从零实现MiniGPT-minigpt.md) |
+| 附录 C | **后训练数学：RLHF、DPO、GRPO、RLVR 推导速查** | Post-Training Mathematics | [`附录-appendices/C-后训练数学-post-training-math.md`](附录-appendices/C-后训练数学-post-training-math.md) |
+| 资料索引 | **时间线、术语表与核心论文索引** | Timeline, Glossary, References | [`参考文献-references/README.md`](参考文献-references/README.md) |
 
 ---
 

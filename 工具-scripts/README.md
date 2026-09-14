@@ -6,7 +6,7 @@
 
 | 文件 | 中文说明 | 作用 |
 |---|---|---|
-| [`normalize_math.py`](normalize_math.py) | **GitHub 数学公式规范化器** | 统一数学定界符，修复 GitHub MathJax 不兼容宏，并处理数学环境中的关系符号 |
+| [`数学公式规范化-normalize_math.py`](数学公式规范化-normalize_math.py) | **GitHub 数学公式规范化器** | 统一数学定界符，修复 GitHub MathJax 不兼容宏，并处理数学环境中的关系符号 |
 
 当前数学规范化器会自动处理：
 

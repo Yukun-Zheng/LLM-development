@@ -5,7 +5,7 @@ Examples:
     # Part I ...   -> # 第一篇（Part I） ...
     # Part VIII ... -> # 第八篇（Part VIII） ...
 
-Only the first line of files under book/ is considered. The script is
+Only the first line of files under 教材-book/ is considered. The script is
 idempotent and deliberately does not rewrite technical terms inside the body.
 """
 
@@ -15,7 +15,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-BOOK = ROOT / "book"
+BOOK = ROOT / "教材-book"
 
 PARTS = {
     "I": "第一篇",

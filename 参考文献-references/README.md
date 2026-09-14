@@ -248,7 +248,7 @@ benchmark 分数必须同时检查：测试污染、prompt protocol、sampling b
 2. Kudo & Richardson, 2018. **SentencePiece: A simple and language independent subword tokenizer and detokenizer for Neural Text Processing**. https://arxiv.org/abs/1808.06226
 3. OpenAI GPT-2 repository. https://github.com/openai/gpt-2
 
-训练数据研究还应持续关注：deduplication、quality filtering、language balance、code/math mixture、synthetic data、contamination 与 licensing。它们常常比一次很小的架构修改更影响最终模型。
+训练数据研究还应持续关注：deduplication、quality filtering、language balance、代码-code/math mixture、synthetic data、contamination 与 licensing。它们常常比一次很小的架构修改更影响最终模型。
 
 ---
 

@@ -15,22 +15,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 FILE_RENAMES = {
-    "book/00-preface.md": "book/00-导读-preface.md",
-    "book/01-foundations-transformer.md": "book/01-Transformer基础-foundations-transformer.md",
-    "book/02-scaling-gpt3.md": "book/02-规模定律与GPT3-scaling-gpt3.md",
-    "book/03-alignment-chatgpt.md": "book/03-对齐与ChatGPT-alignment-chatgpt.md",
-    "book/04-modern-architecture.md": "book/04-现代LLM架构-modern-architecture.md",
-    "book/05-open-source-efficient-ft.md": "book/05-开源与高效微调-open-source-efficient-ft.md",
-    "book/06-rag-multimodal-agent.md": "book/06-RAG多模态与智能体-rag-multimodal-agent.md",
-    "book/07-moe-china.md": "book/07-MoE与中国大模型-moe-china.md",
-    "book/08-reasoning-era.md": "book/08-推理模型时代-reasoning-era.md",
-    "book/09-training-systems.md": "book/09-训练系统-training-systems.md",
-    "book/10-inference-systems.md": "book/10-推理服务系统-inference-systems.md",
-    "book/11-evaluation-safety.md": "book/11-评测与安全-evaluation-safety.md",
-    "book/12-frontier-2026.md": "book/12-2026前沿-frontier-2026.md",
-    "appendices/A-math.md": "appendices/A-数学基础-math.md",
-    "appendices/B-minigpt.md": "appendices/B-从零实现MiniGPT-minigpt.md",
-    "appendices/C-post-training-math.md": "appendices/C-后训练数学-post-training-math.md",
+    "教材-book/00-导读-preface.md": "教材-book/00-导读-preface.md",
+    "教材-book/01-Transformer基础-foundations-transformer.md": "教材-book/01-Transformer基础-foundations-transformer.md",
+    "教材-book/02-规模定律与GPT3-scaling-gpt3.md": "教材-book/02-规模定律与GPT3-scaling-gpt3.md",
+    "教材-book/03-对齐与ChatGPT-alignment-chatgpt.md": "教材-book/03-对齐与ChatGPT-alignment-chatgpt.md",
+    "教材-book/04-现代LLM架构-modern-architecture.md": "教材-book/04-现代LLM架构-modern-architecture.md",
+    "教材-book/05-开源与高效微调-open-source-efficient-ft.md": "教材-book/05-开源与高效微调-open-source-efficient-ft.md",
+    "教材-book/06-RAG多模态与智能体-rag-multimodal-agent.md": "教材-book/06-RAG多模态与智能体-rag-multimodal-agent.md",
+    "教材-book/07-MoE与中国大模型-moe-china.md": "教材-book/07-MoE与中国大模型-moe-china.md",
+    "教材-book/08-推理模型时代-reasoning-era.md": "教材-book/08-推理模型时代-reasoning-era.md",
+    "教材-book/09-训练系统-training-systems.md": "教材-book/09-训练系统-training-systems.md",
+    "教材-book/10-推理服务系统-inference-systems.md": "教材-book/10-推理服务系统-inference-systems.md",
+    "教材-book/11-评测与安全-evaluation-safety.md": "教材-book/11-评测与安全-evaluation-safety.md",
+    "教材-book/12-2026前沿-frontier-2026.md": "教材-book/12-2026前沿-frontier-2026.md",
+    "附录-appendices/A-数学基础-math.md": "附录-appendices/A-数学基础-math.md",
+    "附录-appendices/B-从零实现MiniGPT-minigpt.md": "附录-appendices/B-从零实现MiniGPT-minigpt.md",
+    "附录-appendices/C-后训练数学-post-training-math.md": "附录-appendices/C-后训练数学-post-training-math.md",
 }
 
 DIR_RENAMES = {
@@ -43,9 +43,9 @@ DIR_RENAMES = {
 }
 
 SCRIPT_RENAMES = {
-    "scripts/normalize_math.py": "scripts/数学公式规范化-normalize_math.py",
-    "scripts/localize_headings.py": "scripts/章节标题中文化-localize_headings.py",
-    "scripts/localize_file_tree.py": "scripts/文件树中文化-localize_file_tree.py",
+    "工具-scripts/数学公式规范化-数学公式规范化-normalize_math.py": "工具-scripts/数学公式规范化-数学公式规范化-normalize_math.py",
+    "工具-scripts/章节标题中文化-章节标题中文化-localize_headings.py": "工具-scripts/章节标题中文化-章节标题中文化-localize_headings.py",
+    "工具-scripts/文件树中文化-文件树中文化-localize_file_tree.py": "工具-scripts/文件树中文化-文件树中文化-localize_file_tree.py",
 }
 
 TEXT_SUFFIXES = {".md", ".py"}

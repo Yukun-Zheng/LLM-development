@@ -32,7 +32,7 @@ left untouched so literal examples and source code are never rewritten.
 
 Run from the repository root:
 
-    python scripts/normalize_math.py
+    python 工具-scripts/数学公式规范化-数学公式规范化-normalize_math.py
 
 The script scans every Markdown file in the repository except `.git` and is
 idempotent: running it repeatedly produces no further changes.

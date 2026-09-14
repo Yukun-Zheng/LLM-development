@@ -1435,6 +1435,6 @@ $$
 
 - Goodfellow, Bengio & Courville, **Deep Learning**, 2016: https://www.deeplearningbook.org/
 - Bishop, **Pattern Recognition and Machine Learning**, 2006.
-- Murphy, **Probabilistic Machine Learning**, 2022–2023: https://probml.github.io/pml-book/
-- Sutton & Barto, **Reinforcement Learning: An Introduction**, 2nd ed.: http://incompleteideas.net/book/the-book-2nd.html
+- Murphy, **Probabilistic Machine Learning**, 2022–2023: https://probml.github.io/pml-教材-book/
+- Sutton & Barto, **Reinforcement Learning: An Introduction**, 2nd ed.: http://incompleteideas.net/教材-book/the-book-2nd.html
 - Loshchilov & Hutter, **Decoupled Weight Decay Regularization**, 2017: https://arxiv.org/abs/1711.05101

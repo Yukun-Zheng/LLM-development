@@ -1,0 +1,36 @@
+name: Capstone runtime tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '代码-code/从零构建Astra与Codex级系统/**'
+      - '.github/workflows/capstone-tests.yml'
+  pull_request:
+    paths:
+      - '代码-code/从零构建Astra与Codex级系统/**'
+      - '.github/workflows/capstone-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库 / Checkout
+        uses: actions/checkout@v4
+
+      - name: 配置 Python / Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安装教学运行时 / Install runtime
+        working-directory: 代码-code/从零构建Astra与Codex级系统
+        run: pip install -e '.[dev]'
+
+      - name: 运行单元测试 / Run tests
+        working-directory: 代码-code/从零构建Astra与Codex级系统
+        run: pytest

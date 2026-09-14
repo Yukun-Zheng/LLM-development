@@ -4,6 +4,9 @@
 
 > **最高写作规范**：[`00-教材方法论与证据标准-source-first.md`](00-教材方法论与证据标准-source-first.md)  
 > 本书采用 **Source-First / Mechanism-First / Reproducibility-First** 原则：重要结论优先回到原论文、官方技术报告、官方代码、模型卡、系统卡、数据集与 benchmark 原始资料，并区分“原始主张”“后续证据”“当前较稳健理解”。
+>
+> **完整扩展蓝图**：[`99-全书扩展蓝图-v2.md`](99-全书扩展蓝图-v2.md)  
+> 现有章节是第一版主干，最终覆盖范围按 v2 蓝图扩展到数学、数据、优化、硬件、分布式训练、后训练、reasoning、multimodality、agent、serving、interpretability、evaluation、安全、全球模型生态与 Post-Transformer。
 
 ## 中文目录 / Contents
 
@@ -27,15 +30,18 @@
 | 第十四篇 | **优化器、数值精度与训练动力学** | AdamW、Warmup、BF16、Gradient Clipping、μP | [`14-优化器与训练动力学-optimization-dynamics.md`](14-优化器与训练动力学-optimization-dynamics.md) |
 | 第十五篇 | **可解释性与机制研究** | Probing、Activation Patching、Circuits、SAE、Model Editing | [`15-可解释性与机制研究-interpretability.md`](15-可解释性与机制研究-interpretability.md) |
 | 第十六篇 | **硬件、Kernel 与基础设施** | Roofline、Tensor Core、FlashAttention、NCCL、ZeRO、vLLM | [`16-硬件内核与基础设施-hardware-kernels.md`](16-硬件内核与基础设施-hardware-kernels.md) |
+| 第十七篇 | **闭源前沿模型与证据边界** | System Card、Model Card、Evidence Boundary、Frontier Models | [`17-闭源前沿模型与证据边界-frontier-closed-models.md`](17-闭源前沿模型与证据边界-frontier-closed-models.md) |
+| 蓝图 | **全书扩展蓝图 v2** | Full LLM Stack、Labs、L2/L3 Maturity | [`99-全书扩展蓝图-v2.md`](99-全书扩展蓝图-v2.md) |
 
-## 为什么继续扩展到第十三至十六篇
+## 为什么继续扩展到第十三至十七篇
 
-原来的 12 篇更接近“LLM 主历史线”，但如果目标是形成真正全面的教材，还必须补上四块此前被低估的基础：
+原来的 12 篇更接近“LLM 主历史线”，但如果目标是形成真正全面的教材，还必须补上此前被低估的基础：
 
 1. **模型输入世界**：tokenization 与数据工程；
 2. **模型如何真的被训出来**：optimizer、precision、training dynamics；
 3. **模型内部如何被科学研究**：mechanistic interpretability；
-4. **模型为什么在现实里能跑起来**：hardware、kernel、communication 与 serving infrastructure。
+4. **模型为什么在现实里能跑起来**：hardware、kernel、communication 与 serving infrastructure；
+5. **信息不完整时如何研究前沿**：closed-model evidence boundaries。
 
 后续章节仍将按同一标准继续扩展，而不是把“历史时间线”误当成“完整知识体系”。
 
@@ -43,7 +49,7 @@
 
 如果目标是**系统掌握大模型发展史和机制**，建议：
 
-`00 方法论 → 00 导读 → 01 → 02 → 13 → 14 → 03 → 04 → 05 → 07 → 08 → 06 → 09 → 16 → 10 → 15 → 11 → 12`
+`00 方法论 → 00 导读 → 01 → 02 → 13 → 14 → 03 → 04 → 05 → 07 → 08 → 06 → 09 → 16 → 10 → 15 → 11 → 17 → 12`
 
 如果目标是快速补齐某条技术线，可以按主题跳读：
 
@@ -53,7 +59,8 @@
 - **RAG、多模态与智能体**：06 → 08 → 12
 - **训练与推理系统工程**：09 → 16 → 10
 - **模型内部机制**：01 → 04 → 15
-- **评测、安全与可靠性**：11 → 15 → 12
+- **闭源前沿模型研究**：08 → 17 → 12
+- **评测、安全与可靠性**：11 → 15 → 17 → 12
 
 ## 原始资料入口
 

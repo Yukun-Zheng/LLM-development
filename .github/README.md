@@ -101,6 +101,15 @@ Hugging Face reference eager implementation
 Codex源码解剖-codex-anatomy/
 ```
 
+最新一次真实 workflow 结果：
+
+```text
+43 chapters audited
+2 chapters with no likely primary-source links
+```
+
+两个未含 external primary-like link 的文件是教材方法论/全书蓝图类元文档；**C00–C07 Codex 源码解剖技术章节现在全部有官方一手来源入口**。
+
 报告包括外部链接、primary-like source、原始资料区、evidence markers 与无一手来源章节数量，并上传 `primary-source-coverage` artifact。来源覆盖当前是**质量报告**，等历史章节格式进一步收敛后再切 `--strict`。
 
 ## Internal-link audit
@@ -111,7 +120,14 @@ Codex源码解剖-codex-anatomy/
 工具-scripts/内部链接审计-link_audit.py
 ```
 
-不联网，只验证仓库内所有 Markdown 相对链接实际存在。该检查严格阻塞，因为内部导航损坏是确定性错误。
+最新一次真实 workflow：
+
+```text
+74 Markdown files audited
+Internal Markdown links: PASS
+```
+
+该检查不联网，只验证仓库内所有 Markdown 相对链接实际存在，并严格阻塞 main 上的确定性导航错误。
 
 ---
 

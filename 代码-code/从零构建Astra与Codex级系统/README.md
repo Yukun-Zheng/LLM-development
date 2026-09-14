@@ -2,19 +2,55 @@
 
 这是整本《大语言模型发展史与技术原理》的**终极代码项目**。
 
-目标不是调用现成 agent framework，而是从最底层的模型 forward 开始，逐步搭出：
+目标不是调用现成 agent framework，而是从最底层的模型 forward 开始，逐步搭出一套可以真正运行、测试和继续扩展的现代模型运行时与智能体系统。
 
-1. 自己的 decoder-only Transformer runtime；
-2. 自己的 KV Cache 与推理循环；
-3. structured output / tool calling；
-4. context / notes / searchable history；
-5. shell / filesystem / Python / browser 工具运行时；
-6. coding agent；
-7. general-purpose agent；
-8. worktree-based multi-agent；
-9. evaluation / verifier / safety boundaries。
+> **边界**：训练 frontier 权重不在范围内。我们自己实现模型结构、推理与 agent runtime；参数可用 tiny random weights 做单元测试，也可加载公开 checkpoint 做 parity。Astra / Codex 的完整私有内部实现并未公开，因此本项目构建的是 **Astra-class / Codex-class** 同类系统，而不是声称复刻 OpenAI 私有源码。
 
-> 训练权重不在范围内。模型参数使用 tiny random weights 做单元测试，或加载公开 checkpoint 做 parity 验证。核心机制不能用高层框架一行隐藏掉。
+---
+
+## 现在已经不是蓝图：第一版源码已经落地
+
+核心 Python package：
+
+```text
+src/astra_codex/
+├── config.py          # 模型结构约束
+├── tokenizer.py       # byte tokenizer + 从零训练 BPE
+├── model.py           # RMSNorm / RoPE / GQA / SwiGLU / decoder-only Transformer
+├── cache.py           # per-layer KV Cache
+├── sampling.py        # greedy / temperature / top-k / top-p / repetition penalty
+├── engine.py          # prefill / incremental decode / streaming generation
+├── weights.py         # raw safetensors / key remap / shape audit
+├── structured.py      # JSON tool call + schema validation
+├── tools.py           # filesystem / shell / Git
+├── editing.py         # ambiguity-safe exact edit
+├── repo_map.py        # Python AST + Markdown structure map
+├── memory.py          # SQLite persistent event memory
+├── worktree.py        # Git worktree primitive
+├── general_tools.py   # 最小 HTTP text browser
+├── agent.py           # observe → act → observe loop
+└── coding.py          # Codex-class repository agent assembly
+```
+
+自动测试位于：
+
+```text
+tests/
+```
+
+示例位于：
+
+```text
+examples/
+```
+
+理论—源码对应实验位于：
+
+```text
+教程-lessons/
+```
+
+实时实现清单见：[`实现状态-STATUS.md`](实现状态-STATUS.md)。
 
 ---
 
@@ -23,74 +59,113 @@
 ```text
 User Goal
    ↓
-Context Manager
+Context / Memory
    ↓
 Model Runtime
    ├─ tokenizer
    ├─ embedding
+   ├─ RMSNorm / RoPE / GQA / SwiGLU
    ├─ Transformer
    ├─ KV Cache
-   ├─ sampling
-   └─ structured generation
+   ├─ prefill / decode
+   └─ sampling / structured generation
    ↓
 Action
    ├─ text
    └─ tool call
         ↓
 Tool Runtime
+   ├─ repo map
    ├─ filesystem
+   ├─ exact edit / patch
    ├─ shell
-   ├─ Python
+   ├─ Git / worktree
    ├─ browser
-   ├─ Git
-   └─ computer
+   └─ computer（后续）
         ↓
 Observation
         ↓
-Agent State
+Agent State / Persistent Memory
         ↓
-Verifier / Continue / Finish
+Verifier
+   ├─ test
+   ├─ lint
+   ├─ build
+   ├─ diff review
+   └─ task-specific checks
+        ↓
+Continue / Recover / Finish
 ```
 
 ---
 
-## 实现阶段
+## 从 0 的实现阶段
 
-| 阶段 | 目录 | 目标 | 对应理论 |
-|---|---|---|---|
-| 00 | `00-基础设施/` | config、tensor contract、tests | tensor / shape / dtype |
-| 01 | `01-tokenizer/` | byte tokenizer + BPE | Tokenization |
-| 02 | `02-model-core/` | decoder-only Transformer | Attention / RoPE / GQA / SwiGLU |
-| 03 | `03-weight-loader/` | 加载公开 safetensors | checkpoint / weight tying |
-| 04 | `04-inference-engine/` | KV Cache、prefill、decode、sampling | LLM inference |
-| 05 | `05-structured-generation/` | schema / tool call | constrained generation |
-| 06 | `06-context-memory/` | compaction、notes、search | long context / memory |
-| 07 | `07-tool-runtime/` | shell/files/Python/browser | tool use / security |
-| 08 | `08-agent-core/` | agent loop、planner、verifier | ReAct / agent systems |
-| 09 | `09-codex-class/` | repo edit / test / Git / worktree | coding agents |
-| 10 | `10-astra-class/` | browser/computer/artifacts | general agents |
-| 11 | `11-multi-agent/` | task graph / parallel workers | multi-agent systems |
-| 12 | `12-evals/` | parity / task / safety evals | evaluation |
+| 阶段 | 目标 | 当前状态 | 对应理论 |
+|---|---|---:|---|
+| 00 | config、tensor contract、tests | ✅ 已有 | tensor / shape / dtype |
+| 01 | byte tokenizer + BPE | ✅ 已有 | Tokenization |
+| 02 | decoder-only Transformer | ✅ 已有第一版 | Attention / RoPE / GQA / SwiGLU |
+| 03 | 加载公开 safetensors | ✅ primitive | checkpoint / weight mapping |
+| 04 | KV Cache、prefill、decode、sampling | ✅ 已有 | LLM inference |
+| 05 | schema / structured tool call | ✅ 第一版 | constrained generation |
+| 06 | persistent memory / searchable history | ✅ primitive | context / memory |
+| 07 | shell / files / Git / HTTP browser | ✅ 第一版 | tool use / security |
+| 08 | agent loop / failure recovery | ✅ 第一版 | ReAct / agent systems |
+| 09 | repo map / edit / test / Git | ✅ 第一版 | coding agents |
+| 10 | browser / computer / artifacts | 🟡 HTTP primitive；computer 待做 | general agents |
+| 11 | worktree / task graph / parallel workers | 🟡 worktree primitive | multi-agent systems |
+| 12 | parity / repo tasks / safety evals | 🟡 unit tests 已有 | evaluation |
+
+---
+
+## 已验证的关键性质
+
+### 1. cached decode 与 full forward 数值对齐
+
+单元测试会比较：
+
+$$
+\mathrm{logits}_{cached}(x_T)
+\approx
+\mathrm{logits}_{full}(x_{1:T}).
+$$
+
+这是 KV Cache 正确性的底线，而不是“代码能跑”就算完成。
+
+### 2. tokenizer round-trip
+
+UTF-8 byte tokenizer 与教学 BPE 都必须满足 encode/decode 可逆。
+
+### 3. 编辑必须失败得安全
+
+`ExactEditTool` 要求旧文本在目标文件中恰好出现一次；0 次或多次都拒绝修改，强迫 agent 读取更多上下文，而不是模糊猜位置。
+
+### 4. 工具错误进入 observation
+
+文件不存在、schema 错误、命令失败等不会直接摧毁 agent loop，而会被反馈给 policy，支持下一步恢复。
+
+### 5. CI 真跑测试
+
+GitHub Actions 的 `Capstone runtime tests` 会安装该工程并执行 `pytest`。第一版已经通过 **12 项测试**。
 
 ---
 
 ## 强制原则
 
-### 1. 先自己写，再使用工业框架对照
+### 1. 先自己写，再用工业框架作对照
 
-例如 attention：
-
-先写：
+Attention 先显式写：
 
 ```python
 scores = q @ k.transpose(-2, -1)
 scores = scores / math.sqrt(head_dim)
-scores = scores + mask
+scores = scores.masked_fill(~mask, float("-inf"))
 probs = torch.softmax(scores, dim=-1)
 out = probs @ v
 ```
 
-再研究 PyTorch SDPA、FlashAttention、vLLM 在哪里优化。
+然后才研究 SDPA、FlashAttention、vLLM 如何优化同一计算。
 
 不能反过来只写：
 
@@ -100,9 +175,9 @@ AutoModelForCausalLM.from_pretrained(...)
 
 然后声称“实现了大模型”。
 
-### 2. 每个模块必须写 shape
+### 2. 每个模块必须知道 shape
 
-例如：
+例如 GQA：
 
 ```text
 q: [B, Hq, Tq, Dh]
@@ -110,86 +185,119 @@ k: [B, Hkv, Tk, Dh]
 v: [B, Hkv, Tk, Dh]
 ```
 
-### 3. 每个优化都必须先有 reference implementation
+### 3. 每个优化先有 reference implementation
 
-例如 KV Cache：
+例如：
 
 ```text
 Reference: full recomputation
-Optimized: incremental decode
+Optimized: KV-cached incremental decode
 ```
 
-二者 logits 必须做 parity test。
+必须做 parity test。
 
 ### 4. Agent 必须有真实 environment feedback
 
-不能只模拟：
+目标是：
 
 ```text
-Thought → fake Action → fake Observation
-```
-
-而要真正执行：
-
-```text
-edit → pytest → traceback → next edit
-```
-
-### 5. 安全边界必须是代码，不是 prompt
-
-工具层需要：
-
-- allowed roots；
-- command timeout；
-- network policy；
-- destructive-operation guard；
-- audit log。
-
----
-
-## 最终验收任务
-
-### Model Runtime
-
-- 加载一个公开 checkpoint；
-- 与 reference implementation 做 logits parity；
-- KV Cache decode 与 full recompute 对齐；
-- 支持 streaming generation。
-
-### Codex-class
-
-输入一个真实 Git repository + issue，系统能够：
-
-```text
-inspect repo
-→ search code
+inspect
 → edit
-→ run tests
-→ read failure
+→ pytest
+→ read traceback
 → fix
 → rerun
 → review diff
 → finish
 ```
 
+不是 Thought / Action / Observation 的纸面流程图。
+
+### 5. 安全边界必须最终落到系统层
+
+当前 rooted filesystem 与 timeout 只是第一层。最终还必须有：
+
+- container / VM isolation；
+- network policy；
+- destructive-operation guard；
+- resource quota；
+- secrets boundary；
+- audit log；
+- permission / approval model。
+
+---
+
+## 从这里开始学习
+
+建议按以下顺序边读边跑：
+
+1. [`教程-lessons/00-从字符串到Logits-string-to-logits.md`](教程-lessons/00-从字符串到Logits-string-to-logits.md)
+2. [`教程-lessons/01-KVCache与增量解码-kv-cache.md`](教程-lessons/01-KVCache与增量解码-kv-cache.md)
+3. [`教程-lessons/02-工具协议与Agent循环-tool-agent-loop.md`](教程-lessons/02-工具协议与Agent循环-tool-agent-loop.md)
+4. [`教程-lessons/03-Codex级仓库闭环-coding-agent.md`](教程-lessons/03-Codex级仓库闭环-coding-agent.md)
+5. [`../../教材-book/18A-模型运行时源码导读-runtime-walkthrough.md`](../../教材-book/18A-模型运行时源码导读-runtime-walkthrough.md)
+6. [`../../教材-book/18B-智能体运行时源码导读-agent-walkthrough.md`](../../教材-book/18B-智能体运行时源码导读-agent-walkthrough.md)
+
+本地运行：
+
+```bash
+cd '代码-code/从零构建Astra与Codex级系统'
+pip install -e '.[dev]'
+pytest
+python examples/00_tiny_generate.py
+python examples/01_scripted_coding_agent.py
+```
+
+---
+
+## 最终毕业验收
+
+### Model Runtime
+
+- 加载公开真实 checkpoint；
+- 与 reference implementation 做 logits parity；
+- KV Cache decode 与 full recompute 对齐；
+- streaming / batching / paged cache；
+- structured generation；
+- 性能与显存 profiling。
+
+### Codex-class
+
+输入一个真实 Git repository + issue，系统独立完成：
+
+```text
+understand issue
+→ map repo
+→ inspect code
+→ edit
+→ run tests
+→ diagnose
+→ fix
+→ rerun
+→ inspect diff
+→ verify no regression
+→ finish
+```
+
 ### Astra-class
 
-输入跨工具任务，系统能够：
+输入跨工具长程任务：
 
 ```text
 research
-→ browser
+→ browser/computer
 → filesystem
-→ Python
-→ shell
-→ artifact
+→ Python/shell
+→ generate artifact
+→ inspect artifact
+→ recover from failures
 → verify
 → final result
 ```
 
 ### Multi-Agent
 
-至少完成一次：
+至少完成：
 
 ```text
 coordinator
@@ -197,15 +305,9 @@ coordinator
 ├─ worker B / worktree B
 └─ reviewer
      ↓
-merge
+verified merge
 ```
 
----
+总理论入口：[`../../教材-book/18-从零构建Astra与Codex级系统-capstone.md`](../../教材-book/18-从零构建Astra与Codex级系统-capstone.md)。
 
-## 与教材的关系
-
-总理论说明见：
-
-[`../../教材-book/18-从零构建Astra与Codex级系统-capstone.md`](../../教材-book/18-从零构建Astra与Codex级系统-capstone.md)
-
-从现在开始，每一个理论章节都应该最终落到这个工程中的某个模块。
+从这一版开始，教材中的理论不再以“解释完”为终点，而以**能否在这个工程里亲手实现、测试和验证**为终点。

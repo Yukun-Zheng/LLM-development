@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - '**/*.md'
-      - 'scripts/normalize_math.py'
+      - '工具-scripts/数学公式规范化-normalize_math.py'
       - '.github/workflows/normalize-markdown-math.yml'
   workflow_dispatch:
 
@@ -17,20 +17,20 @@ jobs:
   normalize:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: 检出仓库 / Check out repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Python
+      - name: 配置 Python / Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Normalize math delimiters
-        run: python scripts/normalize_math.py
+      - name: 规范数学公式 / Normalize math
+        run: python '工具-scripts/数学公式规范化-normalize_math.py'
 
-      - name: Commit normalized Markdown
+      - name: 提交规范化结果 / Commit normalized Markdown
         shell: bash
         run: |
           if git diff --quiet; then

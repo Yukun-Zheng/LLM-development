@@ -39,7 +39,7 @@ Sequence Model
 标准 causal self-attention 对长度为 $T$ 的序列形成：
 
 $$
-A=\operatorname{softmax}\left(\frac{QK^\top}{\sqrt{d}}+M\right),
+A=\mathrm{softmax}\left(\frac{QK^\top}{\sqrt{d}}+M\right),
 $$
 
 注意力矩阵规模为：
@@ -255,7 +255,7 @@ Agent memory
 标准 attention：
 
 $$
-\operatorname{softmax}(QK^\top)V
+\mathrm{softmax}(QK^\top)V
 $$
 
 难以直接把 $K,V$ 压缩为固定状态。

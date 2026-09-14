@@ -5,6 +5,9 @@
 > **最高写作规范**：[`00-教材方法论与证据标准-source-first.md`](00-教材方法论与证据标准-source-first.md)  
 > 本书采用 **Source-First / Mechanism-First / Reproducibility-First** 原则：重要结论优先回到原论文、官方技术报告、官方代码、模型卡、系统卡、数据集与 benchmark 原始资料，并区分“原始主张”“后续证据”“当前较稳健理解”。
 >
+> **最终工程终点**：[`18-从零构建Astra与Codex级系统-capstone.md`](18-从零构建Astra与Codex级系统-capstone.md)  
+> 本书最终不是停在“理解 LLM”，而是要求读者从空目录开始，把现代模型运行时、推理引擎、工具运行时、Coding Agent、通用 Agent、长程记忆、Computer Use、多智能体与评测系统一步一步亲手写出来。训练权重本身不作为要求，但**纯代码系统必须能够真实运行**。
+>
 > **完整扩展蓝图**：[`99-全书扩展蓝图-v2.md`](99-全书扩展蓝图-v2.md)  
 > 现有章节是第一版主干，最终覆盖范围按 v2 蓝图扩展到数学、数据、优化、硬件、分布式训练、后训练、reasoning、multimodality、agent、serving、interpretability、evaluation、安全、全球模型生态与 Post-Transformer。
 
@@ -31,36 +34,40 @@
 | 第十五篇 | **可解释性与机制研究** | Probing、Activation Patching、Circuits、SAE、Model Editing | [`15-可解释性与机制研究-interpretability.md`](15-可解释性与机制研究-interpretability.md) |
 | 第十六篇 | **硬件、Kernel 与基础设施** | Roofline、Tensor Core、FlashAttention、NCCL、ZeRO、vLLM | [`16-硬件内核与基础设施-hardware-kernels.md`](16-硬件内核与基础设施-hardware-kernels.md) |
 | 第十七篇 | **闭源前沿模型与证据边界** | System Card、Model Card、Evidence Boundary、Frontier Models | [`17-闭源前沿模型与证据边界-frontier-closed-models.md`](17-闭源前沿模型与证据边界-frontier-closed-models.md) |
+| 第十八篇 | **从零构建 Astra-class 通用智能系统与 Codex-class 编程智能体** | Model Runtime、KV Cache、Tool Runtime、Coding Agent、Computer Use、Multi-Agent | [`18-从零构建Astra与Codex级系统-capstone.md`](18-从零构建Astra与Codex级系统-capstone.md) |
 | 蓝图 | **全书扩展蓝图 v2** | Full LLM Stack、Labs、L2/L3 Maturity | [`99-全书扩展蓝图-v2.md`](99-全书扩展蓝图-v2.md) |
 
-## 为什么继续扩展到第十三至十七篇
+## 为什么继续扩展到第十三至十八篇
 
-原来的 12 篇更接近“LLM 主历史线”，但如果目标是形成真正全面的教材，还必须补上此前被低估的基础：
+原来的 12 篇更接近“LLM 主历史线”，但如果目标是形成真正全面的教材，还必须补上此前被低估的基础与最终工程闭环：
 
 1. **模型输入世界**：tokenization 与数据工程；
 2. **模型如何真的被训出来**：optimizer、precision、training dynamics；
 3. **模型内部如何被科学研究**：mechanistic interpretability；
 4. **模型为什么在现实里能跑起来**：hardware、kernel、communication 与 serving infrastructure；
-5. **信息不完整时如何研究前沿**：closed-model evidence boundaries。
+5. **信息不完整时如何研究前沿**：closed-model evidence boundaries；
+6. **如何把所有理论变成真实系统**：从 model core 一路写到 Codex-class / Astra-class Agent。
 
-后续章节仍将按同一标准继续扩展，而不是把“历史时间线”误当成“完整知识体系”。
+第十八篇不是附加项目，而是整本教材的**总验收**：前面的理论最终都要能够落到一段自己写的代码或一个可验证的系统行为上。
 
 ## 推荐阅读顺序
 
-如果目标是**系统掌握大模型发展史和机制**，建议：
+如果目标是**系统掌握大模型发展史、理论与完整代码实现**，建议：
 
-`00 方法论 → 00 导读 → 01 → 02 → 13 → 14 → 03 → 04 → 05 → 07 → 08 → 06 → 09 → 16 → 10 → 15 → 11 → 17 → 12`
+`00 方法论 → 00 导读 → 01 → 13 → 04 → 02 → 14 → 03 → 05 → 07 → 08 → 06 → 09 → 16 → 10 → 15 → 11 → 17 → 12 → 18`
 
 如果目标是快速补齐某条技术线，可以按主题跳读：
 
-- **Transformer 与架构**：01 → 04 → 07 → 16
+- **Transformer 与模型核心代码**：01 → 04 → 13 → 18
 - **GPT‑3、Scaling 与数据**：02 → 13 → 14 → 09
 - **ChatGPT 与后训练**：03 → 08
-- **RAG、多模态与智能体**：06 → 08 → 12
-- **训练与推理系统工程**：09 → 16 → 10
+- **RAG、多模态与智能体**：06 → 08 → 12 → 18
+- **训练与推理系统工程**：09 → 16 → 10 → 18
 - **模型内部机制**：01 → 04 → 15
 - **闭源前沿模型研究**：08 → 17 → 12
-- **评测、安全与可靠性**：11 → 15 → 17 → 12
+- **Codex-class 编程智能体**：01 → 04 → 10 → 06 → 16 → 18
+- **Astra-class 通用智能体**：06 → 08 → 10 → 12 → 17 → 18
+- **评测、安全与可靠性**：11 → 15 → 17 → 18
 
 ## 原始资料入口
 
@@ -68,6 +75,28 @@
 
 - [`../参考文献-references/00-原始资料总索引-primary-sources.md`](../参考文献-references/00-原始资料总索引-primary-sources.md)
 - [`../参考文献-references/README.md`](../参考文献-references/README.md)
+
+## 终极代码工程入口
+
+- [`../代码-code/从零构建Astra与Codex级系统/README.md`](../代码-code/从零构建Astra与Codex级系统/README.md)
+
+这个工程将按教材进度逐步增长：
+
+```text
+tokenizer
+→ model core
+→ weight loader
+→ inference engine
+→ KV Cache
+→ structured generation
+→ context / memory
+→ tool runtime
+→ agent core
+→ Codex-class
+→ Astra-class
+→ multi-agent
+→ evals
+```
 
 ## 术语原则
 
@@ -91,4 +120,4 @@
 - **L2 复现级**：包含代码、实验与结果；
 - **L3 研究级**：包含争议、反例、最新证据与开放问题。
 
-核心章节最终目标是尽可能达到 **L2–L3**，而不是只做到“有一篇 Markdown”。
+核心章节最终目标是尽可能达到 **L2–L3**。第十八篇最终还要达到一个更严格的工程标准：**不是“有代码”，而是整个系统能够端到端运行、测试、失败恢复并接受真实任务。**

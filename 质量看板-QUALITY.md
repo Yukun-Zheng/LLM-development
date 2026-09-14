@@ -127,6 +127,9 @@ JSON-RPC 2.0
 - [x] Git worktree primitive
 - [x] **minimal MCP client/server + tests**
 - [x] **Fast CPU CI：CPU-only PyTorch + pytest + Ruff correctness lint**
+- [x] **Source-First coverage audit + artifact**
+- [x] **严格内部 Markdown 链接审计**
+- [x] **Theory ↔ Code ↔ Paper 学习地图**
 
 ## 自动化证据
 
@@ -137,13 +140,22 @@ JSON-RPC 2.0
 Ruff correctness lint: All checks passed
 ```
 
-并使用 CPU-only PyTorch 与 pip cache，避免普通单元测试下载整套 CUDA runtime。
+内容审计也已实际通过：
+
+```text
+35 chapters audited
+2 methodology/blueprint documents have no primary-like external links
+60 Markdown files audited
+Internal Markdown links: PASS
+```
+
+Source coverage 当前先作为报告 artifact，不对历史格式差异做硬阻塞；内部链接检查严格阻塞。
 
 ## P0：当前基础设施优先项
 
-- [ ] 自动生成目录/质量数据，消除 README 漂移
-- [ ] source-audit / link-check 进入 CI
-- [ ] Theory ↔ Code ↔ Paper 三向索引
+- [ ] 自动生成目录/质量数据，彻底消除 README 漂移
+- [ ] 把 Theory ↔ Code ↔ Paper 学习地图改为可自动校验的 manifest
+- [ ] 建立 paper card / claim ledger 模板并覆盖核心论文
 
 ## P1：模型系统
 
@@ -193,11 +205,13 @@ Ruff correctness lint: All checks passed
 # 教材基础设施缺口
 
 - [ ] 自动 TOC 生成器
-- [ ] Theory ↔ Code ↔ Paper 三向索引
+- [x] Theory ↔ Code ↔ Paper 三向学习地图（当前手工维护）
+- [ ] 自动校验 cross-index manifest
 - [ ] 每篇论文的 paper card / claim ledger
-- [ ] source-audit 自动进入 CI
-- [ ] broken-link checker
-- [ ] Markdown / formula / citation linter
+- [x] source-audit 进入 CI
+- [x] internal broken-link checker 进入 CI
+- [ ] 外部链接健康检查（需要避免把网络波动当内容错误）
+- [ ] Markdown / formula / citation linter 进一步统一
 - [ ] MkDocs / Docusaurus / Quarto 网站版
 - [ ] PDF / print build
 - [ ] 双语术语表

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit textbook and agent chapters for primary-source coverage.
+"""Audit Source-First coverage across the main technical tracks.
 
 This is a lightweight evidence-quality linter. It does not decide whether a
 citation is scientifically correct; instead it makes missing evidence visible.
@@ -8,7 +8,12 @@ Usage:
     python 工具-scripts/原始资料审计-source_audit.py
     python 工具-scripts/原始资料审计-source_audit.py --strict
 
-The script scans Markdown chapters under 教材-book and 智能体-agent and reports:
+The script scans Markdown chapters under:
+- 教材-book;
+- 智能体-agent;
+- Codex源码解剖-codex-anatomy.
+
+For each chapter it reports:
 - total external links;
 - likely primary-source links;
 - whether the chapter contains an 原始资料/Primary Source section;
@@ -27,7 +32,11 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTENT_ROOTS = (ROOT / "教材-book", ROOT / "智能体-agent")
+CONTENT_ROOTS = (
+    ROOT / "教材-book",
+    ROOT / "智能体-agent",
+    ROOT / "Codex源码解剖-codex-anatomy",
+)
 
 URL_RE = re.compile(r"https?://[^)\s>]+")
 
@@ -76,6 +85,7 @@ SOURCE_SECTION_PATTERNS = (
 EVIDENCE_TERMS = (
     "原论文",
     "官方代码",
+    "官方源码",
     "技术报告",
     "model card",
     "system card",
@@ -83,6 +93,8 @@ EVIDENCE_TERMS = (
     "后续证据",
     "原始主张",
     "官方规范",
+    "clean-room",
+    "parity",
 )
 
 

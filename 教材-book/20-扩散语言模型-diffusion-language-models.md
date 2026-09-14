@@ -9,7 +9,7 @@
 经典 decoder-only LM 使用：
 
 $$
-p_\theta(x_{1:T})=\prod_{t=1}^{T}p_\theta(x_t\mid x_{<t}).
+p_\theta(x_{1:T})=\prod_{t=1}^{T}p_\theta(x_t\mid x_{\lt t}).
 $$
 
 这带来非常清晰的生成过程：

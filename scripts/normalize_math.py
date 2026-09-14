@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
-r"""Normalize LaTeX delimiters for GitHub-flavored Markdown.
+r"""Normalize textbook math for GitHub-flavored Markdown.
 
 The textbook is authored in Markdown and rendered directly on GitHub. GitHub's
-native math syntax uses `$...$` for inline math and `$$...$$` for display math.
-LaTeX document delimiters such as `\(...\)` and `\[...\]` are therefore
-normalized here.
+math renderer supports `$...$` for inline math and `$$...$$` for display math,
+but it does not accept every LaTeX macro that a full TeX installation would.
 
-The transformation deliberately skips fenced code blocks (including Mermaid,
-Python, shell, text, and fenced `math` blocks) so examples and source code are
-never rewritten accidentally.
+This normalizer therefore performs two compatibility passes outside fenced code
+blocks:
+
+1. Normalize math delimiters
+   `\(...\)` -> `$...$`
+   `\[...\]` -> `$$...$$`
+
+2. Rewrite known GitHub-incompatible macros
+   `\operatorname{foo}` -> `\mathrm{foo}`
+   `\operatorname*{foo}` -> `\mathrm{foo}`
+
+Fenced code blocks (Mermaid, Python, shell, text, fenced math examples, etc.) are
+left untouched so literal examples and source code are never rewritten.
 
 Run from the repository root:
 
@@ -28,15 +37,29 @@ ROOT = Path(__file__).resolve().parents[1]
 # Match an opening/closing fenced-code marker after optional indentation.
 FENCE_RE = re.compile(r"^(?P<indent>\s*)(?P<fence>`{3,}|~{3,})")
 
+# GitHub rejects \operatorname in Markdown math.  \mathrm gives us the same
+# upright visual treatment needed for names such as softmax, Var, MHA, FFN,
+# Attention, Concat, KL, etc.  The optional star covers \operatorname* too.
+OPERATORNAME_RE = re.compile(r"\\operatorname\*?\{([^{}]+)\}")
 
-def _single_line_display_math(line: str) -> str:
+
+def _single_line_display_math(line: str) -> tuple[str, int]:
     r"""Convert same-line \[ ... \] to $$ ... $$ outside code fences."""
-    # Keep this conservative: do not span newlines and require both delimiters.
-    return re.sub(r"\\\[(.+?)\\\]", r"$$\1$$", line)
+    return re.subn(r"\\\[(.+?)\\\]", r"$$\1$$", line)
+
+
+def _inline_math(line: str) -> tuple[str, int]:
+    r"""Convert same-line \( ... \) to $ ... $ outside code fences."""
+    return re.subn(r"\\\((.+?)\\\)", r"$\1$", line)
+
+
+def _github_compatible_macros(line: str) -> tuple[str, int]:
+    r"""Rewrite LaTeX macros known to be rejected by GitHub's math renderer."""
+    return OPERATORNAME_RE.subn(r"\\mathrm{\1}", line)
 
 
 def normalize_markdown(text: str) -> tuple[str, int]:
-    """Return normalized Markdown and the number of delimiter replacements."""
+    """Return normalized Markdown and the number of replacements."""
     lines = text.splitlines(keepends=True)
     out: list[str] = []
     in_fence = False
@@ -83,20 +106,16 @@ def normalize_markdown(text: str) -> tuple[str, int]:
             replacements += 1
             continue
 
-        # Same-line display math is rare in the book, but normalize it too.
-        converted = _single_line_display_math(line)
-        if converted != line:
-            replacements += line.count(r"\[") + line.count(r"\]")
-            line = converted
+        converted, count = _single_line_display_math(line)
+        replacements += count
 
-        # Inline LaTeX delimiters -> GitHub inline math delimiters.
-        open_count = line.count(r"\(")
-        close_count = line.count(r"\)")
-        if open_count or close_count:
-            line = line.replace(r"\(", "$").replace(r"\)", "$")
-            replacements += open_count + close_count
+        converted, count = _inline_math(converted)
+        replacements += count
 
-        out.append(line)
+        converted, count = _github_compatible_macros(converted)
+        replacements += count
+
+        out.append(converted)
 
     return "".join(out), replacements
 
@@ -122,7 +141,7 @@ def main() -> int:
             total_replacements += replacements
             print(
                 f"normalized {path.relative_to(ROOT)} "
-                f"({replacements} delimiter replacements)"
+                f"({replacements} replacements)"
             )
 
     if changed_files == 0:
@@ -130,7 +149,7 @@ def main() -> int:
     else:
         print(
             f"Done: {changed_files} Markdown files changed, "
-            f"{total_replacements} delimiter replacements."
+            f"{total_replacements} replacements."
         )
 
     return 0

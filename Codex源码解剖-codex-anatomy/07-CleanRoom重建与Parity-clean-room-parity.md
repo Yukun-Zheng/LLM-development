@@ -1,6 +1,7 @@
 # C07　Clean-room 重建与 Parity：怎样真正“从零搭一个 Codex”
 
-> **目标**：不是复制 `openai/codex`，而是从公开源码提取行为契约，独立写出教学实现，并逐层做可复现 parity。
+> **目标**：不是复制 `openai/codex`，而是从公开源码提取行为契约，独立写出教学实现，并逐层做可复现 parity。  
+> **Primary source**：OpenAI 官方仓库 https://github.com/openai/codex ，重点对照 https://github.com/openai/codex/blob/main/codex-rs/core/src/session/turn.rs 与 https://github.com/openai/codex/blob/main/codex-rs/docs/protocol_v1.md 。
 
 ---
 

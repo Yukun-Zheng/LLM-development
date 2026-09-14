@@ -2,11 +2,23 @@
 
 本目录存放与教材正文配套的**可运行代码**。目标不是调用现成框架“跑通即可”，而是把关键机制写到足够透明，让读者能够把公式、张量形状（shape）与代码逐行对应起来。
 
+## 终极目标
+
+整本书的代码终点不是若干孤立 demo，而是：
+
+> **从空目录开始，逐层写出一个 Astra-class 通用智能系统与 Codex-class 编程智能体。训练权重本身不作为目标，但模型结构、权重加载、推理、KV Cache、工具调用、Agent loop、代码执行、Git/worktree、长程记忆、browser/computer interface、多智能体与评测都要亲手实现。**
+
+总工程入口：
+
+- [`从零构建Astra与Codex级系统/README.md`](从零构建Astra与Codex级系统/README.md)
+- 理论总章：[`../教材-book/18-从零构建Astra与Codex级系统-capstone.md`](../教材-book/18-从零构建Astra与Codex级系统-capstone.md)
+
 ## 当前代码
 
-| 文件 | 中文说明 | 覆盖内容 |
+| 文件 / 项目 | 中文说明 | 覆盖内容 |
 |---|---|---|
 | [`minigpt.py`](minigpt.py) | **从零实现一个小型 GPT** | 字符级 tokenizer、Embedding、RMSNorm、因果多头注意力、SwiGLU、Transformer Block、交叉熵训练、自回归生成 |
+| [`从零构建Astra与Codex级系统/`](从零构建Astra与Codex级系统/) | **全书终极工程** | Model Runtime → Inference Engine → Tool Runtime → Codex-class → Astra-class → Multi-Agent → Evals |
 
 ## 代码阅读原则
 
@@ -15,6 +27,8 @@
 1. **数据流清楚**：每一步输入/输出 shape 尽量可追踪；
 2. **机制透明**：核心模块尽量自己实现，而不是把关键逻辑藏在高层 API 中；
 3. **可以运行**：示例应能作为最小实验直接执行；
-4. **与工业实现区分**：教学实现不等同于生产级高性能实现，涉及 FlashAttention、vLLM、Megatron 等系统优化时会在正文中单独解释。
+4. **Reference parity**：优化实现必须能与朴素实现或官方公开 reference 做数值/行为对齐；
+5. **理论对应代码**：每一个重要公式都应能定位到真实实现；
+6. **与工业实现区分**：教学实现不等同于生产级高性能实现，涉及 FlashAttention、vLLM、Megatron 等系统优化时会在正文中单独解释。
 
-后续代码会逐步扩展到 LoRA / QLoRA、RAG、MoE、DPO / GRPO / RLVR、KV Cache、推理服务与智能体循环等主题。
+后续代码不再以“多放几个独立脚本”为主要组织方式，而是优先推动 `从零构建Astra与Codex级系统/` 这个主工程逐阶段完成。

@@ -21,10 +21,10 @@
         "代码-code/从零构建Astra与Codex级系统/tests/test_sandbox.py"
       ],
       "evidence": [
-        "CI exercises argv-only execution, executable allowlisting, workspace-cwd escape rejection, environment secret scrubbing, wall-time termination, Linux NoNewPrivs=1 observation, tool metadata and sandboxed coding-agent integration"
+        "Fast CPU CI run 152: argv-only execution, executable allowlisting, workspace-cwd escape rejection, environment secret scrubbing, wall-time termination, Linux NoNewPrivs=1 observation, tool metadata and sandboxed coding-agent integration are covered; full suite 119 passed"
       ],
       "next": [
-        "container/namespace backend",
+        "namespace/container backend",
         "filesystem read/write isolation",
         "network isolation",
         "seccomp or equivalent syscall policy",
@@ -36,23 +36,32 @@
       "id": "security.os_container_sandbox",
       "track": "security",
       "title": "OS / Container Isolation for Untrusted Agent Execution",
-      "status": "planned",
+      "status": "partial",
       "maturity": "L1",
       "theory": [
         "代码-code/从零构建Astra与Codex级系统/教程-lessons/14-受限进程沙箱与真实隔离边界-process-sandbox.md",
         "智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md",
         "Codex源码解剖-codex-anatomy/03-工具执行审批与沙箱-tools-approval-sandbox.md"
       ],
-      "code": [],
-      "tests": [],
-      "evidence": [],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/bubblewrap_sandbox.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_bubblewrap_sandbox.py"
+      ],
+      "evidence": [
+        "Bubblewrap 0.9.0 backend and policy/command construction exist, including minimal root view, workspace bind/ro-bind, capability drop, environment clearing and optional network unshare",
+        "GitHub-hosted Ubuntu 24.04 security runs exposed host-policy limits rather than isolation success: one run failed network namespace loopback setup with RTM_NEWADDR Operation not permitted; another failed user-namespace uid mapping with Permission denied",
+        "Runtime namespace isolation is therefore intentionally not marked validated on hosted CI; tests record/skip known unavailable kernel capabilities instead of converting inability-to-start into a false PASS"
+      ],
       "next": [
-        "isolated rootfs / mount namespace",
-        "workspace mount policy",
-        "network-none mode",
-        "capability drop and no-new-privileges",
-        "pids/cpu/memory limits",
-        "host-secret / write-escape / network-escape negative tests"
+        "run escape-oriented namespace tests on a self-hosted environment that permits user namespaces",
+        "add a Docker/container backend that is testable on hosted CI",
+        "validate host-secret invisibility and read-only workspace enforcement",
+        "validate network-none mode",
+        "add seccomp or equivalent syscall policy",
+        "credential broker integration",
+        "pids/cpu/memory limits and escape-oriented adversarial tests"
       ]
     }
   ]

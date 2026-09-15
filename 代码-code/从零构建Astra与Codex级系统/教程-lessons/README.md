@@ -29,6 +29,8 @@
 | 20 | 统一 Rollout Trace 与证据链 | `rollout_trace.py`, `rollout_trace_collector.py` | model/tool/steering/artifact/verifier provenance + hash-chain integrity |
 | 21 | 持久 AgentGraph、Mailbox 与真正并行 Worker | `agent_graph.py`, `parallel_agents.py` | hierarchy/restart + message lease/reclaim + real worker overlap + one-task-per-agent |
 | 22 | 并行 Worktree 候选、Reviewer 与 Merge | `coding_team.py`, `worktree.py`, `artifacts.py`, `verification.py` | isolated candidates + independent verification + patch artifact + review + merge rollback |
+| 23 | A2A v1 远程任务、HTTP 与 Streaming | `a2a.py`, `a2a_http.py`, `a2a_runtime_bridge.py`, `a2a_runtime_http.py`, `a2a_streaming.py`, `a2a_sse.py` | pinned v1 wire semantics / real HTTP / Task→Thread→Turn / SUBMITTED-first SSE |
+| 24 | A2A SubscribeToTask 与断线重放 | `a2a_subscription.py` | durable task-update journal / real SSE subscribe / terminal semantics / Last-Event-ID replay |
 
 对应文件：
 
@@ -56,14 +58,16 @@
 20-统一RolloutTrace与证据链-rollout-trace.md
 21-持久AgentGraph与并行Mailbox-multi-agent-runtime.md
 22-并行Worktree候选Reviewer与Merge-coding-team.md
+23-A2Av1远程任务与HTTP绑定-a2a-runtime.md
+24-A2ASubscribeToTask与断线重放-a2a-subscription.md
 ```
 
 ## 当前硬证据
 
-普通 Fast CPU Capstone CI run 219：
+最新 Fast CPU Capstone CI run 248：
 
 ```text
-165 passed, 14 skipped, 1 warning in 8.96s
+188 passed, 14 skipped, 1 warning in 46.16s
 Ruff correctness lint: All checks passed
 ```
 
@@ -79,7 +83,7 @@ contiguous KV
 → interleaved continuous-batching lifecycle
 ```
 
-Agent / evaluation / multi-agent 主线现在已经串成：
+Agent / evaluation / multi-agent 主线已经串成：
 
 ```text
 Durable Thread / WorkItem
@@ -102,6 +106,21 @@ Persistent AgentGraph
 → merge apply / rollback
 ```
 
+Agent protocol 主线现在也已经不是概念图：
+
+```text
+pinned A2A v1 proto
+→ exact Task / Message / Artifact model
+→ durable SQLite TaskStore
+→ real HTTP+JSON binding
+→ source-aligned ListTasks pagination
+→ A2A Task ↔ Durable Thread / WorkItem / Turn bridge
+→ real remote HTTP Agent-OS gateway
+→ SendStreamingMessage / SSE
+→ durable SubscribeToTask journal
+→ disconnect / Last-Event-ID replay
+```
+
 关键自动验收包括：
 
 ```text
@@ -110,33 +129,30 @@ exact physical prefix hit → zero extra model forward
 partial longest-prefix hit → only suffix forward
 page-aware decode → no historical K/V materialization
 mixed cached lengths → one decode API
-page-aware logits + per-layer K/V == full recomputation
-old request decode + newly arrived request prefill → same serving iteration
+old request decode + new request prefill → same serving iteration
 finished/cancelled request → physical blocks released
 scheduler metrics → TTFT / TPOT / total latency
 rollout trace close/reopen → evidence persists
-same work-item → cannot rebind to another thread
 trace payload tampering → hash-chain verification fails
-second trace sync → zero duplicate evidence
-verifier result → explicit parent edge to artifact evidence
 AgentGraph close/reopen → hierarchy/status/mailbox persist
 message lease expiry → another consumer can reclaim
-stale mailbox owner → cannot ACK
-subtree cancellation → descendants stop without killing siblings
-two parallel workers → barrier proves real wall-clock overlap
-per-agent peak active tasks == 1
-worker exception → failed agent isolated, surviving worker continues
-same base commit → independent Git worktrees
-bad candidate verifier FAIL → reviewer cannot select
-selected binary patch → immutable artifact → git apply --check
-post-merge verifier FAIL → reverse patch → coordinator tree clean
+parallel workers → real wall-clock overlap
+worker-specific Git worktrees → isolated candidates
+post-merge verifier FAIL → reverse patch → clean coordinator tree
+A2A returnImmediately → durable SUBMITTED task
+A2A ListTasks → status/pageSize/opaque pageToken/history projection
+remote POST /message:send → real Thread/WorkItem/Turn
+/message:stream → SUBMITTED first frame before slow handler completes
+artifactUpdate → final statusUpdate
+/tasks/{id}:subscribe → durable submitted/terminal updates
+Last-Event-ID → replay exactly updates after disconnect cursor
 ```
 
-这里仍然是 reference serving/agent system，而不是 production vLLM/SGLang/Codex/Astra 等价物。当前 prefill 仍是逐请求 reference path，page-aware attention 仍有 Python request/block loops，也没有 chunked prefill、preemption/swap、GPU fused kernel 或真实并发 workload benchmark。Rollout Trace 的 SHA-256 链只能提供 tamper-evident 语义；如果攻击者能重写整个数据库并重新计算所有 hash，仍需要外部可信 digest anchor 才能建立更强审计边界。
+这里仍然是 reference serving/agent system，而不是 production vLLM/SGLang/Codex/Astra/A2A conformance implementation。当前 prefill 仍是逐请求 reference path，page-aware attention 仍有 Python request/block loops，也没有 chunked prefill、preemption/swap、GPU fused kernel 或真实并发 workload benchmark。
 
-当前 Multi-Agent 并发使用单进程 ThreadPool 作为**可观察的参考并发层**，持久 SQLite 状态由 coordinator thread 更新。Coding team 已经有 worker-specific Git worktree、candidate-patch artifact、独立 verifier、deterministic reviewer substrate 与单 patch merge rollback，但仍没有 remote actor runtime、LLM Reviewer、多 patch conflict graph、A2A 或跨机器执行。因此“并行已经存在”不等于“多 Agent 已证明优于单 Agent”。后续必须通过 1/2/4/8-agent controlled benchmark 给出 success/cost/wall-time/conflict 的实验结果。
+A2A 当前还缺 executor-native WORKING/intermediate status/artifact deltas、push notification configuration、extended authenticated Agent Card、tenant/security binding 与官方 SDK/conformance differential tests。`Last-Event-ID` 是本项目 SSE transport 的明确 replay extension，不冒充 A2A normative request field。
 
-Docker/Bubblewrap runtime tests 会按环境能力跳过，因此另有专门的 security workflow。Docker tested boundary 使用 shared Linux kernel，不能宣传成 VM-grade hostile-code containment；Bubblewrap backend 在 runner 禁止 namespace 时会显式 skip，而不是把“无法启动”当成“隔离成功”。
+Docker/Bubblewrap runtime tests 会按环境能力跳过，因此另有专门 security workflow。Docker tested boundary 使用 shared Linux kernel，不能宣传成 VM-grade hostile-code containment；Bubblewrap backend 在 runner 禁止 namespace 时会显式 skip，而不是把“无法启动”当成“隔离成功”。
 
 ## 课程成熟度规则
 

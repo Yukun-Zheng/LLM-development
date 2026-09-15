@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
 
 import pytest
 
+from astra_codex.agent import ScriptedBackend
+from astra_codex.coding import build_coding_agent
 from astra_codex.sandbox import (
     RestrictedSubprocessSandbox,
     SandboxExecTool,
@@ -107,3 +110,33 @@ def test_sandbox_exec_tool_surfaces_enforcement_metadata(tmp_path) -> None:
     assert result.metadata is not None
     assert result.metadata["timed_out"] is False
     assert result.metadata["security_boundary"] == "restricted-process-not-namespace-container"
+
+
+def test_coding_agent_can_replace_raw_shell_with_sandbox_exec(tmp_path) -> None:
+    (tmp_path / ".git").mkdir()
+    sandbox = _python_sandbox(tmp_path)
+    call = json.dumps(
+        {
+            "tool": "sandbox_exec",
+            "arguments": {
+                "argv": [sys.executable, "-c", "print('safe-agent')"],
+            },
+        }
+    )
+    backend = ScriptedBackend([call, "verified final answer"])
+    agent = build_coding_agent(
+        backend,
+        tmp_path,
+        execution_sandbox=sandbox,
+        max_steps=3,
+    )
+
+    tool_names = {spec.name for spec in agent.tools.specs}
+    assert "sandbox_exec" in tool_names
+    assert "shell" not in tool_names
+
+    run = agent.run("verify the sandbox")
+    assert run.final_answer == "verified final answer"
+    tool_messages = [message for message in run.messages if message.role == "tool"]
+    assert len(tool_messages) == 1
+    assert "safe-agent" in tool_messages[0].content

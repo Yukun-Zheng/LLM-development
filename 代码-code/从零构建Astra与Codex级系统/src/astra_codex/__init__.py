@@ -1,5 +1,13 @@
 """From-scratch educational runtime for modern LLM and agent systems."""
 
+from .agent_graph import (
+    AgentEvent,
+    AgentMessage,
+    AgentNode,
+    AgentStatus,
+    MessageStatus,
+    PersistentAgentGraph,
+)
 from .app_server import AgentAppClient, AgentAppServer, AppServerError, InProcessAppTransport
 from .artifacts import ArtifactRecord, ArtifactStore
 from .batch_executor import BatchedDecodeState, HomogeneousBatchExecutor
@@ -39,6 +47,7 @@ from .model import DecoderOnlyTransformer, ModelOutput
 from .multi_agent import SequentialCoordinator, WorkerResult
 from .page_aware_decode import HeterogeneousPageAwareDecodeReference
 from .paged_cache import ReferencePagedGenerationEngine, ReferencePagedKVCache
+from .parallel_agents import ParallelAgentCoordinator, ParallelTask, ParallelTaskResult
 from .physical_prefix_cache import (
     PhysicalPrefixCacheEngine,
     PhysicalPrefixPrefillResult,
@@ -110,6 +119,10 @@ from .verification import (
 __all__ = [
     "AgentAppClient",
     "AgentAppServer",
+    "AgentEvent",
+    "AgentMessage",
+    "AgentNode",
+    "AgentStatus",
     "AggregateMetrics",
     "AllocatorMetrics",
     "AppServerError",
@@ -170,10 +183,15 @@ __all__ = [
     "LeaseHeartbeat",
     "LocalHTTPAppServer",
     "LocalSSEEventServer",
+    "MessageStatus",
     "ModelConfig",
     "ModelOutput",
+    "ParallelAgentCoordinator",
+    "ParallelTask",
+    "ParallelTaskResult",
     "PermissionDecision",
     "PermissionProfile",
+    "PersistentAgentGraph",
     "PhysicalBlock",
     "PhysicalBlockGenerationEngine",
     "PhysicalKVTensorPool",

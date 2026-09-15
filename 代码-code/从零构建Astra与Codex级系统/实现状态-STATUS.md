@@ -46,16 +46,17 @@ AgentGraph / mailbox → parallel workers
 Agent Protocols
 MCP teaching runtime
 → A2A v1 Task/Message/Artifact
-→ HTTP+JSON
+→ HTTP+JSON + source-aligned ListTasks
 → A2A ↔ DurableAgentRuntime
 → remote HTTP gateway
 → SendStreamingMessage / SSE
+→ durable SubscribeToTask / reconnect replay
 ```
 
-当前最新已核验 Fast CPU Capstone CI：run **241**。
+当前最新已核验 Fast CPU Capstone CI：run **248**。
 
 ```text
-184 passed, 14 skipped, 1 warning in 10.44s
+188 passed, 14 skipped, 1 warning in 46.16s
 Ruff correctness lint: All checks passed
 ```
 
@@ -211,7 +212,7 @@ Persistent AgentGraph
 
 ## 9.2 A2A v1 Core
 
-A2A 部分固定官方规范快照：
+A2A 固定官方规范快照：
 
 ```text
 a2aproject/A2A
@@ -274,7 +275,7 @@ A2A Task
 
 ## 9.5 Real HTTP → Agent OS Gateway
 
-`a2a_runtime_http.py` 让 HTTP server thread 自己打开 A2ATaskStore 与 DurableAgentRuntime SQLite handles，因此远端：
+`a2a_runtime_http.py` 让 HTTP server thread 自己打开 A2ATaskStore 与 DurableAgentRuntime SQLite handles：
 
 ```text
 POST /message:send
@@ -283,25 +284,11 @@ POST /message:send
 → A2A result
 ```
 
-已经真实打通；server restart 后 A2A Task 和 Agent-OS committed state 都可以恢复。
-
-Fast CI run 235：
-
-```text
-182 passed, 14 skipped
-Ruff passed
-```
+server restart 后 A2A Task 和 Agent-OS committed state 都可以恢复。
 
 ## 9.6 SendStreamingMessage / SSE
 
-新增：
-
-```text
-a2a_streaming.py
-a2a_sse.py
-```
-
-pinned v1 `StreamResponse` 的四类 payload 被显式建模：
+`a2a_streaming.py` + `a2a_sse.py` 显式建模 pinned v1 `StreamResponse`：
 
 ```text
 task
@@ -310,16 +297,59 @@ statusUpdate
 artifactUpdate
 ```
 
-真实 `POST /message:stream` 测试故意阻塞 handler，验证客户端能先收到 durable `SUBMITTED Task` 首帧，再收到 artifact delta / final status；不是把最终数组伪装成 stream。
+真实 `POST /message:stream` 测试故意阻塞 handler，验证客户端先收到 durable `SUBMITTED Task` 首帧，再收到 artifact delta / final status；不是把最终数组伪装成 stream。
 
-Fast CI run 241：
+## 9.7 SubscribeToTask / Durable Replay
+
+新增：
 
 ```text
-184 passed, 14 skipped, 1 warning in 10.44s
+a2a_subscription.py
+```
+
+实现 append-only SQLite Task update journal 与：
+
+```text
+GET /tasks/{id}:subscribe
+→ text/event-stream
+```
+
+测试覆盖：
+
+```text
+SUBMITTED snapshot durable
+→ subscriber reads SUBMITTED
+→ another DB connection completes Task
+→ subscriber reads terminal snapshot
+→ stream closes
+```
+
+连续相同 snapshot 会去重；fresh subscription 对 already-terminal Task 返回 409 reference unsupported-operation boundary。
+
+另外 reference SSE transport 显式使用：
+
+```text
+Last-Event-ID
+```
+
+作为**非 normative 的 transport-level replay extension**。最新 regression 验证：
+
+```text
+observe update N
+→ disconnect
+→ Task reaches N+1 terminal update
+→ reconnect Last-Event-ID=N
+→ replay exactly N+1
+```
+
+Fast CI run 248：
+
+```text
+188 passed, 14 skipped, 1 warning in 46.16s
 Ruff correctness lint: All checks passed
 ```
 
-当前仍缺 `GET /tasks/{id}:subscribe`、durable task-update replay source、push notification config、extended authenticated Agent Card、tenant/security binding 和官方 conformance differential tests。
+当前仍缺 executor-native WORKING/intermediate `TaskStatusUpdateEvent` / `TaskArtifactUpdateEvent`、push notification config、extended authenticated Agent Card、tenant/security binding、active local WorkItem cancellation propagation 和官方 conformance differential tests。
 
 ---
 
@@ -327,11 +357,13 @@ Ruff correctness lint: All checks passed
 
 ## Protocol / Agent OS
 
-- [ ] A2A durable Task update journal
-- [ ] `GET /tasks/{id}:subscribe` + reconnect/replay
+- [x] A2A durable Task update journal
+- [x] `GET /tasks/{id}:subscribe`
+- [x] disconnect / Last-Event-ID replay reference semantics
 - [ ] executor-native `TaskStatusUpdateEvent` / `TaskArtifactUpdateEvent`
 - [ ] A2A cancellation propagation into local running WorkItem
 - [ ] A2A INPUT_REQUIRED / AUTH_REQUIRED continuation mapping
+- [ ] push notification configuration
 - [ ] remote A2A auth / tenant scope
 - [ ] official A2A SDK/conformance differential fixtures
 

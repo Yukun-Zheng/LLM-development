@@ -266,12 +266,21 @@ class DurableAgentRuntime:
         *,
         lease_seconds: float = 300.0,
         now: float | None = None,
+        allowed_thread_ids: set[str] | None = None,
     ) -> RuntimeExecutionRecord | None:
+        """Run one eligible turn, optionally fenced to an allowed thread set.
+
+        The authorization filter is passed directly to the durable queue claim,
+        so an out-of-scope work item is never leased to this worker in the first
+        place. This is stronger than claiming globally and rejecting afterward.
+        """
+
         item = self.work_queue.claim(
             worker_id,
             lease_seconds=lease_seconds,
             now=now,
             kinds={"turn"},
+            thread_ids=allowed_thread_ids,
         )
         if item is None:
             return None

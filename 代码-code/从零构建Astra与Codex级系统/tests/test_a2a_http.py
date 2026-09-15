@@ -105,23 +105,58 @@ def test_return_immediately_get_list_history_and_cancel_over_http(tmp_path) -> N
             assert no_history.history == ()
 
             listed = client.list_tasks(context_id=submitted.context_id)
-            assert [task.id for task in listed] == [submitted.id]
+            assert [task.id for task in listed.tasks] == [submitted.id]
+            assert listed.total_size == 1
+            assert listed.page_size == 50
+
             submitted_only = client.list_tasks(
-                states={A2ATaskState.TASK_STATE_SUBMITTED}
+                status=A2ATaskState.TASK_STATE_SUBMITTED
             )
-            assert [task.id for task in submitted_only] == [submitted.id]
+            assert [task.id for task in submitted_only.tasks] == [submitted.id]
 
             cancelled = client.cancel_task(submitted.id)
             assert cancelled.status.state is A2ATaskState.TASK_STATE_CANCELED
             assert client.get_task(submitted.id).status.state is A2ATaskState.TASK_STATE_CANCELED
 
 
-def test_http_binding_rejects_unimplemented_pagination_instead_of_faking_it(tmp_path) -> None:
+def test_list_tasks_uses_v1_opaque_pagination_and_history_projection(tmp_path) -> None:
+    with A2ATaskStore(tmp_path / "a2a.sqlite") as store:
+        service = A2AService(_card(), store)
+        with LocalA2AHTTPServer(service) as server:
+            client = A2AHTTPClient(server.base_url)
+            ids: list[str] = []
+            for index in range(3):
+                task = client.send_message(
+                    A2ASendMessageRequest(
+                        _message(f"task {index}", f"msg_page_{index}"),
+                        A2ASendMessageConfiguration(return_immediately=True),
+                    )
+                )
+                ids.append(task.id)
+
+            first = client.list_tasks(page_size=2, history_length=0)
+            assert [task.id for task in first.tasks] == ids[:2]
+            assert all(task.history == () for task in first.tasks)
+            assert first.total_size == 3
+            assert first.page_size == 2
+            assert first.next_page_token
+
+            second = client.list_tasks(
+                page_size=2,
+                page_token=first.next_page_token,
+                history_length=0,
+            )
+            assert [task.id for task in second.tasks] == ids[2:]
+            assert second.total_size == 3
+            assert second.next_page_token == ""
+
+
+def test_list_tasks_rejects_invalid_opaque_page_token(tmp_path) -> None:
     with A2ATaskStore(tmp_path / "a2a.sqlite") as store:
         service = A2AService(_card(), store)
         with LocalA2AHTTPServer(service) as server:
             client = A2AHTTPClient(server.base_url)
             with pytest.raises(A2AHTTPError) as exc_info:
-                client._request("GET", "/tasks?pageSize=10")
-            assert exc_info.value.status == 501
-            assert "pagination" in exc_info.value.message
+                client.list_tasks(page_token="not-a-valid-token")
+            assert exc_info.value.status == 400
+            assert "pageToken" in exc_info.value.message

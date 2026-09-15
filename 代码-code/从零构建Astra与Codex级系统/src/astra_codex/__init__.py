@@ -1,5 +1,6 @@
 """From-scratch educational runtime for modern LLM and agent systems."""
 
+from .app_server import AgentAppClient, AgentAppServer, AppServerError, InProcessAppTransport
 from .artifacts import ArtifactRecord, ArtifactStore
 from .batch_executor import BatchedDecodeState, HomogeneousBatchExecutor
 from .benchmark import BenchmarkCase, BenchmarkHarness, BenchmarkRecord, ExactAnswerGrader, Grade
@@ -64,7 +65,10 @@ from .verification import (
 )
 
 __all__ = [
+    "AgentAppClient",
+    "AgentAppServer",
     "AggregateMetrics",
+    "AppServerError",
     "ArtifactRecord",
     "ArtifactStore",
     "BatchKind",
@@ -96,6 +100,7 @@ __all__ = [
     "GuardedToolExecutor",
     "HomogeneousBatchExecutor",
     "IGNORE_INDEX",
+    "InProcessAppTransport",
     "JournaledToolExecutor",
     "LeaseHeartbeat",
     "ModelConfig",

@@ -158,7 +158,7 @@ $$
 统一做：
 
 $$
-P=\operatorname{softmax}(S)
+P=\mathrm{softmax}(S)
 $$
 
 再把概率重新按 block 切开：

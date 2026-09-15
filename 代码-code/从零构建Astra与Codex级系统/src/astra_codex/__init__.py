@@ -13,6 +13,7 @@ from .artifacts import ArtifactRecord, ArtifactStore
 from .batch_executor import BatchedDecodeState, HomogeneousBatchExecutor
 from .benchmark import BenchmarkCase, BenchmarkHarness, BenchmarkRecord, ExactAnswerGrader, Grade
 from .bubblewrap_sandbox import BubblewrapExecTool, BubblewrapPolicy, BubblewrapSandbox
+from .coding_team import CodingCandidate, MergeResult, ReviewerDecision, WorktreeCodingTeam
 from .config import ModelConfig
 from .context import ContextFragment, ContextStore, FragmentKind
 from .continuous_batching import (
@@ -144,6 +145,7 @@ __all__ = [
     "BubblewrapSandbox",
     "ByteBPETokenizer",
     "ByteTokenizer",
+    "CodingCandidate",
     "CommandVerifier",
     "CompositeVerifier",
     "ContextFragment",
@@ -183,6 +185,7 @@ __all__ = [
     "LeaseHeartbeat",
     "LocalHTTPAppServer",
     "LocalSSEEventServer",
+    "MergeResult",
     "MessageStatus",
     "ModelConfig",
     "ModelOutput",
@@ -220,6 +223,7 @@ __all__ = [
     "RequestStatus",
     "ResolvedInstructions",
     "RestrictedSubprocessSandbox",
+    "ReviewerDecision",
     "RolloutTrace",
     "RolloutTraceCollector",
     "RolloutTraceEvent",
@@ -252,6 +256,7 @@ __all__ = [
     "WorkItem",
     "WorkStatus",
     "WorkerResult",
+    "WorktreeCodingTeam",
     "aggregate_metrics",
     "causal_lm_loss",
     "dpo_batch_loss",

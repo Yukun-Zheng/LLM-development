@@ -69,6 +69,7 @@ class CodexTurnResult:
 
 
 ApprovalHandler = Callable[[str, dict[str, object]], ApprovalDecision]
+HarnessEventSink = Callable[[HarnessEvent], None]
 
 
 DEFAULT_CODEX_STYLE_SYSTEM_PROMPT = """You are a repository execution agent.
@@ -88,6 +89,10 @@ class CodexHarness:
     independently written in Python and intentionally much smaller than the
     production Rust codebase.
 
+    ``event_sink`` receives each event when it happens. This keeps the turn
+    executor independent from any particular UI or transport while allowing a
+    durable runtime to expose live progress through a control-plane event feed.
+
     Crucially, this class does *not* implement a security sandbox. A sandbox
     policy is carried as state so the later sandbox module can enforce it at the
     execution boundary.
@@ -99,6 +104,7 @@ class CodexHarness:
         tools: ToolRegistry,
         *,
         approval_handler: ApprovalHandler | None = None,
+        event_sink: HarnessEventSink | None = None,
         system_prompt: str = DEFAULT_CODEX_STYLE_SYSTEM_PROMPT,
         max_model_steps: int = 32,
     ) -> None:
@@ -107,8 +113,21 @@ class CodexHarness:
         self.backend = backend
         self.tools = tools
         self.approval_handler = approval_handler
+        self.event_sink = event_sink
         self.system_prompt = system_prompt
         self.max_model_steps = max_model_steps
+
+    def _record(
+        self,
+        events: list[HarnessEvent],
+        kind: EventKind,
+        payload: dict[str, object],
+    ) -> HarnessEvent:
+        event = HarnessEvent(kind, payload)
+        events.append(event)
+        if self.event_sink is not None:
+            self.event_sink(event)
+        return event
 
     def run_turn(
         self,
@@ -129,53 +148,49 @@ class CodexHarness:
             ),
             Message("user", user_input),
         ]
-        events = [
-            HarnessEvent(
-                EventKind.TURN_STARTED,
-                {
-                    "sandbox_policy": settings.sandbox_policy.value,
-                    "approval_required_tools": sorted(settings.approval_required_tools),
-                },
-            )
-        ]
+        events: list[HarnessEvent] = []
+        self._record(
+            events,
+            EventKind.TURN_STARTED,
+            {
+                "sandbox_policy": settings.sandbox_policy.value,
+                "approval_required_tools": sorted(settings.approval_required_tools),
+            },
+        )
 
         for model_step in range(1, self.max_model_steps + 1):
             response = self.backend.generate(messages, self.tools.specs)
             messages.append(Message("assistant", response))
-            events.append(
-                HarnessEvent(
-                    EventKind.MODEL_OUTPUT,
-                    {"model_step": model_step, "content": response},
-                )
+            self._record(
+                events,
+                EventKind.MODEL_OUTPUT,
+                {"model_step": model_step, "content": response},
             )
 
             call = parse_tool_call(response)
             if call is None:
-                events.append(
-                    HarnessEvent(
-                        EventKind.TURN_COMPLETED,
-                        {"model_steps": model_step, "final_answer": response},
-                    )
+                self._record(
+                    events,
+                    EventKind.TURN_COMPLETED,
+                    {"model_steps": model_step, "final_answer": response},
                 )
                 return CodexTurnResult(response, messages, events, model_step)
 
             if call.tool in settings.approval_required_tools:
-                events.append(
-                    HarnessEvent(
-                        EventKind.APPROVAL_REQUESTED,
-                        {"tool": call.tool, "arguments": call.arguments},
-                    )
+                self._record(
+                    events,
+                    EventKind.APPROVAL_REQUESTED,
+                    {"tool": call.tool, "arguments": call.arguments},
                 )
                 decision = (
                     self.approval_handler(call.tool, call.arguments)
                     if self.approval_handler is not None
                     else ApprovalDecision.DENY
                 )
-                events.append(
-                    HarnessEvent(
-                        EventKind.APPROVAL_DECIDED,
-                        {"tool": call.tool, "decision": decision.value},
-                    )
+                self._record(
+                    events,
+                    EventKind.APPROVAL_DECIDED,
+                    {"tool": call.tool, "decision": decision.value},
                 )
                 if decision is ApprovalDecision.DENY:
                     denied = ToolResult(
@@ -186,31 +201,28 @@ class CodexHarness:
                     messages.append(Message("tool", result_as_observation(denied)))
                     continue
 
-            events.append(
-                HarnessEvent(
-                    EventKind.TOOL_STARTED,
-                    {"tool": call.tool, "arguments": call.arguments},
-                )
+            self._record(
+                events,
+                EventKind.TOOL_STARTED,
+                {"tool": call.tool, "arguments": call.arguments},
             )
             result = self.tools.execute(call.tool, call.arguments)
-            events.append(
-                HarnessEvent(
-                    EventKind.TOOL_COMPLETED,
-                    {
-                        "tool": call.tool,
-                        "ok": result.ok,
-                        "metadata": result.metadata,
-                    },
-                )
+            self._record(
+                events,
+                EventKind.TOOL_COMPLETED,
+                {
+                    "tool": call.tool,
+                    "ok": result.ok,
+                    "metadata": result.metadata,
+                },
             )
             messages.append(Message("tool", result_as_observation(result)))
 
         final = "Stopped because max_model_steps was reached before the turn completed."
-        events.append(
-            HarnessEvent(
-                EventKind.TURN_STOPPED,
-                {"reason": "model_step_limit", "model_steps": self.max_model_steps},
-            )
+        self._record(
+            events,
+            EventKind.TURN_STOPPED,
+            {"reason": "model_step_limit", "model_steps": self.max_model_steps},
         )
         return CodexTurnResult(
             final,

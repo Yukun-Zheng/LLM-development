@@ -8,15 +8,16 @@ from .context import ContextStore
 from .editing import ExactEditTool
 from .instructions import ProjectInstructionResolver
 from .repo_map import RepoMapTool
+from .sandbox import RestrictedSubprocessSandbox, SandboxExecTool
 from .tools import FilesystemTool, GitTool, ShellTool, ToolRegistry
 
 
 CODING_SYSTEM_PROMPT = """You are a repository coding agent.
 Work empirically: inspect before editing, edit the smallest coherent surface,
 run the relevant tests or checks, inspect failures, and iterate.
-Never claim that tests pass unless the shell observation shows they pass.
+Never claim that tests pass unless an execution observation shows they pass.
 Prefer exact-edit for localized modifications because it fails safely when the
-expected context is ambiguous.  Use repo_map before blind repository-wide reads.
+expected context is ambiguous. Use repo_map before blind repository-wide reads.
 End with a concise summary of changes and verification performed.
 Tool calls must be exactly one JSON object:
 {"tool":"<tool-name>","arguments":{...}}
@@ -31,6 +32,7 @@ def build_coding_agent(
     instruction_max_bytes: int = 32_768,
     fallback_instruction_filenames: Iterable[str] = (),
     context_store: ContextStore | None = None,
+    execution_sandbox: RestrictedSubprocessSandbox | None = None,
     max_steps: int = 40,
 ) -> Agent:
     """Construct a transparent repository coding loop with scoped instructions.
@@ -42,16 +44,15 @@ def build_coding_agent(
     persisted as a typed ``INSTRUCTION`` fragment carrying source/scope/
     truncation provenance.
 
-    Current primitives:
-    - repo_map: cheap structural orientation;
-    - filesystem: precise reads/writes/search;
-    - edit: exact old->new replacement with ambiguity checks;
-    - shell: tests/builds/commands;
-    - git: status/diff/history.
+    Execution has two deliberately distinct modes:
 
-    Later stages add unified-diff application, language servers, parallel
-    worktree orchestration, browser/computer adapters, and stronger sandbox
-    isolation.
+    - default teaching mode: the legacy ``ShellTool`` executes ``bash -lc``;
+    - restricted mode: pass ``execution_sandbox`` and arbitrary commands are
+      exposed only through argv-based ``sandbox_exec``.
+
+    The restricted process runner enforces cwd/executable/env/resource guards
+    and Linux ``no_new_privs`` but is still not a filesystem/network namespace
+    or container boundary. The distinction remains explicit in tool metadata.
     """
 
     root = Path(repository_root).resolve()
@@ -60,6 +61,9 @@ def build_coding_agent(
         cwd.relative_to(root)
     except ValueError as exc:
         raise ValueError("working_directory must be inside repository_root") from exc
+
+    if execution_sandbox is not None and execution_sandbox.policy.workspace_root != root:
+        raise ValueError("execution_sandbox workspace_root must equal repository_root")
 
     resolver = ProjectInstructionResolver(
         fallback_filenames=fallback_instruction_filenames,
@@ -78,12 +82,24 @@ def build_coding_agent(
             + resolved.text
         )
 
+    if execution_sandbox is None:
+        execution_tool = ShellTool(root)
+    else:
+        execution_tool = SandboxExecTool(execution_sandbox)
+        system_prompt += (
+            "\n\n# Restricted command execution\n"
+            "Arbitrary commands are available only through sandbox_exec. Pass argv as "
+            "a JSON string array. Shell operators, pipelines and redirection are not "
+            "interpreted. A successful exit code is still evidence only for that "
+            "specific command, not proof of overall task correctness."
+        )
+
     tools = ToolRegistry(
         [
             RepoMapTool(root),
             FilesystemTool(root),
             ExactEditTool(root),
-            ShellTool(root),
+            execution_tool,
             GitTool(root),
         ]
     )

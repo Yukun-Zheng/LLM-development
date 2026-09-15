@@ -5,14 +5,20 @@ on:
     branches: [main]
     paths:
       - '**/*.md'
+      - '**/*.json'
       - '工具-scripts/原始资料审计-source_audit.py'
       - '工具-scripts/内部链接审计-link_audit.py'
+      - '工具-scripts/能力清单审计-capability_audit.py'
+      - '工具-scripts/前沿漂移审计-frontier_drift_audit.py'
       - '.github/workflows/content-audit.yml'
   pull_request:
     paths:
       - '**/*.md'
+      - '**/*.json'
       - '工具-scripts/原始资料审计-source_audit.py'
       - '工具-scripts/内部链接审计-link_audit.py'
+      - '工具-scripts/能力清单审计-capability_audit.py'
+      - '工具-scripts/前沿漂移审计-frontier_drift_audit.py'
       - '.github/workflows/content-audit.yml'
   workflow_dispatch:
 
@@ -37,9 +43,18 @@ jobs:
       - name: Strict internal-link audit
         run: python 工具-scripts/内部链接审计-link_audit.py
 
-      - name: 上传来源覆盖报告 / Upload source audit
+      - name: Capability manifest audit
+        run: python 工具-scripts/能力清单审计-capability_audit.py | tee capability-audit.md
+
+      - name: Frontier snapshot schema and freshness report
+        run: python 工具-scripts/前沿漂移审计-frontier_drift_audit.py | tee frontier-audit.md
+
+      - name: 上传审计报告 / Upload audit reports
         uses: actions/upload-artifact@v4
         with:
-          name: primary-source-coverage
-          path: source-audit.md
+          name: textbook-audit-reports
+          path: |
+            source-audit.md
+            capability-audit.md
+            frontier-audit.md
           if-no-files-found: error

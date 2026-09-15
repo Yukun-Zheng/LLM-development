@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "extends": "能力清单-CAPABILITIES.json",
+  "capabilities": [
+    {
+      "id": "protocol.a2a_v1_core",
+      "track": "protocol",
+      "title": "Source-first A2A v1 Task / Message / Artifact Runtime",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "智能体-agent/09-Agent协议与互操作-agent-protocols.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/23-A2Av1远程任务与HTTP绑定-a2a-runtime.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/a2a.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_a2a.py"
+      ],
+      "evidence": [
+        "Pinned to a2aproject/A2A commit 6d6640c29b102f7a8d23784901351b5d2454fe71 specification/a2a.proto; Fast CI run 233 passed the complete suite (180 passed, 14 skipped) with exact v1 TaskState, Part wire shape, returnImmediately durability and RPC operation tests"
+      ],
+      "next": [
+        "TaskStatusUpdateEvent / TaskArtifactUpdateEvent streaming",
+        "push notification configuration",
+        "official SDK differential fixtures"
+      ]
+    },
+    {
+      "id": "protocol.a2a_http_json",
+      "track": "protocol",
+      "title": "A2A v1 HTTP+JSON Reference Binding",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "智能体-agent/09-Agent协议与互操作-agent-protocols.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/23-A2Av1远程任务与HTTP绑定-a2a-runtime.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/a2a_http.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_a2a_http.py"
+      ],
+      "evidence": [
+        "Fast CI run 233: real localhost HTTP validates /.well-known/agent-card.json, POST /message:send, GET /tasks/{id}, GET /tasks, POST /tasks/{id}:cancel, source-aligned ListTasks status/pageSize/pageToken/historyLength behavior and Ruff; full suite 180 passed, 14 skipped"
+      ],
+      "next": [
+        "POST /message:stream",
+        "GET /tasks/{id}:subscribe",
+        "tenant-prefixed bindings",
+        "security schemes and TLS",
+        "official conformance comparison"
+      ]
+    },
+    {
+      "id": "protocol.a2a_runtime_bridge",
+      "track": "protocol",
+      "title": "A2A Task → Durable Agent Runtime Bridge",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "智能体-agent/09-Agent协议与互操作-agent-protocols.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/23-A2Av1远程任务与HTTP绑定-a2a-runtime.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/a2a_runtime_bridge.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_a2a_runtime_bridge.py"
+      ],
+      "evidence": [
+        "Fast CI run 233: an A2A SendMessage executes a real Durable Thread → WorkItem → Turn and maps the result back to A2A Task metadata/status; deferred returnImmediately processing and explicit raw-media rejection are tested; full suite 180 passed, 14 skipped"
+      ],
+      "next": [
+        "server-thread-owned remote runtime gateway",
+        "interrupted INPUT_REQUIRED/AUTH_REQUIRED continuations",
+        "artifact delta streaming",
+        "A2A cancellation propagation into local running work"
+      ]
+    }
+  ]
+}

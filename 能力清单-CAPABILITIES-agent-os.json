@@ -8,24 +8,11 @@
       "title": "Worker Lease Heartbeat / Renewal",
       "status": "validated",
       "maturity": "L2",
-      "theory": [
-        "代码-code/从零构建Astra与Codex级系统/教程-lessons/09-实时Steering租约与AppServer-live-control-plane.md"
-      ],
-      "code": [
-        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime_control.py",
-        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py"
-      ],
-      "tests": [
-        "代码-code/从零构建Astra与Codex级系统/tests/test_runtime_control_artifacts.py"
-      ],
-      "evidence": [
-        "Fast CI run 91: renewed lease blocks premature reclaim; full suite 86 passed and Ruff passed"
-      ],
-      "next": [
-        "background heartbeat during a single long-running tool/RPC",
-        "lease-loss fencing token",
-        "multi-worker fairness experiments"
-      ]
+      "theory": ["代码-code/从零构建Astra与Codex级系统/教程-lessons/09-实时Steering租约与AppServer-live-control-plane.md"],
+      "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime_control.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py"],
+      "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_runtime_control_artifacts.py"],
+      "evidence": ["Fast CI run 91: renewed lease blocks premature reclaim; full suite 86 passed and Ruff passed"],
+      "next": ["background heartbeat during a single long-running tool/RPC", "lease-loss fencing token", "multi-worker fairness experiments"]
     },
     {
       "id": "agent.live_steering",
@@ -33,26 +20,11 @@
       "title": "Durable Mid-turn Live Steering",
       "status": "validated",
       "maturity": "L2",
-      "theory": [
-        "代码-code/从零构建Astra与Codex级系统/教程-lessons/09-实时Steering租约与AppServer-live-control-plane.md",
-        "Codex源码解剖-codex-anatomy/02-会话线程与事件协议-session-thread-events.md"
-      ],
-      "code": [
-        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/steering.py",
-        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime_control.py",
-        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py"
-      ],
-      "tests": [
-        "代码-code/从零构建Astra与Codex级系统/tests/test_runtime_control_artifacts.py"
-      ],
-      "evidence": [
-        "Fast CI run 91: steering submitted while a tool executes is consumed and injected before the next model sampling; full suite 86 passed"
-      ],
-      "next": [
-        "steering priority / replace / interrupt semantics",
-        "authenticated external clients",
-        "cancellation-aware tool execution"
-      ]
+      "theory": ["代码-code/从零构建Astra与Codex级系统/教程-lessons/09-实时Steering租约与AppServer-live-control-plane.md", "Codex源码解剖-codex-anatomy/02-会话线程与事件协议-session-thread-events.md"],
+      "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/steering.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime_control.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py"],
+      "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_runtime_control_artifacts.py"],
+      "evidence": ["Fast CI run 91: steering submitted while a tool executes is consumed and injected before the next model sampling; full suite 86 passed"],
+      "next": ["steering priority / replace / interrupt semantics", "authenticated external clients", "cancellation-aware tool execution"]
     },
     {
       "id": "agent.artifact_store",
@@ -60,26 +32,11 @@
       "title": "Content-addressed Durable Artifact Store",
       "status": "validated",
       "maturity": "L2",
-      "theory": [
-        "代码-code/从零构建Astra与Codex级系统/教程-lessons/09-实时Steering租约与AppServer-live-control-plane.md",
-        "智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md"
-      ],
-      "code": [
-        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/artifacts.py",
-        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py"
-      ],
-      "tests": [
-        "代码-code/从零构建Astra与Codex级系统/tests/test_runtime_control_artifacts.py",
-        "代码-code/从零构建Astra与Codex级系统/tests/test_app_server.py"
-      ],
-      "evidence": [
-        "Fast CI run 91: identical bytes share a content object, per-thread metadata remains distinct, checksum tampering is detected, and App Server lists artifact metadata"
-      ],
-      "next": [
-        "artifact lineage to tool/turn/verifier records",
-        "directory/tree artifacts",
-        "patch/report specialized graders"
-      ]
+      "theory": ["代码-code/从零构建Astra与Codex级系统/教程-lessons/09-实时Steering租约与AppServer-live-control-plane.md", "智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md"],
+      "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/artifacts.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py"],
+      "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_runtime_control_artifacts.py", "代码-code/从零构建Astra与Codex级系统/tests/test_app_server.py"],
+      "evidence": ["Fast CI run 91: identical bytes share a content object, per-thread metadata remains distinct, checksum tampering is detected, and App Server lists artifact metadata"],
+      "next": ["artifact lineage to tool/turn/verifier records", "directory/tree artifacts", "patch/report specialized graders"]
     },
     {
       "id": "agent.runtime_event_stream",
@@ -87,26 +44,23 @@
       "title": "Durable Cursor-replay Runtime Event Stream",
       "status": "validated",
       "maturity": "L2",
-      "theory": [
-        "代码-code/从零构建Astra与Codex级系统/教程-lessons/10-可重放事件流与HTTP控制面-event-stream-http.md",
-        "Codex源码解剖-codex-anatomy/02-会话线程与事件协议-session-thread-events.md"
-      ],
-      "code": [
-        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/event_stream.py",
-        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py",
-        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/codex_harness.py"
-      ],
-      "tests": [
-        "代码-code/从零构建Astra与Codex级系统/tests/test_event_stream_http.py"
-      ],
-      "evidence": [
-        "Fast CI run 103: restart-safe cursor replay, thread/topic filtering and live harness event publication passed; full suite 89 passed and Ruff passed"
-      ],
-      "next": [
-        "SSE / WebSocket push backed by the same durable cursor",
-        "event retention / compaction",
-        "consumer backpressure and slow-subscriber policy"
-      ]
+      "theory": ["代码-code/从零构建Astra与Codex级系统/教程-lessons/10-可重放事件流与HTTP控制面-event-stream-http.md", "Codex源码解剖-codex-anatomy/02-会话线程与事件协议-session-thread-events.md"],
+      "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/event_stream.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/codex_harness.py"],
+      "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_event_stream_http.py"],
+      "evidence": ["Fast CI run 103: restart-safe cursor replay, thread/topic filtering and live harness event publication passed; full suite 89 passed and Ruff passed"],
+      "next": ["SSE / WebSocket push backed by the same durable cursor", "event retention / compaction", "consumer backpressure and slow-subscriber policy"]
+    },
+    {
+      "id": "agent.scoped_project_instructions",
+      "track": "agent",
+      "title": "Scoped AGENTS.md / Project Instruction Resolver with Provenance",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": ["代码-code/从零构建Astra与Codex级系统/教程-lessons/12-AGENTS作用域与指令来源-agents-md-provenance.md", "Codex源码解剖-codex-anatomy/04-指令上下文压缩与记忆-context-memory.md"],
+      "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/instructions.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/coding.py"],
+      "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_instructions.py"],
+      "evidence": ["Fast CI run 114: root→cwd hierarchy, override/fallback priority, byte-budget truncation, no-root behavior, no ancestor escape, sibling negative control and coding-prompt injection passed; full suite 100 passed and Ruff passed"],
+      "next": ["persist instruction fragments into ContextStore", "turn/rollout instruction provenance", "trust gating and remote filesystem semantics"]
     },
     {
       "id": "protocol.app_server_minimal",
@@ -114,26 +68,11 @@
       "title": "Minimal JSON-RPC Agent App Server Control Plane",
       "status": "validated",
       "maturity": "L2",
-      "theory": [
-        "代码-code/从零构建Astra与Codex级系统/教程-lessons/09-实时Steering租约与AppServer-live-control-plane.md",
-        "Codex源码解剖-codex-anatomy/02-会话线程与事件协议-session-thread-events.md",
-        "Codex源码解剖-codex-anatomy/05-MCP与AppServer-mcp-app-server.md"
-      ],
-      "code": [
-        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/app_server.py"
-      ],
-      "tests": [
-        "代码-code/从零构建Astra与Codex级系统/tests/test_app_server.py",
-        "代码-code/从零构建Astra与Codex级系统/tests/test_event_stream_http.py"
-      ],
-      "evidence": [
-        "Fast CI run 103: JSON-RPC thread/runtime/artifact control plus cursor-based event/poll passed; full suite 89 passed"
-      ],
-      "next": [
-        "session authentication and authorization",
-        "push subscriptions",
-        "protocol transcript comparison against public Codex App Server semantics"
-      ]
+      "theory": ["代码-code/从零构建Astra与Codex级系统/教程-lessons/09-实时Steering租约与AppServer-live-control-plane.md", "Codex源码解剖-codex-anatomy/02-会话线程与事件协议-session-thread-events.md", "Codex源码解剖-codex-anatomy/05-MCP与AppServer-mcp-app-server.md"],
+      "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/app_server.py"],
+      "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_app_server.py", "代码-code/从零构建Astra与Codex级系统/tests/test_event_stream_http.py"],
+      "evidence": ["Fast CI run 103: JSON-RPC thread/runtime/artifact control plus cursor-based event/poll passed; full suite 89 passed"],
+      "next": ["push subscriptions", "protocol transcript comparison against public Codex App Server semantics"]
     },
     {
       "id": "protocol.app_server_http",
@@ -141,25 +80,23 @@
       "title": "Local HTTP JSON-RPC App Server Transport",
       "status": "validated",
       "maturity": "L2",
-      "theory": [
-        "代码-code/从零构建Astra与Codex级系统/教程-lessons/10-可重放事件流与HTTP控制面-event-stream-http.md"
-      ],
-      "code": [
-        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/http_app_server.py",
-        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/app_server.py"
-      ],
-      "tests": [
-        "代码-code/从零构建Astra与Codex级系统/tests/test_event_stream_http.py"
-      ],
-      "evidence": [
-        "Fast CI run 103: real localhost HTTP round-trip performs create→submit→run→event replay→thread inspect; thread-owned runtime handle avoids unsafe cross-thread SQLite sharing; full suite 89 passed and Ruff passed"
-      ],
-      "next": [
-        "bearer/session authentication",
-        "thread/method authorization",
-        "TLS termination guidance",
-        "SSE / WebSocket transport"
-      ]
+      "theory": ["代码-code/从零构建Astra与Codex级系统/教程-lessons/10-可重放事件流与HTTP控制面-event-stream-http.md"],
+      "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/http_app_server.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/app_server.py"],
+      "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_event_stream_http.py", "代码-code/从零构建Astra与Codex级系统/tests/test_control_auth.py"],
+      "evidence": ["Fast CI run 114: real localhost HTTP transport plus bearer propagation and policy enforcement passed; full suite 100 passed and Ruff passed"],
+      "next": ["TLS termination guidance", "SSE / WebSocket transport", "request cancellation"]
+    },
+    {
+      "id": "security.control_plane_auth",
+      "track": "security",
+      "title": "Bearer Authentication + Method/Thread-scoped App Server Authorization",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": ["代码-code/从零构建Astra与Codex级系统/教程-lessons/11-控制面认证与授权-control-plane-auth.md", "智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md"],
+      "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/control_auth.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/app_server.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/http_app_server.py"],
+      "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_control_auth.py"],
+      "evidence": ["Fast CI run 114: missing/invalid bearer is unauthenticated; cross-thread/method access and unscoped feeds are forbidden; thread-scoped principals cannot invoke global worker claims; admin and HTTP bearer paths pass; full suite 100 passed and Ruff passed"],
+      "next": ["token expiry / rotation", "queue-level authorized claim", "OIDC/workload identity", "audit log", "TLS / mTLS"]
     }
   ]
 }

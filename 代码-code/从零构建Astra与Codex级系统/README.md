@@ -1,46 +1,87 @@
 # 从零构建 Astra-class 与 Codex-class 系统
 
-这是整本教材的**终极 Reference System**：从模型 forward、真实权重加载、推理状态管理，一直写到 post-training objective、durable Agent kernel、协议、安全、评测、Coding Agent、Computer Use 与 Multi-Agent。
+这是整本教材的**终极 Reference System**：从模型 forward、真实权重加载、推理状态、Serving，到 SFT/DPO/RL objective，再到 durable Agent kernel、工具、协议、安全、Coding Agent 与 Evaluation。
 
-> **严格边界**：我们不声称复刻未公开的 frontier 权重、训练 recipe 或 OpenAI 云端全部生产基础设施。Open/tiny models 用于真正从零理解与 parity；frontier models 可以作为可插拔 Model Backend。**模型智能可以插拔，系统智能尽量由本项目自己实现。**
+> **边界**：不声称复刻未公开的 frontier 权重、训练 recipe 或 OpenAI 云端全部生产基础设施。Open/tiny models 用于从零实现和 parity；frontier models 可以作为可插拔 Model Backend。**模型智能可以插拔，系统智能尽量自己实现。**
 
-- 实时实现状态：[`实现状态-STATUS.md`](实现状态-STATUS.md)
-- 机器事实源：[`../../能力清单-CAPABILITIES.json`](../../能力清单-CAPABILITIES.json)
-- v3 蓝图：[`../../教材-book/99-全书架构蓝图-v3.md`](../../教材-book/99-全书架构蓝图-v3.md)
-- 独立评测层：[`../../评测-eval/README.md`](../../评测-eval/README.md)
+入口：
+
+- [`实现状态-STATUS.md`](实现状态-STATUS.md)：当前真实代码状态；
+- [`../../能力清单-CAPABILITIES.json`](../../能力清单-CAPABILITIES.json)：机器可读事实源；
+- [`../../教材-book/99-全书架构蓝图-v3.md`](../../教材-book/99-全书架构蓝图-v3.md)：v3 总架构；
+- [`../../评测-eval/README.md`](../../评测-eval/README.md)：独立实验事实层。
 
 ---
 
-# 1　当前源码地图
+# 1　当前系统图
+
+```text
+Open/Tiny Model Runtime ─┐
+Frontier Model Backend ──┤
+                         ↓
+                   Model Interface
+                         │
+       ┌─────────────────┼──────────────────┐
+       ↓                 ↓                  ↓
+Inference Runtime   Post-training      Agent Runtime
+       │                 │                  │
+KV / Paged KV       SFT / DPO          Thread/Event
+Scheduler           Group-relative RL  Work Queue
+Batched Executor                         Turn Executor
+       │                                    │
+       └────────────────┬───────────────────┘
+                        ↓
+                Context / Planner
+                        ↓
+             Permission / Approval
+                        ↓
+        Tool / MCP / Git / Browser / Agent
+                        ↓
+                   Environment
+                        ↓
+                    Verifier
+                        ↓
+           Checkpoint / Replan / Finish
+                        ↓
+          Benchmark / Artifact / Evidence
+```
+
+---
+
+# 2　当前源码地图
 
 ```text
 src/astra_codex/
 │
-├── Model / Inference
+├── Model
 │   ├── config.py
 │   ├── tokenizer.py
 │   ├── model.py
 │   ├── weights.py
-│   ├── public_checkpoint.py
+│   └── public_checkpoint.py
+│
+├── Inference / Serving
 │   ├── cache.py
-│   ├── paged_cache.py       # reference logical pages + parity
+│   ├── paged_cache.py
 │   ├── engine.py
-│   ├── scheduler.py         # request lifecycle / prefill / decode / TTFT / TPOT
+│   ├── scheduler.py
+│   ├── batch_executor.py
 │   └── sampling.py
 │
 ├── Post-training
-│   └── posttraining.py      # masked SFT + sequence logp + DPO + optimizer steps
+│   ├── posttraining.py       # SFT / sequence logp / DPO
+│   └── rlvr.py               # group-relative verifier RL objective
 │
 ├── Durable Agent Kernel
 │   ├── agent.py
 │   ├── codex_harness.py
-│   ├── durable.py           # Thread / Turn / replay / fork / cancellation
-│   ├── runtime_queue.py     # lease / reclaim / ack / cancel
-│   ├── context.py           # typed context + compaction provenance
+│   ├── durable.py            # Thread/Turn/replay/fork/cancel
+│   ├── runtime_queue.py      # lease/reclaim/ack/cancel
+│   ├── runtime.py            # Thread→Queue→Turn integrated pipeline
+│   ├── context.py            # typed context + provenance
 │   ├── memory.py
 │   ├── planning.py
-│   ├── verification.py
-│   └── evaluation.py
+│   └── verification.py
 │
 ├── Environment / Protocol / Security
 │   ├── structured.py
@@ -51,35 +92,34 @@ src/astra_codex/
 │   ├── mcp.py
 │   └── security.py
 │
-├── Multi-Agent / Coding
+├── Coding / Multi-Agent
+│   ├── coding.py
 │   ├── worktree.py
-│   ├── multi_agent.py
-│   └── coding.py
+│   └── multi_agent.py
 │
 └── Evaluation
-    └── benchmark.py         # BenchmarkCase / Grader / Record / aggregation
+    ├── evaluation.py
+    ├── benchmark.py
+    └── repository_eval.py
 ```
 
-暂时保持 flat imports 以保护已经通过的 tests/parity；subsystem contract 稳定后再逐步迁移到 `model/ inference/ posttraining/ agent/ protocols/ security/ eval/` 子包。
+暂时保持 flat package，避免为了目录美观破坏已经建立的 parity/tests。等 subsystem contract 稳定后再迁移子包。
 
 ---
 
-# 2　模型侧：已经从 toy runtime 跨到真实 checkpoint
+# 3　Model Runtime：真实 checkpoint 已对齐
 
-当前真实 checkpoint：
+公开 checkpoint：
 
 ```text
 HuggingFaceTB/SmolLM2-135M
 ```
 
 ```text
-config.json + raw safetensors
-        ↓
-our key mapper
-        ↓
-our RMSNorm / RoPE / GQA / SwiGLU / Transformer
-        ↓
-our logits
+raw config + safetensors
+→ our weight mapping
+→ our RMSNorm / RoPE / GQA / SwiGLU / Transformer
+→ our logits
         ↕
 HF eager reference logits
 ```
@@ -90,327 +130,270 @@ HF eager reference logits
 {"max_abs": 0.0, "mean_abs": 0.0, "argmax_agreement": 1.0}
 ```
 
-这个证据只覆盖当前受测模型/输入/数值设置。下一阶段是 multi-architecture parity matrix。
+这只是第一个真实模型族，不外推为通用兼容。
 
 ---
 
-# 3　Inference：从 KV Cache 进入 Serving Runtime
+# 4　Inference：从 `generate()` 进入真正的 Serving 问题
 
-## 3.1 Contiguous KV
+## Contiguous KV
 
-已经验证 cached incremental decode 与 full recomputation logits 对齐。
+已验证 incremental cached decode 与 full recomputation logits parity。
 
-## 3.2 Reference Paged KV
+## Reference Paged KV
 
-`paged_cache.py` 已有逻辑 page、per-layer page table、suffix ingest 与 paged decode parity。
+`paged_cache.py` 已实现 logical page table 与 suffix ingest；paged prefill/decode 与 full forward 数值对齐。
 
-当前 reference path 会把 pages 重新拼成 contiguous `past_key_values`，所以它证明的是：
+当前 pages 仍会重新拼成 contiguous K/V，因此证明的是**分页语义**，不是生产级 block allocator 性能。
 
-> **分页状态语义正确。**
+## Request Scheduler
 
-它不证明已经拥有 vLLM 的 block allocator / zero-copy kernel / 显存收益。
-
-## 3.3 Reference Request Scheduler
-
-`scheduler.py` 把 serving 生命周期显式化：
+`scheduler.py` 已实现：
 
 ```text
-arrival
-→ WAITING
-→ PREFILL admission
-→ DECODE
-→ FINISHED / CANCELLED
+WAITING → PREFILL → DECODE → FINISHED/CANCELLED
 ```
 
-已支持：
+并显式记录 TTFT / TPOT / total latency。
+
+## Actual Batched Model Executor
+
+`batch_executor.py` 已经执行真正的 batched model forward：多个 request 一次进入模型，并将 batched K/V 拆回各自 decode state。
+
+测试证明：
 
 ```text
-max_batch_size
-max_prefill_tokens
-decode-first scheduling
-cancellation
-TTFT
-TPOT
-total latency
+batched prefill == individual prefill
+batched decode  == individual full recomputation
 ```
 
-Fast CI 已验证调度和指标行为。下一步不是继续改接口，而是接入**真实 batched model executor**，再测 continuous batching 的 throughput / fairness / memory。
+当前只支持同长度 cache cohort。真正 continuous batching 仍要解决 variable-length sequence、block table、allocator 和 scheduler/executor integration。
+
+实验：[`教程-lessons/05-PagedKV与调度-serving-runtime.md`](教程-lessons/05-PagedKV与调度-serving-runtime.md)
 
 ---
 
-# 4　Post-training：数学已经第一次变成 optimizer step
-
-此前 RLHF / DPO 主要在教材公式里。现在 `posttraining.py` 已经落到 tensor。
+# 5　Post-training：已经从公式进入真实 gradient
 
 ## SFT
 
-```text
-input ids
-→ logits [B,T,V]
-→ causal shift
-→ mask prompt/user targets with -100
-→ CE
-→ backward
-→ grad clip (optional)
-→ optimizer.step
-```
+`posttraining.py` 已有 prompt masking、causal shift、CE、backward、grad clip、optimizer step。
+
+自动测试用 uniform logits 手算 `log(V)`，并验证 tiny model 参数真的更新。
 
 ## DPO
 
-```text
-policy chosen/rejected sequence logp
-reference chosen/rejected sequence logp
-→ log-ratio preference margin
-→ beta-scaled implicit rewards
-→ -log sigmoid(margin)
-→ backward
-→ update policy only
-```
+已经实现 policy/reference chosen/rejected sequence log-probs、implicit reward margin、DPO loss 与优化步骤。
 
-自动测试包括：uniform logits 手算 CE、policy==reference 时 DPO loss=`log(2)`、SFT/DPO 真实更新 policy、reference 保持冻结。
-
-Fast CI run 51：
+自动不变量：
 
 ```text
-49 passed, 1 warning in 2.11s
-Ruff correctness lint: All checks passed
+policy == reference
+→ DPO loss = log(2)
 ```
 
-这还不是完整训练平台：dataset/dataloader/checkpoint/eval、reward model、GRPO/RLVR 仍待实现。
+并验证 policy 更新、reference 冻结。
+
+实验：[`教程-lessons/04-从SFT到DPO-post-training.md`](教程-lessons/04-从SFT到DPO-post-training.md)
+
+## Group-relative verifier RL primitive
+
+`rlvr.py` 已实现教学用 GRPO-style：
+
+```text
+verifier rewards [B,G]
+→ group-relative advantages
+→ policy ratios
+→ clipped surrogate
+→ optional reference KL
+```
+
+这还不是完整 RLVR pipeline；rollout generation、old-policy snapshot、真正 verifier reward、token-level update 与 held-out eval 仍待串联。
+
+实验：[`教程-lessons/07-从Verifier到GroupRelativeRL-rlvr.md`](教程-lessons/07-从Verifier到GroupRelativeRL-rlvr.md)
 
 ---
 
-# 5　Agent：从 Turn Loop 进入 Durable Kernel
+# 6　Agent：从 while-loop 进入 Durable Runtime
 
-现在不再把：
+## Turn Executor
 
-```text
-model → tool → model
-```
+`codex_harness.py`：sampling → tool/approval → observation → follow-up → complete/stop。
 
-当作整个 Agent architecture。
+## Durable Thread
 
-## 5.1 Turn Executor
+`durable.py`：Thread/Turn/event replay、checkpoint、pause/resume、fork、cancel、complete/fail。
 
-`codex_harness.py`：
+进程关闭后重开 SQLite 可以重建 projection；fork 保存 parent provenance，并形成独立 child event stream。
 
-```text
-TURN_STARTED
-→ sampling
-→ optional approval
-→ tool
-→ observation
-→ follow-up
-→ TURN_COMPLETED / TURN_STOPPED
-```
-
-## 5.2 Event-sourced Thread
-
-`durable.py`：
-
-```text
-Thread
-→ Submission
-→ Turn
-→ Checkpoint
-→ Replay
-→ Pause / Resume
-→ Fork
-→ Cancel / Complete / Fail
-```
-
-进程关闭后重新打开数据库仍能恢复 running turn / submissions / checkpoint。
-
-Fork 会复制指定 event prefix 到独立 child stream，并保存：
-
-```text
-parent_thread_id
-parent_event_id
-```
-
-子 thread 的 cancellation 不改变 parent state。
-
-## 5.3 Durable Work Queue
+## Durable Work Queue
 
 `runtime_queue.py`：
 
 ```text
-PENDING
-→ LEASED(worker)
-├─ ACK → COMPLETED
-├─ FAIL → FAILED
-├─ CANCEL → CANCELLED
-└─ lease expires → reclaim
+PENDING → LEASED(worker)
+├─ ACK
+├─ FAIL
+├─ CANCEL
+└─ lease timeout → reclaim
 ```
 
-这把 task state 与 worker execution ownership 分开。
+## Integrated Runtime
+
+`runtime.py` 第一次把：
+
+```text
+Submission
+→ Thread Event
+→ Durable WorkItem
+→ Worker Lease
+→ Turn Executor
+→ Checkpoint
+→ Turn Complete
+→ Work ACK
+```
+
+接成一个真正运行的 pipeline。
+
+**重要未解问题**：如果 worker 在 side-effecting tool 执行期间死亡，不能简单自动重跑 turn，否则可能重复副作用。后续必须引入 durable tool-execution record / idempotency semantics。
+
+实验：[`教程-lessons/06-从AgentLoop到DurableRuntime-durable-agent.md`](教程-lessons/06-从AgentLoop到DurableRuntime-durable-agent.md)
 
 ---
 
-# 6　Context：不再把 Summary 当成历史本身
+# 7　Context：Summary 不是 Evidence
 
-`context.py` 已开始区分：
+`context.py` 区分：RAW_EVENT / NOTE / SUMMARY / ARTIFACT / RETRIEVAL / INSTRUCTION。
 
-```text
-RAW_EVENT
-NOTE
-SUMMARY
-ARTIFACT
-RETRIEVAL
-INSTRUCTION
-```
+Compaction 生成新的 summary fragment，同时保存 parent lineage；raw observations 不会被 summary 覆盖或删除。
 
-Compaction 产生新的 `SUMMARY` fragment，并记录 parent IDs；raw observations 不被覆盖。
-
-因此以后模型看到一个摘要时，可以追问：
-
-```text
-这个 summary 来自哪些 raw events？
-是谁/哪种 policy 压缩的？
-原始证据还能不能取回？
-```
-
-下一步是 persistent notes、semantic index、artifact provenance 与 token-budget context builder。
+下一步：persistent notes、semantic index、artifact provenance、token-budget builder、historical-window retrieval。
 
 ---
 
-# 7　Security：第一道真实 gate 已经进入执行路径
+# 8　Security：权限 gate 已有，OS sandbox 还没有
 
-当前：
+`security.py` 已实现：
 
 ```text
 Action Proposal
-→ PermissionProfile
-├─ ALLOW
-├─ REQUIRE_APPROVAL
-└─ DENY
+→ ALLOW / REQUIRE_APPROVAL / DENY
 → optional approval
-→ ToolRegistry dispatch
+→ Tool Dispatch
 ```
 
-DENY / rejected approval 会在 tool body 执行前阻断。
+测试证明 DENY / approval reject 时底层 tool body 不执行。
 
-**仍然没有冒充 OS sandbox。** process / filesystem / network / credentials / syscall isolation 仍是独立 P0。
+但 shell/browser 仍未处于真正 process/container sandbox 中。filesystem/network/secrets/resource isolation 与 escape tests 仍是 P0。
 
 ---
 
-# 8　Evaluation：测试与能力评测正式分层
+# 9　Evaluation：已经有真实 local repository final-state grader
 
-`evaluation.py` 记录 trajectory cost/behavior；`benchmark.py` 新增：
+通用层：
 
 ```text
 BenchmarkCase
 → Executor
-→ Result / trajectory
+→ trajectory
 → Grader
 → Grade
-→ BenchmarkRecord
 → AggregateMetrics
 ```
 
-这允许以后同一个 task 在不同系统设置下做严格 A/B：
+`repository_eval.py` 再往前一步，把 coding task 固定成：
 
 ```text
-memory vs no memory
-planner vs reactive
-1 agent vs N agents
-reviewer vs no reviewer
-paged vs contiguous KV
+initial files
++ goal
++ verify argv
++ expected final files
 ```
 
-当前 grader 只包含 deterministic toy reference。真实 repository/browser/OS benchmark adapter 仍未完成。
+然后 Agent 完成后，由独立 grader 检查 final state。
+
+自动测试故意构造：
+
+```text
+Agent 只说 "I fixed it"
+→ repository 仍错
+→ FAIL
+
+Agent 真改文件并验证
+→ final-state grader
+→ PASS
+```
+
+这意味着项目已经开始从“agent demo”进入可证伪的 coding-agent evaluation。
+
+入口：[`../../评测-eval/README.md`](../../评测-eval/README.md)
 
 ---
 
-# 9　当前系统总图
+# 10　当前硬证据
+
+Fast CPU CI run 66：
 
 ```text
-                        Model Backend
-                             │
-          ┌──────────────────┴──────────────────┐
-          ↓                                     ↓
-   Open/Tiny Runtime                      Frontier API
-          │                                     │
-          └──────────────────┬──────────────────┘
-                             ↓
-                     Durable Thread
-                             ↓
-                       Work Queue
-                             ↓
-                       Turn Executor
-                             ↓
-                    Context Builder
-                             ↓
-                   Planner / Policy
-                             ↓
-              Permission / Approval
-                             ↓
-       Tool / MCP / Browser / Remote Agent
-                             ↓
-                       Environment
-                             ↓
-                        Verifier
-                             ↓
-              Checkpoint / Replan / Finish
-                             ↓
-                  Benchmark / Evidence
+61 passed, 1 warning in 3.67s
+Ruff correctness lint: All checks passed
+```
+
+测试覆盖范围现在已经横跨：
+
+```text
+Tokenizer / Transformer / real checkpoint
+KV / Paged KV / Scheduler / Batched Executor
+SFT / DPO / Group-relative RL primitive
+Tool runtime / MCP / Coding tools
+Codex-style harness
+Thread replay / fork / cancellation
+Lease / reclaim / integrated runtime
+Context provenance
+Permission enforcement
+Trajectory / Benchmark / Repository final-state grading
 ```
 
 ---
 
-# 10　下一阶段最高优先级
-
-### Inference
+# 11　下一阶段
 
 ```text
-Reference Scheduler
-→ actual batched model executor
-→ continuous batching
-→ prefix cache
-→ block allocator
+Inference:
+heterogeneous continuous batching
+→ real block allocator / prefix sharing
 → chunked/disaggregated prefill
 → speculative decoding
-```
 
-### Post-training
+Post-training:
+dataset/checkpoint loops
+→ verifier rollouts
+→ actual tiny-policy RLVR update
+→ held-out evaluator
 
-```text
-SFT/DPO objective primitives
-→ real dataset pipeline
-→ checkpointable loops
-→ verifier reward
-→ GRPO/RLVR-style toy policy update
-```
+Agent OS:
+durable tool execution / idempotency
+→ crash recovery during active turn
+→ live steering
+→ heartbeat
+→ App Server / artifact store
 
-### Agent OS
-
-```text
-Thread + Queue + Turn
-→ integrated runtime
-→ pending steering
-→ worker heartbeat
-→ App Server control plane
-→ artifact/rollout store
-```
-
-### Security
-
-```text
-Permission Gate
-→ enforced process/container sandbox
-→ filesystem/network/secret scope
+Security:
+real process/container sandbox
+→ fs/network/secret policies
 → escape tests
-```
 
-### Evaluation
-
-```text
-Benchmark Harness
-→ repository fixture suite
+Evaluation:
+multi-file hidden-test repository suite
 → SWE-bench adapter
-→ browser environment
-→ OS/computer environment
-→ long-horizon crash/recovery
+→ Browser environment
+→ Computer/OS environment
+
+Coding / Multi-Agent:
+tree-sitter / LSP / semantic patch
+→ parallel workers
+→ mailbox / reviewer / merge
+→ 1/2/4/8-agent controlled comparison
 ```
 
-**终点不是代码文件数量，而是：每一层都能解释、执行、测试、恢复、评测，并且知道自己还没有证明什么。**
+**最终毕业标准不是“模块名都出现过”，而是每一层都能解释、实现、数值/行为验证、失败恢复、真实评测，并明确自己还没有证明什么。**

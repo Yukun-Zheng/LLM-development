@@ -232,3 +232,39 @@ class JournaledToolExecutor:
         metadata = dict(result.metadata or {})
         metadata["idempotency_key"] = idempotency_key
         return ToolResult(result.ok, result.output, metadata)
+
+
+class TurnScopedJournaledTools:
+    """CodexHarness-compatible adapter with deterministic per-turn call keys.
+
+    Given a stable ``scope`` (normally a durable work-item id), the nth tool
+    call always receives ``{scope}:tool:{n}``. Re-running the same turn after a
+    worker restart therefore replays already-completed calls and surfaces an
+    in-doubt record instead of blindly repeating a possibly non-idempotent side
+    effect.
+
+    If a retried model produces a *different* tool/argument sequence at the same
+    call index, the journal rejects the key reuse. That conservative failure is
+    preferable to silently binding one idempotency key to two side effects.
+    """
+
+    def __init__(self, executor: JournaledToolExecutor, *, scope: str) -> None:
+        if not scope:
+            raise ValueError("scope must be non-empty")
+        self.executor = executor
+        self.scope = scope
+        self.call_index = 0
+
+    @property
+    def specs(self):  # type: ignore[no-untyped-def]
+        return self.executor.specs
+
+    def execute(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
+        key = f"{self.scope}:tool:{self.call_index}"
+        index = self.call_index
+        self.call_index += 1
+        result = self.executor.execute(key, tool_name, arguments)
+        metadata = dict(result.metadata or {})
+        metadata["tool_call_index"] = index
+        metadata["tool_call_scope"] = self.scope
+        return ToolResult(result.ok, result.output, metadata)

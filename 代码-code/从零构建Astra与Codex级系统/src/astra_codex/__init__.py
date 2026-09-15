@@ -52,6 +52,13 @@ from .runtime import DurableAgentRuntime, RuntimeExecutionRecord
 from .runtime_control import BackgroundLeaseHeartbeat, ControlledBackend, LeaseHeartbeat
 from .runtime_queue import DurableWorkQueue, WorkItem, WorkStatus
 from .sampling import SamplingConfig
+from .sandbox import (
+    RestrictedSubprocessSandbox,
+    SandboxExecTool,
+    SandboxExecution,
+    SandboxLimits,
+    SandboxPolicy,
+)
 from .scheduler import (
     BatchKind,
     ReferenceRequestScheduler,
@@ -152,11 +159,16 @@ __all__ = [
     "RequestState",
     "RequestStatus",
     "ResolvedInstructions",
+    "RestrictedSubprocessSandbox",
     "RuntimeEvent",
     "RuntimeExecutionRecord",
     "SSEEventClient",
     "SSEMessage",
     "SamplingConfig",
+    "SandboxExecTool",
+    "SandboxExecution",
+    "SandboxLimits",
+    "SandboxPolicy",
     "ScheduledBatch",
     "SequenceLogProbs",
     "SequentialCoordinator",

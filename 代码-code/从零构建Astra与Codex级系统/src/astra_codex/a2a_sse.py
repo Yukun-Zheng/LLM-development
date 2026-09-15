@@ -4,8 +4,8 @@ Pinned source:
 https://github.com/a2aproject/A2A/blob/6d6640c29b102f7a8d23784901351b5d2454fe71/specification/a2a.proto
 
 The normative HTTP route is ``POST /message:stream`` and the RPC returns a
-stream of ``StreamResponse`` values.  Server-Sent Events are used as the HTTP
-stream framing in this educational binding.  ``SubscribeToTask`` is kept out of
+stream of ``StreamResponse`` values. Server-Sent Events are used as the HTTP
+stream framing in this educational binding. ``SubscribeToTask`` is kept out of
 this module until the Task store has a real asynchronous update source.
 """
 
@@ -14,7 +14,6 @@ from __future__ import annotations
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from pathlib import Path
 from typing import Any, Iterator
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -84,7 +83,9 @@ class LocalA2AStreamingHTTPServer:
                     self._write_json(404, {"error": {"message": "not found"}})
                     return
                 if outer._thread_service is None:
-                    self._write_json(503, {"error": {"message": "A2A stream service not ready"}})
+                    self._write_json(
+                        503, {"error": {"message": "A2A stream service not ready"}}
+                    )
                     return
                 try:
                     length = int(self.headers.get("Content-Length", "0"))
@@ -93,28 +94,32 @@ class LocalA2AStreamingHTTPServer:
                     decoded = json.loads(self.rfile.read(length).decode("utf-8"))
                     if not isinstance(decoded, dict):
                         raise A2AHTTPError(400, "request body must be a JSON object")
+
+                    # Advance once before emitting HTTP 200. This forces request
+                    # validation + durable Task creation while an ordinary JSON
+                    # error response is still possible.
+                    stream = stream_send_message(outer._thread_service, decoded)
+                    first = next(stream)
+
                     self.send_response(200)
                     self.send_header("Content-Type", "text/event-stream; charset=utf-8")
                     self.send_header("Cache-Control", "no-cache")
                     self.send_header("Connection", "close")
                     self.end_headers()
-                    for response in stream_send_message(outer._thread_service, decoded):
+                    self.wfile.write(_encode_sse(first))
+                    self.wfile.flush()
+                    for response in stream:
                         self.wfile.write(_encode_sse(response))
                         self.wfile.flush()
                 except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-                    self._write_json(400, {"error": {"message": f"invalid JSON: {exc}"}})
-                except (A2AHTTPError, ValueError) as exc:
-                    # If headers were already sent this cannot be converted into
-                    # a new HTTP status. In the deterministic reference path all
-                    # request validation happens before the first stream frame.
-                    if not self.wfile.closed:
-                        try:
-                            self._write_json(
-                                exc.status if isinstance(exc, A2AHTTPError) else 400,
-                                {"error": {"message": str(exc)}},
-                            )
-                        except OSError:
-                            pass
+                    self._write_json(
+                        400, {"error": {"message": f"invalid JSON: {exc}"}}
+                    )
+                except (A2AHTTPError, ValueError, StopIteration) as exc:
+                    self._write_json(
+                        exc.status if isinstance(exc, A2AHTTPError) else 400,
+                        {"error": {"message": str(exc)}},
+                    )
 
             def _write_json(self, status: int, payload: dict[str, Any]) -> None:
                 body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -192,7 +197,9 @@ class A2AStreamingHTTPClient:
         self.timeout_s = timeout_s
 
     def send_streaming_message(self, request) -> Iterator[A2AStreamResponse]:  # type: ignore[no-untyped-def]
-        body = json.dumps(_send_request_payload(request), ensure_ascii=False).encode("utf-8")
+        body = json.dumps(_send_request_payload(request), ensure_ascii=False).encode(
+            "utf-8"
+        )
         http_request = Request(
             self.base_url + "/message:stream",
             data=body,

@@ -1,406 +1,416 @@
 # 从零构建 Astra-class 与 Codex-class 系统
 
-这是整本教材的**终极 Reference System**：不是调用高层 Agent framework 拼一个 demo，而是从模型 forward、权重加载、推理缓存一路写到 durable thread、工具、协议、权限、评测、Coding Agent、Computer Use 与 Multi-Agent。
+这是整本教材的**终极 Reference System**：从模型 forward、真实权重加载、推理状态管理，一直写到 post-training objective、durable Agent kernel、协议、安全、评测、Coding Agent、Computer Use 与 Multi-Agent。
 
-> **边界**：不要求自己训练 frontier 权重；可以用 tiny/open models 学机制、做 parity，也可以把 GPT/Claude/Gemini 等作为可插拔 Model Backend。我们构建的是 **Astra-class / Codex-class system runtime**，不声称复刻未公开模型权重或云端全部生产基础设施。
+> **严格边界**：我们不声称复刻未公开的 frontier 权重、训练 recipe 或 OpenAI 云端全部生产基础设施。Open/tiny models 用于真正从零理解与 parity；frontier models 可以作为可插拔 Model Backend。**模型智能可以插拔，系统智能尽量由本项目自己实现。**
 
-实时实现状态：[`实现状态-STATUS.md`](实现状态-STATUS.md)  
-机器事实源：[`../../能力清单-CAPABILITIES.json`](../../能力清单-CAPABILITIES.json)  
-v3 蓝图：[`../../教材-book/99-全书架构蓝图-v3.md`](../../教材-book/99-全书架构蓝图-v3.md)  
-独立评测层：[`../../评测-eval/README.md`](../../评测-eval/README.md)
+- 实时实现状态：[`实现状态-STATUS.md`](实现状态-STATUS.md)
+- 机器事实源：[`../../能力清单-CAPABILITIES.json`](../../能力清单-CAPABILITIES.json)
+- v3 蓝图：[`../../教材-book/99-全书架构蓝图-v3.md`](../../教材-book/99-全书架构蓝图-v3.md)
+- 独立评测层：[`../../评测-eval/README.md`](../../评测-eval/README.md)
 
 ---
 
-# 1　当前源码：仍然扁平，但 subsystem 已经开始成形
+# 1　当前源码地图
 
 ```text
 src/astra_codex/
-├── config.py             # 模型结构约束
-├── tokenizer.py          # UTF-8 byte tokenizer + 从零 BPE
-├── model.py              # RMSNorm / RoPE / GQA / SwiGLU / Transformer
-├── cache.py              # per-layer contiguous KV Cache
-├── sampling.py           # greedy / temperature / top-k / top-p
-├── engine.py             # prefill / incremental decode / streaming
-├── weights.py            # raw safetensors / key remap / shape audit
-├── public_checkpoint.py  # 公开 Llama-family checkpoint adapter
 │
-├── agent.py              # 最小 observe → act → observe loop
-├── codex_harness.py      # Codex-style Turn / Event / Approval teaching harness
-├── durable.py            # [v3] event-sourced Thread / Turn / replay / resume
-├── memory.py             # SQLite persistent event memory
-├── planning.py           # typed task DAG
-├── verification.py       # external verifier
-├── evaluation.py         # [v3] trajectory capability metrics
-├── security.py           # [v3] pre-dispatch permission / approval enforcement
+├── Model / Inference
+│   ├── config.py
+│   ├── tokenizer.py
+│   ├── model.py
+│   ├── weights.py
+│   ├── public_checkpoint.py
+│   ├── cache.py
+│   ├── paged_cache.py       # reference logical pages + parity
+│   ├── engine.py
+│   ├── scheduler.py         # request lifecycle / prefill / decode / TTFT / TPOT
+│   └── sampling.py
 │
-├── structured.py         # JSON tool call / schema validation
-├── tools.py              # filesystem / shell / Git
-├── editing.py            # ambiguity-safe exact edit
-├── repo_map.py           # Python AST + Markdown structure map
-├── general_tools.py      # minimal HTTP text browser
-├── mcp.py                # minimal MCP teaching subset
+├── Post-training
+│   └── posttraining.py      # masked SFT + sequence logp + DPO + optimizer steps
 │
-├── worktree.py           # Git worktree primitive
-├── multi_agent.py        # coordinator primitive
-└── coding.py             # repository coding-agent assembly
+├── Durable Agent Kernel
+│   ├── agent.py
+│   ├── codex_harness.py
+│   ├── durable.py           # Thread / Turn / replay / fork / cancellation
+│   ├── runtime_queue.py     # lease / reclaim / ack / cancel
+│   ├── context.py           # typed context + compaction provenance
+│   ├── memory.py
+│   ├── planning.py
+│   ├── verification.py
+│   └── evaluation.py
+│
+├── Environment / Protocol / Security
+│   ├── structured.py
+│   ├── tools.py
+│   ├── editing.py
+│   ├── repo_map.py
+│   ├── general_tools.py
+│   ├── mcp.py
+│   └── security.py
+│
+├── Multi-Agent / Coding
+│   ├── worktree.py
+│   ├── multi_agent.py
+│   └── coding.py
+│
+└── Evaluation
+    └── benchmark.py         # BenchmarkCase / Grader / Record / aggregation
 ```
 
-短期保持这些 import 稳定；等 subsystem contract 充分成熟后，再逐步迁移到 `model/`、`inference/`、`agent/`、`protocols/`、`security/`、`eval/` 等子包，避免为了目录漂亮而破坏已经通过的 parity/tests。
+暂时保持 flat imports 以保护已经通过的 tests/parity；subsystem contract 稳定后再逐步迁移到 `model/ inference/ posttraining/ agent/ protocols/ security/ eval/` 子包。
 
 ---
 
-# 2　真实公开模型 parity：当前最重要的模型证据
+# 2　模型侧：已经从 toy runtime 跨到真实 checkpoint
 
-真实 checkpoint：
+当前真实 checkpoint：
 
 ```text
 HuggingFaceTB/SmolLM2-135M
 ```
 
-数据流：
-
 ```text
 config.json + raw safetensors
         ↓
-ModelConfig + key mapping
+our key mapper
         ↓
 our RMSNorm / RoPE / GQA / SwiGLU / Transformer
         ↓
 our logits
-
-same input
-        ↓
-HF reference eager implementation
-        ↓
-reference logits
+        ↕
+HF eager reference logits
 ```
 
-当前受测 CPU float32 设置：
+固定受测 CPU float32：
 
 ```json
 {"max_abs": 0.0, "mean_abs": 0.0, "argmax_agreement": 1.0}
 ```
 
-这只证明当前模型/输入/数值设置，不外推为“兼容所有模型族”。后续要做 architecture parity matrix。
+这个证据只覆盖当前受测模型/输入/数值设置。下一阶段是 multi-architecture parity matrix。
 
 ---
 
-# 3　v3 新增：Durable Thread / Event Store / Replay
+# 3　Inference：从 KV Cache 进入 Serving Runtime
 
-`durable.py` 把 Agent 生命周期从“一个 Python 函数跑到底”升级为显式持久状态：
+## 3.1 Contiguous KV
+
+已经验证 cached incremental decode 与 full recomputation logits 对齐。
+
+## 3.2 Reference Paged KV
+
+`paged_cache.py` 已有逻辑 page、per-layer page table、suffix ingest 与 paged decode parity。
+
+当前 reference path 会把 pages 重新拼成 contiguous `past_key_values`，所以它证明的是：
+
+> **分页状态语义正确。**
+
+它不证明已经拥有 vLLM 的 block allocator / zero-copy kernel / 显存收益。
+
+## 3.3 Reference Request Scheduler
+
+`scheduler.py` 把 serving 生命周期显式化：
 
 ```text
-THREAD_CREATED
-→ USER_SUBMISSION
-→ TURN_STARTED
-→ CHECKPOINT_CREATED
-→ TURN_COMPLETED
-→ THREAD_PAUSED / THREAD_RESUMED
-→ THREAD_COMPLETED / THREAD_FAILED
+arrival
+→ WAITING
+→ PREFILL admission
+→ DECODE
+→ FINISHED / CANCELLED
 ```
 
-SQLite event log 是 source of truth，`project(thread_id)` 通过 replay 得到当前状态。因此：
+已支持：
 
 ```text
-process A
-→ running turn + checkpoint
-→ close process
-
-process B
-→ reopen same DB
-→ replay events
-→ recover thread / active turn / checkpoint
+max_batch_size
+max_prefill_tokens
+decode-first scheduling
+cancellation
+TTFT
+TPOT
+total latency
 ```
 
-这是 long-running Agent OS 的最小地基。它还不是 distributed scheduler、lease manager 或 durable queue。
+Fast CI 已验证调度和指标行为。下一步不是继续改接口，而是接入**真实 batched model executor**，再测 continuous batching 的 throughput / fairness / memory。
 
 ---
 
-# 4　v3 新增：Permission Enforcement
+# 4　Post-training：数学已经第一次变成 optimizer step
 
-`security.py` 把：
+此前 RLHF / DPO 主要在教材公式里。现在 `posttraining.py` 已经落到 tensor。
+
+## SFT
 
 ```text
-"模型被提示不要做危险动作"
+input ids
+→ logits [B,T,V]
+→ causal shift
+→ mask prompt/user targets with -100
+→ CE
+→ backward
+→ grad clip (optional)
+→ optimizer.step
 ```
 
-和：
+## DPO
 
 ```text
-"runtime 在执行前物理阻断动作"
+policy chosen/rejected sequence logp
+reference chosen/rejected sequence logp
+→ log-ratio preference margin
+→ beta-scaled implicit rewards
+→ -log sigmoid(margin)
+→ backward
+→ update policy only
 ```
 
-分开。
+自动测试包括：uniform logits 手算 CE、policy==reference 时 DPO loss=`log(2)`、SFT/DPO 真实更新 policy、reference 保持冻结。
 
-当前数据流：
+Fast CI run 51：
 
 ```text
-Tool Proposal
-    ↓
-PermissionProfile
+49 passed, 1 warning in 2.11s
+Ruff correctness lint: All checks passed
+```
+
+这还不是完整训练平台：dataset/dataloader/checkpoint/eval、reward model、GRPO/RLVR 仍待实现。
+
+---
+
+# 5　Agent：从 Turn Loop 进入 Durable Kernel
+
+现在不再把：
+
+```text
+model → tool → model
+```
+
+当作整个 Agent architecture。
+
+## 5.1 Turn Executor
+
+`codex_harness.py`：
+
+```text
+TURN_STARTED
+→ sampling
+→ optional approval
+→ tool
+→ observation
+→ follow-up
+→ TURN_COMPLETED / TURN_STOPPED
+```
+
+## 5.2 Event-sourced Thread
+
+`durable.py`：
+
+```text
+Thread
+→ Submission
+→ Turn
+→ Checkpoint
+→ Replay
+→ Pause / Resume
+→ Fork
+→ Cancel / Complete / Fail
+```
+
+进程关闭后重新打开数据库仍能恢复 running turn / submissions / checkpoint。
+
+Fork 会复制指定 event prefix 到独立 child stream，并保存：
+
+```text
+parent_thread_id
+parent_event_id
+```
+
+子 thread 的 cancellation 不改变 parent state。
+
+## 5.3 Durable Work Queue
+
+`runtime_queue.py`：
+
+```text
+PENDING
+→ LEASED(worker)
+├─ ACK → COMPLETED
+├─ FAIL → FAILED
+├─ CANCEL → CANCELLED
+└─ lease expires → reclaim
+```
+
+这把 task state 与 worker execution ownership 分开。
+
+---
+
+# 6　Context：不再把 Summary 当成历史本身
+
+`context.py` 已开始区分：
+
+```text
+RAW_EVENT
+NOTE
+SUMMARY
+ARTIFACT
+RETRIEVAL
+INSTRUCTION
+```
+
+Compaction 产生新的 `SUMMARY` fragment，并记录 parent IDs；raw observations 不被覆盖。
+
+因此以后模型看到一个摘要时，可以追问：
+
+```text
+这个 summary 来自哪些 raw events？
+是谁/哪种 policy 压缩的？
+原始证据还能不能取回？
+```
+
+下一步是 persistent notes、semantic index、artifact provenance 与 token-budget context builder。
+
+---
+
+# 7　Security：第一道真实 gate 已经进入执行路径
+
+当前：
+
+```text
+Action Proposal
+→ PermissionProfile
 ├─ ALLOW
 ├─ REQUIRE_APPROVAL
 └─ DENY
-    ↓
-optional approval callback
-    ↓
-ToolRegistry dispatch
+→ optional approval
+→ ToolRegistry dispatch
 ```
 
-测试验证：DENY / approval reject 时底层 tool body 的计数保持 0，说明动作没有被 dispatch。
+DENY / rejected approval 会在 tool body 执行前阻断。
 
-**但这仍不是 OS sandbox。** Bash 进程、filesystem namespace、network、secret、syscall isolation 仍是独立 P0。
+**仍然没有冒充 OS sandbox。** process / filesystem / network / credentials / syscall isolation 仍是独立 P0。
 
 ---
 
-# 5　v3 新增：Agent Trajectory Evaluation
+# 8　Evaluation：测试与能力评测正式分层
 
-`evaluation.py` 开始把 unit tests 与 capability evaluation 分开。
-
-统一记录：
+`evaluation.py` 记录 trajectory cost/behavior；`benchmark.py` 新增：
 
 ```text
-success
-verifier_passed
-model_steps
-tool_calls
-tool_failures
-approvals_requested
-stopped_by_limit
-wall_time_s
-input_tokens
-output_tokens
-cost_usd
+BenchmarkCase
+→ Executor
+→ Result / trajectory
+→ Grader
+→ Grade
+→ BenchmarkRecord
+→ AggregateMetrics
 ```
 
-这只是 metrics layer；后续 `评测-eval/` 会继续加入 benchmark case format、graders 与 SWE-bench / Browser / OS adapters。
+这允许以后同一个 task 在不同系统设置下做严格 A/B：
+
+```text
+memory vs no memory
+planner vs reactive
+1 agent vs N agents
+reviewer vs no reviewer
+paged vs contiguous KV
+```
+
+当前 grader 只包含 deterministic toy reference。真实 repository/browser/OS benchmark adapter 仍未完成。
 
 ---
 
-# 6　模型运行时数据流
+# 9　当前系统总图
 
 ```text
-Text
- ↓
-Tokenizer / Token IDs
- ↓
-Embedding
- ↓
-RMSNorm
- ↓
-Q / K / V
- ↓
-RoPE
- ↓
-Grouped-Query Causal Attention
- ↓
-Residual
- ↓
-RMSNorm
- ↓
-SwiGLU
- ↓
-... N blocks
- ↓
-Final RMSNorm
- ↓
-LM Head
- ↓
-Logits
+                        Model Backend
+                             │
+          ┌──────────────────┴──────────────────┐
+          ↓                                     ↓
+   Open/Tiny Runtime                      Frontier API
+          │                                     │
+          └──────────────────┬──────────────────┘
+                             ↓
+                     Durable Thread
+                             ↓
+                       Work Queue
+                             ↓
+                       Turn Executor
+                             ↓
+                    Context Builder
+                             ↓
+                   Planner / Policy
+                             ↓
+              Permission / Approval
+                             ↓
+       Tool / MCP / Browser / Remote Agent
+                             ↓
+                       Environment
+                             ↓
+                        Verifier
+                             ↓
+              Checkpoint / Replan / Finish
+                             ↓
+                  Benchmark / Evidence
 ```
 
-自回归推理：
+---
+
+# 10　下一阶段最高优先级
+
+### Inference
 
 ```text
-Prompt
-→ Prefill
-→ contiguous KV Cache
-→ one-token Decode
-→ Sampling
-→ repeat
-```
-
-当前下一道系统门槛不是“再加一种 sampling”，而是：
-
-```text
-contiguous KV
-→ paged KV
-→ prefix cache
-→ scheduler
+Reference Scheduler
+→ actual batched model executor
 → continuous batching
+→ prefix cache
+→ block allocator
 → chunked/disaggregated prefill
 → speculative decoding
 ```
 
-所有优化必须保留 reference implementation 和 parity test。
-
----
-
-# 7　Agent Runtime v3 目标
-
-最终核心对象：
+### Post-training
 
 ```text
-Submission Queue
-      ↓
-Thread
-      ↓
-Turn Executor
-      ↓
-Event Stream
-      ↓
-Event Store / Replay
-      ↓
-Context Builder
-├─ raw history
-├─ notes
-├─ semantic index
-├─ artifacts
-└─ compaction provenance
-      ↓
-Planner / Policy
-      ↓
-Permission / Approval / Sandbox
-      ↓
-Tool / MCP / A2A / Remote Agent
-      ↓
-Observation
-      ↓
-Verifier
-      ↓
-Checkpoint / Continue / Finish
+SFT/DPO objective primitives
+→ real dataset pipeline
+→ checkpointable loops
+→ verifier reward
+→ GRPO/RLVR-style toy policy update
 ```
 
-`codex_harness.py` 只负责其中的 **TurnExecutor teaching slice**，不再被当成整个 Agent OS。
-
----
-
-# 8　Protocol 分层
-
-不要把所有外部交互都叫“Agent API”。最终至少分：
+### Agent OS
 
 ```text
-Tool Protocol
-└─ MCP: Agent/Host ↔ Tool / Context Server
-
-Agent Protocol
-└─ A2A: Agent ↔ Agent
-
-Application Runtime Protocol
-└─ App-Server-like: UI / Client ↔ Agent Runtime
+Thread + Queue + Turn
+→ integrated runtime
+→ pending steering
+→ worker heartbeat
+→ App Server control plane
+→ artifact/rollout store
 ```
 
-当前 `mcp.py` 是教学子集。下一步优先按 2026-07-28 语义审计 stateless core、discovery、cache/auth/tasks extensions，再实现 minimal A2A 1.0。
-
----
-
-# 9　未来源码目录目标
-
-不立即搬文件，但最终目标明确为：
+### Security
 
 ```text
-astra_codex/
-├── model/
-├── inference/
-├── posttraining/
-├── agent/
-├── protocols/
-├── environments/
-├── security/
-├── multi_agent/
-└── eval/
+Permission Gate
+→ enforced process/container sandbox
+→ filesystem/network/secret scope
+→ escape tests
 ```
 
-迁移必须以稳定 API、全量 tests、compatibility update 为前提。
-
----
-
-# 10　P0 / P1
-
-## P0
+### Evaluation
 
 ```text
-[x] Capability Manifest + CI validator
-[x] Durable Thread / Event Store / Replay primitive
-[x] Trajectory Metrics primitive
-[x] Pre-dispatch Permission primitive
-[ ] Enforced OS/container sandbox
-[ ] Context provenance / notes / semantic index / compaction record
-[ ] Paged KV reference + parity
-[ ] request scheduler + serving metrics
+Benchmark Harness
+→ repository fixture suite
+→ SWE-bench adapter
+→ browser environment
+→ OS/computer environment
+→ long-horizon crash/recovery
 ```
 
-## P1
-
-```text
-[ ] prefix cache / continuous batching / speculative decode
-[ ] tiny SFT → DPO → verifier/RL pipeline
-[ ] MCP 2026-07-28 fuller semantics + A2A 1.0 minimal runtime
-[ ] tree-sitter / LSP / semantic patch
-[ ] browser DOM/A11y + screenshot + actions + verifier
-[ ] parallel worktree workers + reviewer/merge
-[ ] real benchmark adapters
-```
-
-真实状态以 [`../../能力清单-CAPABILITIES.json`](../../能力清单-CAPABILITIES.json) 为准，而不是 README 里的手工勾选。
-
----
-
-# 11　运行
-
-基础测试：
-
-```bash
-cd '代码-code/从零构建Astra与Codex级系统'
-pip install -e '.[dev]'
-pytest
-```
-
-真实 checkpoint parity：
-
-```bash
-pip install -e '.[parity]'
-python examples/02_smollm2_parity.py
-```
-
-教材内容 / manifest / frontier 审计由根仓库 GitHub Actions 执行。
-
----
-
-# 12　最终毕业验收
-
-## Model / Inference
-
-公开模型 parity matrix + paged/state cache + scheduler + batching + speculation + profiling。
-
-## Post-training
-
-至少在 tiny/open model 上真正跑通 SFT、preference/DPO、verifier/reward 与小规模 RL update。
-
-## Codex-class
-
-真实 repository + issue：
-
-```text
-resume durable thread
-→ read scoped instructions
-→ inspect / localize
-→ edit
-→ targeted tests
-→ diagnose / repair
-→ broader verification
-→ review diff
-→ produce artifact + evidence
-```
-
-## Astra-class
-
-跨 browser/computer/files/code 的长程任务，支持 crash/restart、context compaction、permission/sandbox、安全审计和 external verifier。
-
-## Multi-Agent
-
-不仅能 spawn，而能用 controlled benchmark 回答：
-
-> 2/4/8 agents 相比 1 agent 到底提高了什么，又增加了多少成本、冲突与 merge failure？
-
-**终点不是“代码很多”，而是每一层都能解释、运行、测试、对齐、恢复、评测并暴露失败。**
+**终点不是代码文件数量，而是：每一层都能解释、执行、测试、恢复、评测，并且知道自己还没有证明什么。**

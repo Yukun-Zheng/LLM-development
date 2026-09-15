@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "extends": "能力清单-CAPABILITIES.json",
+  "capabilities": [
+    {
+      "id": "agent.lease_heartbeat",
+      "track": "agent",
+      "title": "Worker Lease Heartbeat / Renewal",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/09-实时Steering租约与AppServer-live-control-plane.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime_control.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_runtime_control_artifacts.py"
+      ],
+      "evidence": [
+        "Fast CI run 91: renewed lease blocks premature reclaim; full suite 86 passed and Ruff passed"
+      ],
+      "next": [
+        "background heartbeat during a single long-running tool/RPC",
+        "lease-loss fencing token",
+        "multi-worker fairness experiments"
+      ]
+    },
+    {
+      "id": "agent.live_steering",
+      "track": "agent",
+      "title": "Durable Mid-turn Live Steering",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/09-实时Steering租约与AppServer-live-control-plane.md",
+        "Codex源码解剖-codex-anatomy/02-会话线程与事件协议-session-thread-events.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/steering.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime_control.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_runtime_control_artifacts.py"
+      ],
+      "evidence": [
+        "Fast CI run 91: steering submitted while a tool executes is consumed and injected before the next model sampling; full suite 86 passed"
+      ],
+      "next": [
+        "mirror steering consumption into the unified Thread event stream",
+        "steering priority / replace / interrupt semantics",
+        "external streaming client"
+      ]
+    },
+    {
+      "id": "agent.artifact_store",
+      "track": "agent",
+      "title": "Content-addressed Durable Artifact Store",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/09-实时Steering租约与AppServer-live-control-plane.md",
+        "智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/artifacts.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_runtime_control_artifacts.py",
+        "代码-code/从零构建Astra与Codex级系统/tests/test_app_server.py"
+      ],
+      "evidence": [
+        "Fast CI run 91: identical bytes share a content object, per-thread metadata remains distinct, checksum tampering is detected, and App Server lists artifact metadata"
+      ],
+      "next": [
+        "artifact lineage to tool/turn/verifier records",
+        "directory/tree artifacts",
+        "patch/report specialized graders"
+      ]
+    },
+    {
+      "id": "protocol.app_server_minimal",
+      "track": "protocol",
+      "title": "Minimal JSON-RPC Agent App Server Control Plane",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/09-实时Steering租约与AppServer-live-control-plane.md",
+        "Codex源码解剖-codex-anatomy/02-会话线程与事件协议-session-thread-events.md",
+        "Codex源码解剖-codex-anatomy/05-MCP与AppServer-mcp-app-server.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/app_server.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_app_server.py"
+      ],
+      "evidence": [
+        "Fast CI run 91: thread create/get/submit, runtime execution, steering, fork provenance, artifact listing and protocol errors are covered; full suite 86 passed and Ruff passed"
+      ],
+      "next": [
+        "event subscription / streaming",
+        "stdio / HTTP / WebSocket transports",
+        "authentication and session authorization",
+        "protocol transcript comparison against public Codex App Server semantics"
+      ]
+    }
+  ]
+}

@@ -4,7 +4,7 @@
 
 ---
 
-# 1　Model Runtime
+# 1　Model Runtime / Inference
 
 当前已实现并测试：
 
@@ -21,14 +21,42 @@
 - [x] full-forward vs cached-decode logits parity
 - [x] `HuggingFaceTB/SmolLM2-135M` public checkpoint adapter
 - [x] own runtime vs HF eager reference logits parity
+- [x] **reference Paged KV Cache + page table + paged decode parity**
 
-受测 CPU float32 结果：
+真实 checkpoint 受测 CPU float32 结果：
 
 ```json
 {"max_abs": 0.0, "mean_abs": 0.0, "argmax_agreement": 1.0}
 ```
 
 只对当前受测 checkpoint / input / numerical setting 成立。
+
+## Reference Paged KV 的边界
+
+`paged_cache.py` 现在已经建立：
+
+```text
+logical page size
+→ per-layer K/V pages
+→ incremental suffix ingest
+→ page table
+→ reconstruct past_key_values
+→ one-token decode
+```
+
+自动测试证明 paged path 的 prefill / decode logits 与 full forward 对齐，并验证页面从：
+
+```text
+(2, 2, 1)
+```
+
+增长到：
+
+```text
+(2, 2, 2)
+```
+
+但当前模型 forward 仍会产生完整 K/V，`as_past_key_values()` 也会重建 contiguous tensor。因此这是**Paged KV 语义 reference implementation**，不是 vLLM 级 zero-copy block allocator，也不声称已经获得生产级显存/吞吐收益。
 
 ---
 
@@ -83,9 +111,9 @@ TurnSettings
 
 ---
 
-# 4　v3 新增：Durable Thread / Event Store
+# 4　Durable Thread / Event Store
 
-新增 `durable.py`：
+`durable.py` 已实现：
 
 - [x] persistent `ThreadId` / `TurnId`
 - [x] append-only SQLite event log
@@ -97,13 +125,79 @@ TurnSettings
 - [x] 关闭数据库后重新打开，可恢复 running turn、submission 和 checkpoint
 - [x] invalid state transition tests
 
-这已经解决了“状态只活在一个 Python 进程内”的最小问题，但还没有：async durable queue、lease、cancellation、fork、distributed worker ownership。
+这解决了“任务状态只活在一个 Python 进程内”的最小问题。
 
 ---
 
-# 5　v3 新增：Permission Enforcement
+# 5　Durable Work Queue / Lease / Cancellation
 
-新增 `security.py`：
+新增 `runtime_queue.py`，把长期任务进一步从 thread state 推到 worker execution：
+
+```text
+enqueue
+→ PENDING
+→ claim(worker)
+→ LEASED
+├─ ack → COMPLETED
+├─ fail → FAILED
+├─ cancel → CANCELLED
+└─ lease timeout → another worker reclaim
+```
+
+已经自动验证：
+
+- [x] active lease 阻止第二 worker 重复领取；
+- [x] lease 过期后另一 worker 可以 reclaim；
+- [x] ACK 后持久化 result；
+- [x] cancel 后该 work item 不再可 claim。
+
+这仍不是分布式生产队列：还没有 heartbeat renewal、priority/fairness、跨节点 clock/transaction 设计和真正异步 worker pool。
+
+---
+
+# 6　Context Provenance / Compaction Ledger
+
+新增 `context.py`。现在 memory 不再只是“把字符串塞 SQLite”，而开始区分：
+
+```text
+RAW_EVENT
+NOTE
+SUMMARY
+ARTIFACT
+RETRIEVAL
+INSTRUCTION
+```
+
+每个 `ContextFragment` 保存：
+
+```text
+fragment_id
+kind
+content
+source
+parent_ids
+metadata
+created_at
+```
+
+Compaction 不覆盖原历史，而是：
+
+```text
+raw fragment A ─┐
+raw fragment B ─┼→ summary fragment
+raw fragment C ─┘        │
+                         └→ parent provenance
+```
+
+自动测试已经证明：summary 建立后仍能沿 lineage 找回原始 tool observations，原始 fragment 本身也不会被删除。
+
+下一步是 token-budget builder、persistent notes、semantic index、artifact provenance 和 historical-window retrieval。
+
+---
+
+# 7　Permission Enforcement
+
+`security.py` 当前执行顺序：
 
 ```text
 Tool Proposal
@@ -117,27 +211,17 @@ Tool Proposal
 
 自动测试已经证明：
 
-- [x] `DENY` 时底层 tool body 调用次数保持 0
-- [x] approval reject 时底层 tool body 不执行
-- [x] approval allow 后才进入 dispatch
+- [x] `DENY` 时底层 tool body 调用次数保持 0；
+- [x] approval reject 时底层 tool body 不执行；
+- [x] approval allow 后才进入 dispatch。
 
-这是 **application-layer execution gate**，仍不是：
-
-```text
-process isolation
-filesystem namespace
-network isolation
-credential isolation
-syscall sandbox
-```
-
-真实 OS / container sandbox 继续是 P0。
+这是 **application-layer execution gate**，仍不是 process/filesystem/network/credential/syscall sandbox。真实 OS / container sandbox 继续是 P0。
 
 ---
 
-# 6　v3 新增：Evaluation Metrics
+# 8　Evaluation Metrics
 
-新增 `evaluation.py`，把 unit correctness 与 capability evaluation 分开。
+`evaluation.py` 已把 unit correctness 与 capability evaluation 分开。
 
 当前统一记录：
 
@@ -159,7 +243,7 @@ cost_usd
 
 ---
 
-# 7　Agent Protocol Runtime
+# 9　Agent Protocol Runtime
 
 当前：
 
@@ -171,29 +255,37 @@ cost_usd
 - [x] in-process transport / client
 - [x] protocol / tool failure tests
 
-注意：当前 `mcp.py` 是教学子集。MCP 2026-07-28 的完整 stateless semantics、stdio/HTTP、authorization、tasks/extensions，以及 A2A 1.0 都仍在后续。
+当前 `mcp.py` 仍是教学子集。MCP 2026-07-28 的完整 stateless semantics、stdio/HTTP、authorization、tasks/extensions，以及 A2A 1.0 都仍在后续。
 
 ---
 
-# 8　最新 Fast CI
+# 10　最新 Fast CI
 
-修复 permission metadata edge case 后，最新 Fast CI 已真实通过：
+加入 reference Paged KV、Context provenance 与 durable work queue 后，Fast CI run 42 已真实通过：
 
 ```text
-36 passed, 1 warning in 2.14s
+40 passed, 1 warning in 2.46s
 Ruff correctness lint: All checks passed
 ```
 
-新增加的 6 个测试覆盖 durable replay、state transition、permission/approval enforcement 和 trajectory metrics。
+当前新增测试明确覆盖：
+
+```text
+paged KV prefill/decode parity
+context compaction lineage
+lease exclusivity / expiry reclaim
+work cancellation
+```
 
 ---
 
-# 9　当前明确未实现
+# 11　当前明确未实现
 
 ## Inference / Serving
 
 - [ ] SDPA / high-performance FlashAttention backend
-- [ ] paged KV cache
+- [x] reference paged KV semantics + parity
+- [ ] production block allocator / free list / prefix sharing
 - [ ] prefix cache
 - [ ] chunked / disaggregated prefill
 - [ ] continuous batching scheduler
@@ -211,12 +303,14 @@ Ruff correctness lint: All checks passed
 
 ## Durable Agent OS
 
-- [ ] async Submission Queue / Event Queue
-- [ ] pending steering / cancellation
+- [x] event-sourced thread replay
+- [x] durable leased work queue
+- [ ] pending steering integrated into active turn
 - [ ] thread fork
-- [ ] worker lease / ownership
+- [ ] thread-level cancellation semantics
+- [ ] worker heartbeat / lease renewal
 - [ ] scoped `AGENTS.md` resolver + instruction provenance
-- [ ] context budget / compaction / historical-window retrieval
+- [x] provenance-aware context fragments / compaction lineage
 - [ ] persistent notes / semantic index / artifact provenance
 - [ ] App Server / external runtime control plane
 - [ ] rollout trace / artifact store
@@ -257,19 +351,3 @@ Ruff correctness lint: All checks passed
 - [ ] OSWorld-style adapter
 - [ ] long-horizon crash/recovery benchmark
 - [ ] full token / latency / cost instrumentation
-
----
-
-# 10　成熟度规则
-
-一个 capability 标为 `validated` 至少要求：
-
-```text
-Source / Theory
-+ Code
-+ Explicit Contract
-+ Automated Test
-+ Evidence
-```
-
-若声称与公开/工业实现等价，还必须有 numerical / behavioral / protocol parity 或 benchmark。真正状态统一进入 [`../../能力清单-CAPABILITIES.json`](../../能力清单-CAPABILITIES.json)。

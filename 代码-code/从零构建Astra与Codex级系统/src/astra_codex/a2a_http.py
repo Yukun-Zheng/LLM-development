@@ -11,16 +11,23 @@ Implemented unprefixed v1 routes:
 * GET  /tasks
 * POST /tasks/{id}:cancel
 
-This module deliberately does not claim complete A2A conformance. Streaming,
-push notifications, authenticated extended cards, tenant-prefixed bindings,
-security schemes, pagination and protocol conformance certification remain
-separate layers.
+``ListTasks`` follows the pinned v1 request fields ``contextId``, ``status``,
+``pageSize``, ``pageToken``, ``historyLength``, ``statusTimestampAfter`` and
+``includeArtifacts``. Page tokens are deliberately opaque to clients, though
+the reference implementation internally encodes an offset.
+
+This module still does not claim complete A2A conformance. Streaming, push
+notifications, authenticated extended cards, tenant-prefixed bindings, security
+schemes and protocol conformance certification remain separate layers.
 """
 
 from __future__ import annotations
 
+import base64
 import json
 import threading
+from dataclasses import dataclass
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 from urllib.error import HTTPError
@@ -48,6 +55,14 @@ class A2AHTTPError(RuntimeError):
         self.message = message
 
 
+@dataclass(frozen=True, slots=True)
+class A2AListTasksPage:
+    tasks: tuple[A2ATask, ...]
+    next_page_token: str
+    page_size: int
+    total_size: int
+
+
 def _configuration_payload(config: A2ASendMessageConfiguration) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     if config.accepted_output_modes:
@@ -69,6 +84,65 @@ def _send_request_payload(request: A2ASendMessageRequest) -> dict[str, Any]:
     if request.tenant is not None:
         payload["tenant"] = request.tenant
     return payload
+
+
+def _encode_page_token(offset: int) -> str:
+    if offset <= 0:
+        return ""
+    encoded = base64.urlsafe_b64encode(f"offset:{offset}".encode("ascii"))
+    return encoded.decode("ascii").rstrip("=")
+
+
+def _decode_page_token(token: str) -> int:
+    if not token:
+        return 0
+    padding = "=" * (-len(token) % 4)
+    try:
+        decoded = base64.urlsafe_b64decode(token + padding).decode("ascii")
+        prefix, raw_offset = decoded.split(":", 1)
+        offset = int(raw_offset)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise A2AHTTPError(400, "invalid opaque pageToken") from exc
+    if prefix != "offset" or offset < 0:
+        raise A2AHTTPError(400, "invalid opaque pageToken")
+    return offset
+
+
+def _parse_timestamp(value: str) -> datetime:
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise A2AHTTPError(400, "statusTimestampAfter must be ISO 8601") from exc
+
+
+def _parse_bool(value: str, name: str) -> bool:
+    lowered = value.lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    raise A2AHTTPError(400, f"{name} must be true or false")
+
+
+def _project_list_task(
+    task: A2ATask,
+    *,
+    history_length: int | None,
+    include_artifacts: bool,
+) -> A2ATask:
+    if history_length is not None and history_length < 0:
+        raise A2AHTTPError(400, "historyLength cannot be negative")
+    history = task.history
+    if history_length is not None:
+        history = () if history_length == 0 else history[-history_length:]
+    return A2ATask(
+        id=task.id,
+        context_id=task.context_id,
+        status=task.status,
+        artifacts=task.artifacts if include_artifacts else (),
+        history=history,
+        metadata=task.metadata,
+    )
 
 
 class LocalA2AHTTPServer:
@@ -161,6 +235,80 @@ class LocalA2AHTTPServer:
             raise A2AHTTPError(400, f"query parameter {name} must occur once")
         return values[0]
 
+    def _list_tasks(self, query: dict[str, list[str]]) -> dict[str, Any]:
+        service = self._require_service()
+        context_id = self._single_query(query, "contextId")
+        status_raw = self._single_query(query, "status")
+        page_size_raw = self._single_query(query, "pageSize")
+        page_token = self._single_query(query, "pageToken") or ""
+        history_raw = self._single_query(query, "historyLength")
+        timestamp_raw = self._single_query(query, "statusTimestampAfter")
+        include_raw = self._single_query(query, "includeArtifacts")
+
+        status = None
+        if status_raw is not None:
+            try:
+                status = A2ATaskState(status_raw)
+            except ValueError as exc:
+                raise A2AHTTPError(400, "status is not a valid A2A TaskState") from exc
+
+        if page_size_raw is None:
+            page_size = 50
+        else:
+            try:
+                page_size = int(page_size_raw)
+            except ValueError as exc:
+                raise A2AHTTPError(400, "pageSize must be an integer") from exc
+            if page_size < 1 or page_size > 100:
+                raise A2AHTTPError(400, "pageSize must be between 1 and 100")
+
+        history_length = None
+        if history_raw is not None:
+            try:
+                history_length = int(history_raw)
+            except ValueError as exc:
+                raise A2AHTTPError(400, "historyLength must be an integer") from exc
+            if history_length < 0:
+                raise A2AHTTPError(400, "historyLength cannot be negative")
+
+        include_artifacts = False
+        if include_raw is not None:
+            include_artifacts = _parse_bool(include_raw, "includeArtifacts")
+
+        tasks = list(
+            service.store.list(
+                context_id=context_id,
+                states=None if status is None else {status},
+            )
+        )
+        if timestamp_raw is not None:
+            cutoff = _parse_timestamp(timestamp_raw)
+            tasks = [
+                task for task in tasks if _parse_timestamp(task.status.timestamp) >= cutoff
+            ]
+
+        total_size = len(tasks)
+        offset = _decode_page_token(page_token)
+        if offset > total_size:
+            raise A2AHTTPError(400, "pageToken offset is beyond the result set")
+        selected = tasks[offset : offset + page_size]
+        next_offset = offset + len(selected)
+        next_token = _encode_page_token(next_offset) if next_offset < total_size else ""
+        projected = [
+            _project_list_task(
+                task,
+                history_length=history_length,
+                include_artifacts=include_artifacts,
+            )
+            for task in selected
+        ]
+        return {
+            "tasks": [task.to_dict() for task in projected],
+            "nextPageToken": next_token,
+            "pageSize": page_size,
+            "totalSize": total_size,
+        }
+
     def _handle_http(
         self,
         method: str,
@@ -181,21 +329,7 @@ class LocalA2AHTTPServer:
                 return service.handle_operation("SendMessage", body)
 
             if method == "GET" and path == "/tasks":
-                params: dict[str, Any] = {}
-                context_id = self._single_query(query, "contextId")
-                if context_id is not None:
-                    params["contextId"] = context_id
-                states = query.get("state", [])
-                if states:
-                    params["states"] = states
-                # Pagination is intentionally not fabricated. Reject it until
-                # the store has a real opaque page-token implementation.
-                if "pageSize" in query or "pageToken" in query:
-                    raise A2AHTTPError(
-                        501,
-                        "reference ListTasks does not yet implement A2A pagination",
-                    )
-                return service.handle_operation("ListTasks", params)
+                return self._list_tasks(query)
 
             if path.startswith("/tasks/"):
                 suffix = path[len("/tasks/") :]
@@ -307,8 +441,6 @@ class A2AHTTPClient:
         return decoded
 
     def get_agent_card(self) -> A2AAgentCard:
-        # AgentCard.from_dict is intentionally not implemented yet; return the
-        # wire object through a thin reconstruction of fields this project owns.
         payload = self._request("GET", A2A_AGENT_CARD_PATH)
         interfaces = payload.get("supportedInterfaces", [])
         skills = payload.get("skills", [])
@@ -377,19 +509,39 @@ class A2AHTTPClient:
         self,
         *,
         context_id: str | None = None,
-        states: set[A2ATaskState] | None = None,
-    ) -> tuple[A2ATask, ...]:
+        status: A2ATaskState | None = None,
+        page_size: int | None = None,
+        page_token: str | None = None,
+        history_length: int | None = None,
+        status_timestamp_after: str | None = None,
+        include_artifacts: bool | None = None,
+    ) -> A2AListTasksPage:
         params: list[tuple[str, str]] = []
         if context_id is not None:
             params.append(("contextId", context_id))
-        if states:
-            params.extend(("state", state.value) for state in sorted(states, key=lambda x: x.value))
+        if status is not None:
+            params.append(("status", status.value))
+        if page_size is not None:
+            params.append(("pageSize", str(page_size)))
+        if page_token is not None:
+            params.append(("pageToken", page_token))
+        if history_length is not None:
+            params.append(("historyLength", str(history_length)))
+        if status_timestamp_after is not None:
+            params.append(("statusTimestampAfter", status_timestamp_after))
+        if include_artifacts is not None:
+            params.append(("includeArtifacts", "true" if include_artifacts else "false"))
         suffix = "?" + urlencode(params) if params else ""
         payload = self._request("GET", "/tasks" + suffix)
         raw_tasks = payload.get("tasks", [])
         if not isinstance(raw_tasks, list):
             raise A2AHTTPError(502, "ListTasks response.tasks must be an array")
-        return tuple(A2ATask.from_dict(item) for item in raw_tasks)
+        return A2AListTasksPage(
+            tasks=tuple(A2ATask.from_dict(item) for item in raw_tasks),
+            next_page_token=str(payload.get("nextPageToken", "")),
+            page_size=int(payload.get("pageSize", 0)),
+            total_size=int(payload.get("totalSize", 0)),
+        )
 
     def cancel_task(self, task_id: str) -> A2ATask:
         return A2ATask.from_dict(

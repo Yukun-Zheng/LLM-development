@@ -17,6 +17,11 @@ from .engine import GenerationEngine
 from .evaluation import AggregateMetrics, TrajectoryMetrics, aggregate_metrics, summarize_codex_turn
 from .event_stream import DurableEventStream, RuntimeEvent
 from .http_app_server import HTTPAppTransport, LocalHTTPAppServer
+from .instructions import (
+    InstructionSource,
+    ProjectInstructionResolver,
+    ResolvedInstructions,
+)
 from .model import DecoderOnlyTransformer, ModelOutput
 from .multi_agent import SequentialCoordinator, WorkerResult
 from .paged_cache import ReferencePagedGenerationEngine, ReferencePagedKVCache
@@ -114,6 +119,7 @@ __all__ = [
     "HomogeneousBatchExecutor",
     "IGNORE_INDEX",
     "InProcessAppTransport",
+    "InstructionSource",
     "JournaledToolExecutor",
     "LeaseHeartbeat",
     "LocalHTTPAppServer",
@@ -127,6 +133,7 @@ __all__ = [
     "PrefixCacheStats",
     "PrefixPrefillResult",
     "Principal",
+    "ProjectInstructionResolver",
     "ReferencePagedGenerationEngine",
     "ReferencePagedKVCache",
     "ReferencePrefixCacheEngine",
@@ -139,6 +146,7 @@ __all__ = [
     "RequestMetrics",
     "RequestState",
     "RequestStatus",
+    "ResolvedInstructions",
     "RuntimeEvent",
     "RuntimeExecutionRecord",
     "SamplingConfig",

@@ -1,73 +1,77 @@
 # 实现状态：v3 Reference System
 
-> 本文件只记录**已经落地且有证据的实现**。机器可读事实源：[`../../能力清单-CAPABILITIES.json`](../../能力清单-CAPABILITIES.json) 与 `能力清单-CAPABILITIES-*.json`。任何 `planned` 都不能在 README 中被写成“已完成”。
+> 本文件只记录**已经落地且有证据的实现**。机器可读事实源是根目录的 [`../../能力清单-CAPABILITIES.json`](../../能力清单-CAPABILITIES.json) 与 `能力清单-CAPABILITIES-*.json`。任何 `planned` 都不能在 README 中被写成“已完成”。
 
 ---
 
 # 1　当前总览
 
-Reference System 已经形成六条可运行纵向链：
+Reference System 现在已经形成七条可运行纵向链：
 
 ```text
-Model:
+Model Runtime
 raw checkpoint → own Transformer → logits parity
 
-Inference:
-contiguous KV → reference paged KV → prefix reuse → scheduler
-→ real homogeneous batched forward → speculative decoding reference path
+Inference Runtime
+contiguous KV → paged KV reference → prefix reuse → scheduler
+→ homogeneous batched forward → speculative-decoding reference path
 
-Post-training:
-masked SFT → DPO → GRPO-style group-relative objective primitive
+Post-training
+masked SFT → DPO → group-relative / RLVR objective primitive
 
-Agent Runtime:
-submission → durable Thread → leased WorkItem → TurnExecutor
-→ journaled tools → checkpoint / recovery / ACK
-→ live steering / lease heartbeat
+Durable Agent Kernel
+submission → durable Thread → WorkItem lease → TurnExecutor
+→ journaled tools → checkpoint / crash recovery / ACK
+→ live steering → foreground/background lease heartbeat
 
-Control Plane / Context:
-Durable Event Feed → JSON-RPC App Server → real localhost HTTP
-→ Bearer AuthN → Method/Thread AuthZ → queue-fenced worker claim
-→ scoped AGENTS.md instructions → ContextStore provenance
-→ content-addressed artifacts
+Control Plane
+Durable Event Feed → JSON-RPC App Server → localhost HTTP
+→ Bearer AuthN/AuthZ → queue-level thread fencing
+→ SSE cursor replay / reconnect
 
-Evaluation:
-toy case/grader → deterministic repository fixture
-→ independent final-state verification
+Context / Artifacts
+scoped AGENTS.md → prompt injection → ContextStore provenance
+→ immutable content-addressed artifacts
+
+Security / Evaluation
+permission/approval gate → restricted subprocess execution
+→ independent repository final-state grading
 ```
 
-最新已核验 Fast CPU CI（run 127）：
+最新已核验 Fast CPU CI（run **152**）：
 
 ```text
-102 passed, 1 warning in 4.67s
+119 passed, 1 warning in 8.48s
 Ruff correctness lint: All checks passed
 ```
 
-这 102 个 tests 覆盖模型数学、cache/parity、真实 checkpoint、推理 primitives、post-training、工具/MCP、Codex harness、durability、tool idempotency、live steering、worker lease、artifact integrity、replayable runtime events、HTTP App Server、control-plane AuthN/AuthZ、queue-level thread fencing、scoped AGENTS instructions、ContextStore instruction provenance、security、evaluation 与 repository final-state grading。
+这 119 个 tests 已经同时覆盖模型数学、真实 checkpoint parity、cache/serving primitives、post-training objectives、MCP/Codex harness、durability、tool idempotency、live steering、lease/reclaim、background heartbeat、artifact integrity、runtime event replay、HTTP/SSE、control-plane AuthN/AuthZ、scoped AGENTS provenance、restricted-process security guards、evaluation 与 repository final-state grading。
 
 ---
 
 # 2　Model Runtime
 
-已实现：
+已经实现并验证：
 
 - [x] UTF-8 byte tokenizer / 教学版 byte-level BPE
 - [x] `ModelConfig` 与 tensor contract
-- [x] Embedding / RMSNorm / RoPE / causal attention
+- [x] Embedding / RMSNorm / RoPE / causal GQA
 - [x] half-split / interleaved RoPE
-- [x] GQA
 - [x] SwiGLU / residual block / LM head
 - [x] raw safetensors loader / key mapping / shape audit
 - [x] greedy / temperature / top-k / top-p / repetition penalty
 - [x] public checkpoint adapter
-- [x] `HuggingFaceTB/SmolLM2-135M` real checkpoint parity
+- [x] `HuggingFaceTB/SmolLM2-135M` tested real-checkpoint parity
 
-受测 CPU float32 / HF eager reference：
+当前受测 CPU float32 / HF eager reference：
 
 ```json
 {"max_abs": 0.0, "mean_abs": 0.0, "argmax_agreement": 1.0}
 ```
 
-边界：只证明当前 checkpoint / input / numerical setting；不能外推为“支持全部 Llama/Qwen/DeepSeek 架构”。
+这个结果只证明当前 checkpoint / input / numerical setting；不能外推为“支持全部 Llama/Qwen/DeepSeek 架构”。
+
+下一步模型侧重点不再是继续复制普通 Transformer，而是 multi-architecture adapter、hybrid attention / SSM reference implementation 与 activation-level parity。
 
 ---
 
@@ -82,9 +86,9 @@ Ruff correctness lint: All checks passed
 
 ## 3.2 Reference Paged KV
 
-`paged_cache.py` 已实现 logical pages、page growth 与 reference materialization，并验证 paged prefill/decode 与 full recomputation 对齐。
+`paged_cache.py` 已实现 logical page growth、per-layer page table 和 reference materialization，并验证 paged prefill/decode 与 full recomputation 对齐。
 
-**未声称 production benefit**：当前 reference path 仍可 materialize 为 contiguous K/V；它不是 vLLM-style physical block allocator + page-aware attention kernel。
+**未声称 production benefit**：当前 reference path 仍会 materialize contiguous K/V；它不是 vLLM-style physical block allocator + page-aware attention kernel。
 
 ## 3.3 Prefix Cache
 
@@ -92,32 +96,44 @@ Ruff correctness lint: All checks passed
 
 ```text
 partial prefix reuse → logits / K/V parity
-exact prefix hit     → no extra model forward
+exact prefix hit     → zero additional model forward
 ```
 
-下一步是 radix/block-hash index、eviction、physical block sharing 与 scheduler integration。
+仍缺 radix/block-hash index、eviction、physical block sharing 和 scheduler integration。
 
-## 3.4 Request Scheduler
+## 3.4 Request Scheduler / Batched Executor
 
-`scheduler.py` 已测试 max batch size、prefill token budget、decode-first、cancellation、TTFT、TPOT 与 total latency。
-
-## 3.5 真实 Batched Model Forward
+`scheduler.py` 已覆盖 max batch size、prefill token budget、decode-first、cancellation、TTFT、TPOT 和 total latency。
 
 `batch_executor.py` 能让多个等长 request 共用一次真实 batched forward，并把 K/V 拆回独立 request state。
 
-当前限制：同一 decode batch 仍要求相同 cached sequence length。真正 heterogeneous continuous batching 需要 per-request lengths / block tables / specialized attention backend。
+当前最大缺口是 heterogeneous / variable-length continuous batching：
 
-## 3.6 Speculative Decoding
+```text
+per-request sequence length
++ physical block table
++ page-aware attention backend
++ scheduler ↔ executor integration
+```
 
-`speculative.py` 已进入 reference implementation + tests。后续重点：draft/target distribution correctness、accept/reject parity、speedup crossover 与真实 latency benchmark。
+## 3.5 Speculative Decoding
+
+`speculative.py` 已进入 reference implementation + tests。下一层验收必须加入：
+
+```text
+draft/target distribution correctness
+accept/reject parity
+speedup crossover
+real latency benchmark
+```
 
 ---
 
 # 4　Post-training
 
-源码：`posttraining.py`, `rlvr.py`。
+## 4.1 SFT
 
-## SFT
+当前实现：
 
 ```text
 logits [B,T,V]
@@ -129,23 +145,37 @@ logits [B,T,V]
 → optimizer step
 ```
 
-已测试 uniform logits 下 masked CE=`log(V)`，且真实 AdamW step 更新 tiny Transformer 参数。
+已测试 uniform logits 下 masked CE=`log(V)`，且真实 AdamW step 会更新 tiny Transformer 参数。
 
-## DPO
+## 4.2 DPO
 
-已测试 `policy == reference → loss = log(2)`；policy 更新而 reference 保持冻结。
+已测试：
 
-## GRPO-style / RLVR primitive
+```text
+policy == reference → loss = log(2)
+policy parameters   → update
+reference model     → remains frozen
+```
 
-当前实现 verifier rewards → group-relative advantage → clipped surrogate → optional reference KL。
+## 4.3 Group-relative / RLVR primitive
 
-**边界**：仍是 objective primitive，不是完整 RLVR pipeline；尚缺 rollout generation、old-policy snapshot、真实 verifier environment、optimizer loop 与 held-out evaluator。
+`rlvr.py` 当前实现：
+
+```text
+verifier rewards
+→ group-relative advantage
+→ policy ratio
+→ clipped surrogate
+→ optional reference KL
+```
+
+**边界**：仍是 objective primitive，不是完整 RLVR pipeline。尚缺 rollout generation、old-policy snapshot、真正 environment verifier、optimizer loop、checkpoint 和 held-out evaluator。
 
 ---
 
 # 5　Codex-style Turn Executor
 
-`codex_harness.py` 当前状态：
+`codex_harness.py` clean-room teaching slice：
 
 ```text
 TURN_STARTED
@@ -157,9 +187,9 @@ TURN_STARTED
 → TURN_COMPLETED / TURN_STOPPED
 ```
 
-新增 `HarnessEventSink` 后，事件不再只能等 `run_turn()` 结束后批量返回，而可以在发生时写入 durable runtime feed。
+`HarnessEventSink` 允许事件发生时直接写入 durable runtime feed，而不是必须等 `run_turn()` 返回后批量获取。
 
-`SandboxPolicy` 仍只是 metadata contract，不是 OS isolation。
+这里的 `codex_harness.SandboxPolicy` 只是**模型可见的 turn/session metadata contract**；真正的执行限制现在单独进入 `sandbox.py`，两者不能混为一谈。
 
 ---
 
@@ -167,9 +197,9 @@ TURN_STARTED
 
 ## 6.1 Thread / Event Store
 
-`durable.py` 已有 persistent ThreadId/TurnId、append-only event log、restart replay、submission/checkpoint、pause/resume、terminal states、fork、parent provenance 与独立 child cancellation。
+`durable.py` 已有：persistent ThreadId / TurnId、append-only event log、restart replay、submission/checkpoint、pause/resume、terminal states、fork、parent provenance 与独立 child cancellation。
 
-## 6.2 Work Queue / Lease / Scoped Claim
+## 6.2 Work Queue / Lease / Thread-fenced Claim
 
 `runtime_queue.py`：
 
@@ -182,32 +212,52 @@ PENDING
 └─ lease expires → another worker reclaim
 ```
 
-`runtime_control.py` 的 `LeaseHeartbeat` 已验证 lease renewal 能阻止过早 reclaim。
+`DurableWorkQueue.claim(...)` 支持 `thread_ids`，thread authorization 已下沉到 SQL claim transaction，而不是先拿到未授权 work 再拒绝。
 
-现在 `DurableWorkQueue.claim(...)` 还接受 `thread_ids`，并在同一个 SQL claim transaction 内增加 thread filter。测试故意让未授权 `thr_b` 的 work 更早入队，再让只允许 `thr_a` 的 worker 领取任务：结果 `thr_a` 被执行，`thr_b` 仍保持 `PENDING`。
+## 6.3 Foreground + Background Heartbeat
 
-这意味着 thread authorization 已经从 App Server 下沉到真正的 capability acquisition point，而不是“先 lease 再拒绝”。
-
-**边界**：当前 integrated runtime 在 model sampling 边界续约。单个超长 tool/RPC 仍需要 background heartbeat 或 tool-owned lease。
-
-## 6.3 Tool Journal / Crash Recovery
-
-`tool_journal.py` 已验证：completed call replay 不重复副作用、restart 后 replay、key rebinding rejection、STARTED-only in-doubt protection、recovered TurnId 复用、`turn_finished` checkpoint 无 model resampling 完成 work。
-
-仍不等于通用 exactly-once；远端服务需 tool-specific reconciliation / external idempotency key。
-
-## 6.4 Live Steering
-
-`steering.py` + `ControlledBackend`：
+当前有两层 lease protection：
 
 ```text
-heartbeat
-→ atomically consume pending steering
-→ append steering to transcript
-→ model.generate(...)
+model-sampling boundary
+→ LeaseHeartbeat
+
+long blocking model/tool call
+→ BackgroundLeaseHeartbeat
 ```
 
-已测试 steering 在 tool body 执行期间到达时，下一次 model sampling 可看到新要求。
+CI 曾经真实暴露一个 startup race：heartbeat 线程被创建并不代表第一轮续租已经成功，极短 lease 在 CI 调度压力下会先过期。
+
+现在 `BackgroundLeaseHeartbeat.start()` 使用：
+
+```text
+synchronous renewal
+→ spawn thread
+→ immediate thread-side renewal
+→ ready barrier
+→ start() returns
+```
+
+只有后台续租真正 arm 成功后，调用方才继续进入受保护的长阻塞工作。测试还把 protected section 设置为**长于原始 lease**，并验证 competitor 仍不能 reclaim。
+
+这仍不是分布式 fencing-token / consensus protocol；worker 若失去 lease，外部 side effect 仍需更强的 ownership fencing。
+
+## 6.4 Tool Journal / Crash Recovery
+
+`tool_journal.py` 已验证：
+
+- [x] completed call replay 不重复副作用
+- [x] restart 后 replay
+- [x] idempotency-key rebinding rejection
+- [x] STARTED-only non-idempotent call → in-doubt，不盲重试
+- [x] recovered TurnId 复用
+- [x] `turn_finished` checkpoint 可无 model resampling 完成 work
+
+仍不等于通用 exactly-once；远端服务需 tool-specific reconciliation 或 external idempotency key。
+
+## 6.5 Live Steering
+
+`steering.py` + `ControlledBackend` 已验证：steering 即使在 tool body 执行期间到达，也会在下一次 model sampling 前被持久化消费并注入 transcript。
 
 ---
 
@@ -228,21 +278,7 @@ INSTRUCTION
 
 Compaction summary 保留 parent lineage，raw evidence 不被覆盖。
 
-现在 `ContextStore.add_resolved_instructions(...)` 会把真正进入 Coding Agent prompt 的每一层仓库指令保存为 `INSTRUCTION` fragment，并记录：
-
-```text
-source_path
-scope_directory
-candidate_name
-truncated
-bytes_loaded
-project_root
-cwd
-max_bytes
-order
-```
-
-因此“模型为什么看到了这条规则”开始能从 prompt 反向追到具体仓库文件与作用域。
+`ContextStore.add_resolved_instructions(...)` 会把真正进入 Coding Agent prompt 的仓库指令保存为 `INSTRUCTION` fragment，并记录 source path、scope、candidate name、truncation、byte budget、project root、cwd 和 order。
 
 ## 7.2 Scoped AGENTS.md
 
@@ -251,35 +287,37 @@ order
 ```text
 nearest project root
 → root ... cwd
-→ each directory selects one candidate
+→ each directory chooses one candidate
    AGENTS.override.md
    > AGENTS.md
-   > configured fallbacks
-→ one global byte budget
+   > configured fallback
+→ global byte budget
 → exact source/scope/truncation provenance
 ```
 
-`coding.py` 已把 resolved instructions 注入 Coding Agent system prompt；可选 `ContextStore` 同时持久化同一组 model-visible instructions。
-
-负对照测试证明：
-
-```text
-root instruction    → visible
-cwd instruction     → visible
-sibling instruction → not visible
-```
-
-当前未复现 Codex 的 remote filesystem abstraction、multi-environment labeling、project trust gating 和完整 config layering。
+负对照测试证明 sibling instruction 不会污染当前 cwd。
 
 ## 7.3 Artifact Store
 
-`artifacts.py` 使用 SHA-256 content-addressed immutable snapshots；相同 bytes 可复用 object，读取时重新校验 checksum，篡改会报错。
+`artifacts.py` 使用 SHA-256 content-addressed immutable snapshots。相同 bytes 可复用 object，读取时重新校验 checksum，篡改会失败。
 
-Checksum 证明 byte integrity，不证明 semantic correctness；后者仍需要 verifier/grader/reviewer。
+Checksum 只证明 byte integrity，不证明 semantic correctness；后者仍由 verifier/grader/reviewer 负责。
 
 ---
 
 # 8　Security
+
+安全栈现在明确拆成四层：
+
+```text
+Control-plane AuthN/AuthZ
+        ↓
+Tool Permission / Approval
+        ↓
+Restricted Process Execution
+        ↓
+[planned] OS / Container Isolation
+```
 
 ## 8.1 Tool permission gate
 
@@ -297,9 +335,9 @@ Tool Proposal
 
 DENY / approval reject 时底层 tool body 不执行。
 
-## 8.2 Control-plane AuthN/AuthZ + Queue Fencing
+## 8.2 Control-plane AuthN/AuthZ
 
-`control_auth.py`、App Server、runtime 与 work queue 现在形成：
+`control_auth.py` 已形成：
 
 ```text
 Bearer token
@@ -308,87 +346,96 @@ Bearer token
 ├─ allowed_methods
 └─ thread_ids
 → App Server Authorization
-→ allowed_thread_ids
-→ SQL-filtered DurableWorkQueue.claim
+→ SQL-filtered WorkQueue claim
 ```
 
-已验证：
+已覆盖 missing/invalid/expired/revoked token、method scope、thread scope、scoped `runtime/runOne`、HTTP bearer 与队列级 thread fencing。Authorizer 还已有显式 expiry、revoke、rotate 生命周期。
+
+**边界**：credential metadata 仍是 process-local；没有 OIDC、mTLS、secure distributed persistence、distributed revocation propagation 或外部 policy engine。
+
+## 8.3 Restricted Subprocess Sandbox Guards
+
+新增 `sandbox.py`。当前真正 enforce 的是：
 
 ```text
-missing / invalid token         → -32001 Unauthenticated
-wrong method                    → -32003 Forbidden
-wrong thread                    → -32003 Forbidden
-scoped event/poll(all)          → Forbidden
-scoped runOne without threadId  → Forbidden
-scoped runOne wrong threadId    → Forbidden
-scoped runOne allowed threadId  → executes only that thread
-older unauthorized work         → remains PENDING
-admin global worker             → allowed
-HTTP bearer                     → same policy as in-process
+✅ argv-only execution；不经过 shell parser
+✅ executable basename allowlist
+✅ cwd 不能逃出 workspace root
+✅ child environment allowlist；默认不继承任意 secret
+✅ wall-clock timeout
+✅ timeout 时 kill process group
+✅ POSIX CPU / file-size / open-file / process-count rlimits
+✅ optional address-space limit
+✅ core dump disabled
+✅ Linux PR_SET_NO_NEW_PRIVS
+✅ output clipping
 ```
 
-Bearer token 当前仅做 SHA-256 digest → in-memory Principal mapping。没有 expiry、rotation、OIDC、mTLS、distributed policy engine。
+测试会直接验证：cwd escape / disallowed executable / forbidden env key 被拒绝；父进程假 secret 不会出现在 child；长任务超时；Linux child 的 `/proc/self/status` 显示 `NoNewPrivs: 1`。
 
-## 8.3 仍缺真正 sandbox
+`coding.py` 现在支持 opt-in：
 
-真实 OS/container enforcement 仍未实现：process isolation、filesystem namespace/policy、network isolation、credential scope、resource limits、escape tests。
+```text
+legacy teaching mode → ShellTool
+restricted mode      → SandboxExecTool
+```
 
-**Auth ≠ Permission ≠ Sandbox。** 三层不能互相冒充。
+restricted mode 中 `shell` 会从工具表消失，Agent 只能提交 argv array。
+
+## 8.4 尚未完成的真正 OS / Container Sandbox
+
+当前**没有**声称可以安全运行任意恶意代码。仍未实现：
+
+```text
+mount namespace / isolated rootfs
+filesystem read/write policy
+network namespace / network-none
+seccomp or equivalent syscall filtering
+capability drop
+container/VM boundary
+credential broker
+host-secret / fs-escape / network-escape adversarial tests
+```
+
+因此 machine-readable capability 将：
+
+```text
+security.restricted_subprocess_sandbox = validated
+security.os_container_sandbox          = planned
+```
+
+**Auth ≠ Approval ≠ Restricted Process ≠ OS Sandbox。**
 
 ---
 
-# 9　Event Feed / App Server / HTTP
+# 9　Event Feed / App Server / HTTP / SSE
 
 ## 9.1 Durable Runtime Event Feed
 
-`event_stream.py` 是独立于 authoritative Thread event log 的 integration feed：
+`event_stream.py` 是独立于 authoritative Thread event log 的 integration feed，支持 cursor replay、thread/topic filter、high watermark 与 restart-safe replay。Harness events 会在发生时进入 feed。
+
+## 9.2 App Server + HTTP
+
+`app_server.py` 当前暴露 thread lifecycle、runtime execution、artifact listing、event polling 等 JSON-RPC 方法；`http_app_server.py` 已让同一语义真正经过 localhost TCP/HTTP。
+
+HTTP server thread 使用独立 runtime/SQLite handles，避免跨线程复用 SQLite connection。
+
+## 9.3 SSE durable push
+
+`sse_events.py` 已提供 durable-cursor-backed SSE reference path：
 
 ```text
-event_id
-+ topic
-+ payload
-+ thread_id
-+ turn_id
-+ created_at
+catch-up from cursor / Last-Event-ID
+→ live delivery
+→ disconnect
+→ reconnect from last durable event id
 ```
 
-支持 `afterEventId` cursor replay、thread/topic filter、high watermark 与 restart-safe replay。
+并复用 control-plane AuthN/AuthZ 做 thread-scoped event visibility。
 
-`CodexHarness` 事件通过 `event_sink` 在发生时进入 feed，而不是等整个 Turn 完成。
+**边界**：仍是 localhost/reference server；没有 TLS termination、WebSocket duplex channel、production backpressure、rate limiting、OIDC/session gateway 或多节点 fan-out。
 
-## 9.2 App Server
-
-`app_server.py` 当前方法：
-
-```text
-server/discover
-thread/create / get / submit / steer
-thread/pause / resume / cancel / fork
-runtime/runOne
-artifact/list
-event/poll
-```
-
-`runtime/runOne` 现在支持可选 `threadId`，并将其传入 queue-level claim filter。
-
-## 9.3 Real localhost HTTP
-
-`http_app_server.py` 已让 JSON 真正走：
-
-```text
-AgentAppClient
-→ HTTPAppTransport
-→ localhost TCP/HTTP
-→ LocalHTTPAppServer
-→ AgentAppServer
-→ DurableAgentRuntime
-```
-
-HTTP server thread 为自己打开独立 runtime/SQLite handles，避免跨线程复用 SQLite connection；HTTP / in-process 两种 transport 使用同一 auth policy。
-
-**边界**：默认仅 loopback、serialized reference server；无 TLS、SSE/WebSocket、production concurrency、rate limit、OIDC 或公网 hardening。
-
-配套课程：Lesson 09–12。
+配套课程：Lesson 09–14。
 
 ---
 
@@ -409,30 +456,39 @@ real edit + command verification      → PASS
 
 # 11　Protocols / Multi-Agent / Computer Use
 
-已实现：minimal MCP JSON-RPC discover/list/call；task DAG、coordinator、worktree primitive；replayable App Server control plane；local HTTP bearer auth；queue-level scoped worker claim。
+已经实现：minimal MCP JSON-RPC discover/list/call；task DAG、sequential coordinator、worktree primitive；replayable App Server；HTTP/SSE；scoped worker claim。
 
-仍未实现：完整 MCP transports/auth/tasks/extensions、A2A runtime、persistent AgentGraph/mailbox、parallel reviewer/merge、JS browser、DOM/A11y、screenshot/grounding、mouse/keyboard、Computer Use verifier。
+仍未实现：完整 MCP transports/auth/tasks/extensions、A2A runtime、persistent AgentGraph/mailbox、parallel reviewer/merge、JS browser、DOM/A11y、screenshot grounding、mouse/keyboard 与 Computer Use verifier。
 
 ---
 
 # 12　最新硬证据
 
-Fast CPU CI run 127：
+Fast CPU CI run **152**：
 
 ```text
-102 passed, 1 warning in 4.67s
+119 passed, 1 warning in 8.48s
 Ruff correctness lint: All checks passed
 ```
 
-本轮新增回归覆盖：
+这一轮最重要的新增/强化回归是：
 
 ```text
-queue-level authorized thread claim
-older unauthorized work negative control
-instruction → ContextStore provenance persistence
+restricted argv-only subprocess execution
+workspace cwd escape negative control
+executable allowlist negative control
+environment secret scrubbing
+wall-time timeout + process-group kill
+Linux NoNewPrivs = 1 direct observation
+SandboxExecTool metadata
+Coding Agent shell → sandbox_exec replacement
+background heartbeat synchronous arming
+heartbeat ready barrier
+blocking model call longer than original lease
+competitor reclaim remains forbidden
 ```
 
-此前同一全量回归还覆盖 runtime cursor replay、HTTP round-trip、Bearer AuthN/AuthZ、AGENTS hierarchy 与 Coding Agent instruction injection。
+CI 之前确实捕获了 heartbeat startup race；不是把 flaky test 删除，而是先补两阶段 arming，再把测试时间窗改成明显大于 scheduler quantum。现在它验证的是 lease/liveness 语义，而不是 CI 调度运气。
 
 ---
 
@@ -442,7 +498,7 @@ instruction → ContextStore provenance persistence
 
 - [ ] heterogeneous / variable-length batching
 - [ ] scheduler ↔ batch executor 完整 request-state integration
-- [ ] real physical block allocator / free list / prefix sharing
+- [ ] physical KV block allocator / free list / prefix sharing
 - [ ] chunked / disaggregated prefill
 - [ ] speculative decoding real speed/distribution benchmark
 - [ ] throughput / memory / fairness benchmark
@@ -457,36 +513,35 @@ instruction → ContextStore provenance persistence
 
 ## Agent OS / Control Plane
 
-- [x] durable tool execution journal / idempotency semantics
+- [x] durable tool journal / idempotency semantics
 - [x] crash recovery for completed side effects / finished checkpoints
 - [x] live steering
-- [x] worker lease renewal primitive
+- [x] foreground + background lease heartbeat
 - [x] content-addressed artifact store
 - [x] durable cursor-replay runtime event feed
-- [x] App Server `event/poll`
-- [x] real localhost HTTP JSON-RPC transport
-- [x] Bearer AuthN + method/thread AuthZ
+- [x] localhost HTTP JSON-RPC transport
+- [x] Bearer AuthN + method/thread AuthZ + credential lifecycle
 - [x] queue-level authorized thread claim
-- [x] scoped `AGENTS.md` resolver + coding-prompt injection
-- [x] project instruction → `ContextStore` provenance persistence
-- [ ] background heartbeat for one long tool/RPC
-- [ ] steering / artifacts / verifier → unified rollout provenance
-- [ ] SSE / WebSocket push backed by durable cursor
-- [ ] token expiry / rotation / session identity
-- [ ] rollout trace linked to artifacts/context/instructions
+- [x] scoped `AGENTS.md` + ContextStore provenance
+- [x] SSE durable cursor push / reconnect
+- [ ] steering / artifact / verifier → one unified rollout trace
+- [ ] WebSocket duplex control channel
+- [ ] production session gateway / distributed identity
 
 ## Security / General Agent
 
-- [ ] enforced OS/container sandbox + escape tests
-- [ ] fs/network/secret scope
+- [x] restricted subprocess execution guards
+- [ ] real OS/container sandbox + escape tests
+- [ ] filesystem/network/secret capability broker
 - [ ] JS browser / DOM / Accessibility Tree
-- [ ] screenshot / grounding / mouse / keyboard
+- [ ] screenshot grounding / mouse / keyboard
 
 ## Evaluation / Coding / Multi-Agent
 
 - [x] deterministic repository fixture grader
-- [ ] multi-file/hidden-test fixture suite
+- [ ] multi-file hidden-test fixture suite
 - [ ] SWE-bench adapter
 - [ ] tree-sitter / LSP / semantic patch
-- [ ] parallel workers / mailbox / reviewer / merge
-- [ ] controlled 1/2/4/8-agent comparison
+- [ ] persistent AgentGraph / mailbox
+- [ ] parallel workers / reviewer / merge
+- [ ] controlled 1/2/4/8-agent success/cost/time comparison

@@ -1,21 +1,40 @@
 # 评测实验室 / Evaluation Lab
 
-> **定位**：把“pytest 通过”“模型输出看起来不错”和“智能体在真实环境里真的完成任务”严格分开。
+> **定位**：这是全项目的**实验事实层**。把“pytest 通过”“模型最后说自己完成了”和“智能体真的改变了正确的环境状态”严格分开。
 
 单元测试回答：**实现是否满足代码契约？**  
-能力评测回答：**系统在给定环境、预算和 grader 下完成多少工作，代价和失败模式是什么？**
+能力评测回答：**系统在给定环境、预算和 grader 下完成多少真实工作，代价与失败模式是什么？**
 
 ---
 
-# 1　现在已经有可执行评测 substrate
+# 1　当前可执行评测栈
+
+```text
+Trajectory Metrics          evaluation.py
+        ↓
+Generic Case / Grader       benchmark.py
+        ↓
+Repository Final-state Eval repository_eval.py
+        ↓
+[next] hidden/multi-file repository suite
+        ↓
+[next] SWE-bench / Browser / OS adapters
+```
 
 源码：
 
-- [`evaluation.py`](../代码-code/从零构建Astra与Codex级系统/src/astra_codex/evaluation.py)：trajectory metrics；
-- [`benchmark.py`](../代码-code/从零构建Astra与Codex级系统/src/astra_codex/benchmark.py)：case / executor / grader / record；
-- [`test_scheduler_benchmark.py`](../代码-code/从零构建Astra与Codex级系统/tests/test_scheduler_benchmark.py)：确定性 reference tests。
+- [`evaluation.py`](../代码-code/从零构建Astra与Codex级系统/src/astra_codex/evaluation.py)
+- [`benchmark.py`](../代码-code/从零构建Astra与Codex级系统/src/astra_codex/benchmark.py)
+- [`repository_eval.py`](../代码-code/从零构建Astra与Codex级系统/src/astra_codex/repository_eval.py)
 
-当前数据流：
+测试：
+
+- [`test_scheduler_benchmark.py`](../代码-code/从零构建Astra与Codex级系统/tests/test_scheduler_benchmark.py)
+- [`test_repository_eval.py`](../代码-code/从零构建Astra与Codex级系统/tests/test_repository_eval.py)
+
+---
+
+# 2　通用 Case / Grader 分层
 
 ```text
 BenchmarkCase
@@ -33,15 +52,66 @@ BenchmarkRecord
 AggregateMetrics
 ```
 
-`BenchmarkHarness` 刻意不把“assistant 最后说了什么”直接当作成功；成功需要 grader/verifier 决定。
+`BenchmarkHarness` 刻意不把 assistant final answer 当作 success。是否成功由外部 grader 决定。
 
-Fast CI 已验证一个两个 case 的 toy suite：一个通过、一个失败，aggregate `success_rate=0.5`。这证明评测框架的分层行为，不代表真实 Agent benchmark 能力。
+当前 toy suite 已自动验证：两个 case 中一个通过、一个失败，aggregate `success_rate=0.5`。
 
 ---
 
-# 2　统一指标层
+# 3　Repository Fixture：第一个真正的环境终态评测
 
-当前 `TrajectoryMetrics` 可记录：
+`RepositoryFixture` 当前固定：
+
+```text
+case_id
+goal
+initial files
+verify argv
+optional expected final files
+timeout
+```
+
+Harness：
+
+```text
+materialize repository
+→ git init
+→ Coding Agent executes
+→ Agent stops
+→ independent verify command
+→ expected-file check
+→ RepositoryGrade
+```
+
+最重要的是 grading 发生在 Agent 完成以后，并且不信任其自然语言结论。
+
+自动测试故意构造：
+
+```text
+Case A
+Agent: "I fixed it and all tests pass."
+但没有调用任何工具，也没有修改 solution.py
+→ external command fails
+→ expected file mismatch
+→ FAIL
+
+Case B
+Agent performs real exact edit
+→ runs command
+→ external harness independently reruns verifier
+→ final file matches expected state
+→ PASS
+```
+
+这使本项目第一次拥有：
+
+> **“模型自述成功”与“最终环境成功”可被系统性区分的 coding-agent benchmark。**
+
+---
+
+# 4　统一 Trajectory Metrics
+
+当前已经能记录：
 
 ```text
 success
@@ -57,7 +127,7 @@ output_tokens
 cost_usd
 ```
 
-最终扩展：
+后续扩展：
 
 ```text
 context_compactions
@@ -72,162 +142,163 @@ environment_errors
 artifact_count
 ```
 
-Inference 侧统一记录：
+Inference 侧统一：
 
 ```text
 TTFT
 TPOT / ITL
 throughput
-prompt/decode tokens
-KV/state memory
 queueing delay
 batch occupancy
+KV/state memory
 scheduler fairness
 ```
 
 ---
 
-# 3　成功必须来自环境/Artifact 证据
+# 5　Benchmark Case 的复现信息
 
-不接受：
-
-```text
-assistant: "任务已经完成。"
-```
-
-作为完成证据。
-
-Coding Agent 至少应形成：
-
-```text
-initial repository
-→ issue
-→ trajectory
-→ patch
-→ tests
-→ final git diff
-→ deterministic/hidden grader
-```
-
-Browser / Computer Agent：
-
-```text
-initial environment state
-→ actions
-→ final environment state
-→ hidden/deterministic grader
-```
-
-研究 Agent：
-
-```text
-question
-→ sources / files / computation
-→ artifact
-→ factual / structural / reproducibility grader
-```
-
----
-
-# 4　Benchmark Case 规范下一步
-
-真实 benchmark adapter 每个 case 至少固定：
+真实 adapter 每个 case 最终必须固定：
 
 ```text
 case_id
-benchmark_version
+benchmark version
 environment/image version
 initial state
 goal
 tool/action budget
 timeout
-model settings
+model/backend settings
 permission profile
 sandbox profile
 grader version
 expected artifacts
+random seeds / nondeterminism policy
 ```
 
-否则：
-
-```text
-score A > score B
-```
-
-无法知道到底来自模型、harness、环境、tool budget 还是 grader 差异。
+否则两次 score 无法科学比较。
 
 ---
 
-# 5　Controlled Comparison 是核心，而不是排行榜
+# 6　Controlled Comparison 优先于排行榜
 
-任何新模块优先回答“它究竟贡献了什么”。
+本项目后续最重要的评测不是“我们的 Agent 排第几”，而是：
 
-例如：
-
-| 对照 | 主要测量 |
+| 对照 | 主要问题 |
 |---|---|
-| memory vs no-memory | success / context tokens / stale retrieval |
-| raw history vs compaction | success / tokens / evidence loss |
-| planner vs reactive | success / steps / replans |
-| 1 vs 2 vs 4 vs 8 agents | success / wall time / tokens / conflicts / cost |
-| reviewer vs no-reviewer | regressions / false positives / cost |
-| DOM vs screenshot | grounding success / latency / token/image cost |
-| contiguous vs paged KV | logits parity / memory / fragmentation |
-| scheduler A vs B | TTFT / TPOT / throughput / fairness |
-| normal vs speculative decode | distribution parity / latency / accepted tokens |
+| memory vs no-memory | Memory 是否真的提高成功率，还是只增加 context/cost？ |
+| raw history vs compaction | 压缩节省多少 token，又丢多少证据？ |
+| planner vs reactive | plan 是否减少失败/重试？ |
+| 1 vs 2 vs 4 vs 8 agents | 并行是否值得额外 token/conflict/merge cost？ |
+| reviewer vs no-reviewer | reviewer 能减少多少 regression？ |
+| DOM vs screenshot | 哪种 observation 对 GUI grounding 更有效？ |
+| contiguous vs paged KV | 数值等价后，memory/fragmentation 收益多少？ |
+| scheduler A vs B | TTFT/TPOT/throughput/fairness trade-off？ |
+| normal vs speculative | 分布是否一致，实际 latency 是否下降？ |
+| no durability vs durable runtime | crash 后 completion/lost work/duplicate side effect 如何变化？ |
 
 ---
 
-# 6　Benchmark 路线
+# 7　Benchmark 路线
 
 ```text
-Level 0  deterministic local toy cases        ✅ substrate 已有
-Level 1  repository fixtures                  ← 当前下一步
-Level 2  SWE-bench adapter
-Level 3  browser environment adapter
-Level 4  OS/computer environment adapter
-Level 5  long-horizon cross-application tasks
+Level 0   deterministic toy case / grader              ✅
+Level 1a  single-file repository final-state fixture   ✅
+Level 1b  multi-file + hidden-test repository suite    ← next
+Level 2   SWE-bench adapter
+Level 3   browser environment adapter
+Level 4   OS/computer environment adapter
+Level 5   long-horizon cross-application + crash/recovery
 ```
 
-Level 1 不需要先追求大规模 benchmark。先建立几个完全可复现的小仓库：bug、feature、refactor、test failure、multi-file dependency，让 patch + tests + artifact grader 的闭环稳定，再接 SWE-bench。
+Level 1b 应先覆盖：
+
+```text
+bug fix
+feature addition
+multi-file dependency
+refactor with behavior preservation
+hidden regression
+failing test localization
+```
+
+并保存 patch / test / final-state artifacts。
 
 ---
 
-# 7　评测与训练的接口
+# 8　评测与 RL 的隔离
 
-随着 Agentic RL 加入，评测必须和 reward 严格区分：
+随着 verifier RL 加入，必须强制：
 
 ```text
-training verifier / reward
-            ≠
+training reward / verifier
+!=
 held-out evaluator
 ```
 
-否则系统会直接优化 grader，而不是任务本身。
-
-未来 RLVR/Agentic RL 实验至少保留：
+否则可能得到：
 
 ```text
-train environments
-held-out environments
-reward function version
-evaluation grader version
+training reward ↑
+held-out task success ↔ / ↓
 ```
 
-并报告 reward hacking / overfitting。
+而误以为 reasoning 变强。
+
+所以未来 SFT→DPO→RLVR 实验必须同时记录：
+
+```text
+train environment set
+training reward version
+held-out environment set
+evaluator/grader version
+reward curve
+held-out success curve
+```
 
 ---
 
-# 8　原则
+# 9　与 Durable Runtime 的交叉评测
+
+长程 Agent 的可靠性不能靠“支持 resume”这句话证明。
+
+未来 resilience benchmark：
+
+```text
+start task
+→ execute side effects
+→ kill worker at controlled point
+→ lease expires / runtime restarts
+→ replay/checkpoint recovery
+→ continue
+→ final-state grader
+```
+
+测量：
+
+```text
+completion rate
+recovery latency
+lost work
+duplicate side effects
+manual interventions
+final artifact correctness
+```
+
+这会直接检验 durable runtime 的设计是否真正有价值。
+
+---
+
+# 10　原则
 
 ```text
 Unit Test != Capability Eval
+Final Answer != Final Environment State
 Benchmark Score != Scientific Explanation
-Model Quality != Agent Runtime Quality
+Model Quality != Runtime Quality
 Agent Count != Multi-Agent Benefit
 Long Context != Long-Horizon Reliability
-Final Answer != Final Environment State
 Training Reward != Held-out Evaluation
 ```
 
-本目录最终是整个项目的**实验事实层**：任何“更强、更快、更安全、更可靠”的结论，都必须能在这里找到可重复的任务、环境、grader、指标与对照。
+任何“更强、更快、更可靠、更安全”的结论，最终都必须在本层找到**可重复任务、固定环境、grader、指标、artifact 与对照组**。

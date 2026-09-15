@@ -1,6 +1,6 @@
 # Lesson 23　A2A v1：从远程任务协议到 Durable Agent Runtime
 
-> 本课不是“介绍一下 A2A”。目标是把 **A2A v1 原始协议对象、HTTP+JSON wire binding 和我们自己的 Durable Agent Runtime** 一层层对应起来，并明确哪些已经实现、哪些仍然没有实现。
+> 本课不是“介绍一下 A2A”。目标是把 **A2A v1 原始协议对象、HTTP+JSON wire binding、SSE streaming 和我们自己的 Durable Agent Runtime** 一层层对应起来，并明确哪些已经实现、哪些仍然没有实现。
 
 ---
 
@@ -16,15 +16,15 @@
 
 https://github.com/a2aproject/A2A/blob/6d6640c29b102f7a8d23784901351b5d2454fe71/specification/a2a.proto
 
-官方 v1 文档同时说明标准 binding 包括 JSON-RPC、gRPC 和 HTTP+JSON：
+官方 v1 文档：
 
 https://github.com/a2aproject/A2A/blob/6d6640c29b102f7a8d23784901351b5d2454fe71/docs/specification.md
 
-因此本项目不会继续沿用旧版博客中常见的 `message/send`、`tasks/get` 等模糊伪路径，而直接对齐 pinned v1 proto。
+因此本项目不会继续沿用旧版博客中常见的 `message/send`、`tasks/get` 等近似写法，而直接对齐 pinned v1 proto。
 
 ---
 
-## 2　先分清 MCP 与 A2A
+## 2　MCP 与 A2A 解决的是不同边界
 
 MCP 主要回答：
 
@@ -44,13 +44,13 @@ long-running Task / Message / Artifact
 Agent B
 ```
 
-Tool 调用通常更像：
+Tool 调用通常近似：
 
 ```text
 arguments → result
 ```
 
-Agent 协作则可能持续很久：
+Agent 协作则可能经历：
 
 ```text
 goal
@@ -66,9 +66,9 @@ goal
 
 ---
 
-## 3　v1 的几个核心对象
+## 3　v1 核心对象
 
-当前 `a2a.py` 从原始 proto clean-room 实现了：
+当前 `a2a.py` 从原始 proto clean-room 实现：
 
 ```text
 AgentCard
@@ -84,7 +84,7 @@ TaskStore
 A2AService
 ```
 
-Task state 不是自己发明的字符串，而是 pinned v1 中的：
+Task state 严格保留 pinned v1 wire enum：
 
 ```text
 TASK_STATE_UNSPECIFIED
@@ -98,13 +98,13 @@ TASK_STATE_REJECTED
 TASK_STATE_AUTH_REQUIRED
 ```
 
-这里一个重要教学原则是：**协议 enum 拼写本身就是 wire contract。**
+协议 enum 的拼写本身就是 wire contract，不能为了“更 Pythonic”自行改成 `done`、`waiting`、`cancelled`。
 
 ---
 
 ## 4　Part 为什么不是只有文本
 
-A2A `Part` 是通信内容容器。原始 proto 的 oneof 包含：
+原始 proto 中 `Part` 的 oneof 是：
 
 ```text
 text
@@ -121,15 +121,15 @@ media_type
 metadata
 ```
 
-这意味着未来 Astra-class Agent 间传递的不只是聊天文字，还可能是：
+因此 Agent-to-Agent 通信天然可以承载文本、结构化 JSON、文件引用和多模态内容。
 
-- JSON 数据；
-- 图片/音频/视频；
-- 文件 URL；
-- 二进制内容；
-- 结构化 artifact metadata。
+但“协议允许”不等于“runtime 可以安全处理”。当前 `a2a_runtime_bridge.py`：
 
-我们当前 runtime bridge 对 `text` 和 `data` 有明确处理；对 `raw` 和 `url` **主动拒绝**，因为如果没有下载策略、MIME 校验、大小限制、凭证策略和 sandbox，就不应该偷偷替 Agent 拉取外部内容。
+- 明确支持 `text`；
+- 将 `data` 序列化为结构化文本进入当前模型上下文；
+- 对 `raw` 与 `url` 主动拒绝。
+
+这是因为真正支持 URL/raw 还需要下载策略、MIME 校验、大小限制、credential scope、malware/content inspection 与 sandbox。项目不会偷偷帮 Agent 下载外部内容后再宣称“多模态支持”。
 
 ---
 
@@ -146,13 +146,13 @@ POST /tasks/{id}:cancel
 GET  /tasks/{id}:subscribe
 ```
 
-Agent Card 的标准公开发现入口是：
+Agent Card 的公开发现入口：
 
 ```text
 GET /.well-known/agent-card.json
 ```
 
-我们的 `a2a_http.py` 当前只实现一个**可验证子集**：
+当前 `a2a_http.py` 已实现并用真实 localhost TCP/HTTP 测试：
 
 ```text
 GET  /.well-known/agent-card.json
@@ -162,35 +162,85 @@ GET  /tasks
 POST /tasks/{id}:cancel
 ```
 
-没有实现的东西不会写成已完成：
+当前还没有完成：
 
 ```text
-/message:stream                 ❌
 /tasks/{id}:subscribe           ❌
 push notification configs      ❌
 extended authenticated card    ❌
 tenant-prefixed routes          ❌
-full pagination                 ❌
-TLS / protocol auth             ❌
+A2A transport security          ❌
 official conformance suite      ❌
 ```
 
+`POST /message:stream` 已进入独立 SSE reference path，见第 12 节。
+
 ---
 
-## 6　`returnImmediately` 的语义
+## 6　ListTasks：用一个小接口检查协议严谨性
 
-原始 `SendMessageConfiguration` 规定：
+原始 `ListTasksRequest` 不是随便的 `GET /tasks`，而包含：
+
+```text
+tenant
+context_id
+status
+page_size
+page_token
+history_length
+status_timestamp_after
+include_artifacts
+```
+
+HTTP+JSON 使用 camelCase：
+
+```text
+contextId
+status
+pageSize
+pageToken
+historyLength
+statusTimestampAfter
+includeArtifacts
+```
+
+响应还需要：
+
+```text
+tasks
+nextPageToken
+pageSize
+totalSize
+```
+
+当前 reference implementation 已完成：
+
+- `status` 单状态过滤，而不是自己发明 `states=` wire 字段；
+- `pageSize` 默认 50，约束 1–100；
+- opaque `pageToken`；
+- `historyLength` 投影；
+- `statusTimestampAfter`；
+- `includeArtifacts`；
+- `nextPageToken/pageSize/totalSize`。
+
+教学实现内部用 offset 编码 token，但客户端只把它看作 opaque token，不能依赖内部格式。
+
+---
+
+## 7　`returnImmediately` 是 lifecycle，不只是 bool
+
+原始 `SendMessageConfiguration` 的语义是：
 
 ```text
 returnImmediately = false
 → SendMessage 等到 terminal / interrupted state 再返回
 
 returnImmediately = true
-→ 创建 Task 后立即返回
-→ Task 可以仍处于 SUBMITTED / processing lifecycle
+→ Task 创建后即可返回
+→ 后续通过 GetTask / streaming 等机制观察状态
 ```
 
-我们的测试不只是检查一个布尔字段，而是真正验证：
+项目测试真正验证：
 
 ```text
 POST /message:send
@@ -198,49 +248,18 @@ returnImmediately=true
         ↓
 Task = SUBMITTED
         ↓
-SQLite persistence
+SQLite durable Task
+        ↓
+server restart / later processing
         ↓
 GET /tasks/{id}
-        ↓
-仍然能恢复同一个 Task
 ```
 
-这已经把“协议字段”落到了 durable semantics。
+所以协议字段最终必须落到持久化状态机，而不是只出现在 dataclass。
 
 ---
 
-## 7　为什么 HTTP server 不能直接复用 SQLite connection
-
-Python SQLite 默认 connection 是 thread-affine 的。
-
-错误做法：
-
-```text
-main thread 创建 A2ATaskStore
-          ↓
-HTTP server thread 直接拿同一个 connection 用
-```
-
-正确 reference design：
-
-```text
-main thread
-└── prototype A2AService
-
-HTTP server thread
-└── A2ATaskStore(same_db_path)   ← 新 connection
-    └── A2AService
-```
-
-因此跨线程共享的是**durable state file**，不是 SQLite connection object。
-
-这与我们之前 App Server HTTP transport 的设计原则一致。
-
----
-
-## 8　协议 Task 与本地 Runtime Thread 不是一个东西
-
-这是本课最关键的结构区别。
+## 8　A2A Task 与本地 Runtime Thread 不是一个东西
 
 A2A：
 
@@ -262,34 +281,33 @@ Thread
 ├── Turn
 ├── Tool Journal
 ├── Checkpoint
+├── Context provenance
 └── Artifact Store
 ```
 
-因此不能直接写：
+因此：
 
 ```text
-A2A Task == Runtime Thread
+A2A Task ≠ Runtime Thread
 ```
 
-而应该做显式映射：
+正确做法是显式 bridge：
 
 ```text
 A2A Task
    │
    ├── metadata.runtimeThreadId
-   │
    ▼
 Durable Thread
-   │
-   ├── submission
-   ▼
+   ↓
 WorkItem
-   ▼
+   ↓
+queue-level thread fencing
+   ↓
 Turn Executor
-   ▼
+   ↓
 result / artifacts
-   │
-   ▼
+   ↓
 A2A TaskStatus + Message + Artifact
 ```
 
@@ -301,9 +319,9 @@ src/astra_codex/a2a_runtime_bridge.py
 
 ---
 
-## 9　真实 bridge 当前怎样执行
+## 9　本地 runtime bridge 当前怎样执行
 
-`DurableRuntimeA2AHandler` 第一次处理 Task 时，会生成稳定映射：
+`DurableRuntimeA2AHandler` 第一次处理 Task 时建立稳定映射：
 
 ```text
 A2A task id = task_abc
@@ -333,13 +351,52 @@ RuntimeExecutionRecord
 A2AExecutionResult
 ```
 
-这里 `allowed_thread_ids` 很重要：A2A worker 不能随手 claim 另一个 Thread 的 work。
+这里 `allowed_thread_ids` 是真实 queue-level fencing：A2A worker 不能误 claim 其他 Thread 的工作。
 
 ---
 
-## 10　Artifact 不应该退化成聊天文字
+## 10　HTTP → A2A → Agent OS 已经真正接通
 
-Runtime 中的 artifact 有：
+如果 HTTP server 直接调用一个在主线程构造的 `DurableAgentRuntime`，Python SQLite 会触发 thread-affinity 错误。
+
+因此新增：
+
+```text
+src/astra_codex/a2a_runtime_http.py
+```
+
+其结构是：
+
+```text
+remote HTTP client
+      ↓
+POST /message:send
+      ↓
+HTTP server thread
+├── A2ATaskStore(thread-owned connection)
+└── DurableAgentRuntime(thread-owned connections)
+          ↓
+    DurableRuntimeA2AHandler
+          ↓
+Thread → WorkItem → Turn
+          ↓
+A2A Task response
+```
+
+测试还会关闭 HTTP server，再用原始 runtime 重新读取 committed Thread/WorkItem，证明跨线程共享的是**durable state files**，不是 connection object。
+
+Fast CI run 235 对这一链路给出的硬证据：
+
+```text
+182 passed, 14 skipped
+Ruff: All checks passed
+```
+
+---
+
+## 11　Artifact 不应该退化成聊天文字
+
+Runtime artifact 记录：
 
 ```text
 artifact_id
@@ -349,7 +406,7 @@ size_bytes
 metadata
 ```
 
-bridge 会把新的 runtime artifact 映射成 A2A `Artifact`，并使用结构化 `data` Part 暴露：
+bridge 会映射成 A2A `Artifact` + 结构化 `data` Part，例如：
 
 ```json
 {
@@ -361,17 +418,79 @@ bridge 会把新的 runtime artifact 映射成 A2A `Artifact`，并使用结构�
 }
 ```
 
-注意没有把本机绝对路径假装成远端可访问 URL。
+不会把服务端本机绝对路径伪装成远端可访问 URL。
 
-这体现一个重要原则：
+原则是：
 
-> **跨 Agent 交付的是协议 artifact，不是服务端机器内部路径。**
+> **跨 Agent 交付协议 artifact，而不是泄漏服务端机器内部路径。**
 
 ---
 
-## 11　当前已经用测试证明什么
+## 12　SendStreamingMessage：真正的 SSE 首帧
 
-当前自动测试覆盖：
+pinned proto 的 `StreamResponse` oneof 可以携带：
+
+```text
+task
+message
+status_update
+artifact_update
+```
+
+当前新增：
+
+```text
+src/astra_codex/a2a_streaming.py
+src/astra_codex/a2a_sse.py
+```
+
+reference streaming 流程：
+
+```text
+POST /message:stream
+        ↓
+validate request
+        ↓
+create durable SUBMITTED Task
+        ↓
+SSE flush: {task: ...}          ← 首帧先到客户端
+        ↓
+process handler
+        ↓
+new artifacts?
+        ├─ yes → artifactUpdate
+        ↓
+statusUpdate(final)
+        ↓
+close stream
+```
+
+关键测试故意让 handler 阻塞：客户端必须先读到 `SUBMITTED Task`，然后 handler 才完成。这证明它不是“任务全部跑完后一次性返回一个伪装成 stream 的数组”。
+
+另一个测试验证新 artifact 在 final status 之前以 `artifactUpdate` 发送。
+
+Fast CI run 241：
+
+```text
+184 passed, 14 skipped, 1 warning
+Ruff correctness lint: All checks passed
+```
+
+### 当前 streaming 边界
+
+底层 handler 目前仍是同步函数，因此 reference stream 不会伪造它没有暴露的 token-level 或 WORKING 中间增量。真正的 incremental runtime 需要 executor 主动发布：
+
+```text
+TaskStatusUpdateEvent
+TaskArtifactUpdateEvent
+model/tool progress events
+```
+
+这将与未来 `SubscribeToTask` 共享同一个 durable update source。
+
+---
+
+## 13　当前自动测试已经证明什么
 
 ```text
 A2A v1 exact TaskState spelling
@@ -380,85 +499,102 @@ AgentInterface protocolVersion
 returnImmediately durability
 SendMessage / GetTask / ListTasks / CancelTask
 well-known Agent Card over real localhost HTTP
-real POST /message:send round trip
-GET task + historyLength
-ListTasks context/state filtering
-HTTP cancel
-explicit pagination-not-implemented error
+source-aligned ListTasks fields + opaque pagination
+real HTTP cancel
 A2A Task → real Durable Thread → WorkItem → Turn
+HTTP → A2A → thread-owned DurableAgentRuntime
+server restart persistence
 runtime result → A2A COMPLETED
-raw media without policy → REJECTED
+raw/url media without policy → REJECTED
+/message:stream real SSE
+SUBMITTED first frame before slow handler completion
+artifactUpdate → final statusUpdate ordering
 ```
 
-所以当前已经跨过：
+项目已经从：
 
 ```text
-“我们定义了几个 A2A dataclass”
+几个 A2A dataclass
 ```
 
-进入：
+推进到：
 
 ```text
 original v1 spec
 → wire objects
 → durable Task store
-→ real HTTP binding
-→ local Agent OS execution
+→ HTTP binding
+→ source-aligned ListTasks
+→ local Agent OS bridge
+→ remote HTTP Agent-OS gateway
+→ SSE SendStreamingMessage
 ```
 
 ---
 
-## 12　还缺什么
+## 14　下一层
 
-下一层不是继续堆字段，而是补协议里真正困难的部分：
+后续优先级：
 
 ```text
-SendStreamingMessage / SSE
 SubscribeToTask
+→ durable task-update journal
+→ reconnect / replay cursor
+
 TaskStatusUpdateEvent
 TaskArtifactUpdateEvent
-opaque pagination token
+→ executor-native intermediate events
+
 push notification configuration
 extended authenticated Agent Card
 A2A security schemes
 HTTP tenant routing
-official SDK / conformance differential tests
-remote A2A → runtime bridge with server-thread-owned runtime handles
+official SDK differential tests
+protocol conformance fixtures
 ```
 
-尤其最后一点很重要：当前 `a2a_runtime_bridge.py` 是本地同线程 reference adapter。若 HTTP server 直接调用一个在主线程构造的 bridge，会重新遇到 SQLite thread affinity。因此真正 remote runtime gateway 要像 App Server 一样，在 server thread / worker process 中拥有自己的 durable runtime handles。
+最重要的下一步不是增加更多协议名词，而是让：
+
+```text
+Task lifecycle
++ streaming
++ reconnect
++ authorization
++ local Agent OS state
+```
+
+在崩溃、重连和并发情况下仍保持可解释的一致性。
 
 ---
 
-## 13　毕业标准
+## 15　毕业标准
 
-读完这一课后，不应该只会说：
-
-> A2A 是 Agent-to-Agent 协议。
-
-而应该能从空文件开始解释并实现：
+读完本课后，应该能从空目录解释并实现：
 
 ```text
 Agent Card discovery
-→ Message
+→ Message / Part
 → Task creation
 → durable Task state
 → returnImmediately
-→ polling
+→ Get/List pagination
 → cancellation
 → Artifact delivery
-→ HTTP+JSON route
-→ local Agent Runtime bridge
+→ HTTP+JSON binding
+→ A2A ↔ local Runtime bridge
+→ real remote runtime gateway
+→ SSE SendStreamingMessage
 ```
 
-并且能明确指出：
+并能明确指出：
 
 ```text
 Tool protocol ≠ Agent protocol
 A2A Task ≠ local Thread
 HTTP transport ≠ task lifecycle
-authentication ≠ authorization
+streaming ≠ async executor
 wire compatibility ≠ full conformance
+authentication ≠ authorization ≠ sandbox
 ```
 
 这才是协议层进入 Astra-class / Codex-class 系统后的正确学习方式。

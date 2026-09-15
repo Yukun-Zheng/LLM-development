@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-09-15",
+  "revalidate_after_days": 30,
+  "scope": "Representative primary-source signals for model systems, agent runtimes, protocols and inference infrastructure. Not a ranking and not exhaustive.",
+  "items": [
+    {
+      "id": "openai.gpt-6-astra",
+      "category": "frontier_model",
+      "name": "GPT-6 Astra",
+      "released": "2026-09-03",
+      "source": "https://openai.com/index/gpt-6-astra/",
+      "facts": [
+        "OpenAI positions Astra as a frontier model for computer use, browsing, software engineering, cybersecurity, science and professional work.",
+        "The public release description attributes capability to pre-training, reinforcement learning and alignment rather than disclosing a complete architecture recipe."
+      ],
+      "evidence_boundary": "Do not infer undisclosed parameter count, layer topology, MoE structure or training recipe."
+    },
+    {
+      "id": "openai.agents-api",
+      "category": "agent_runtime",
+      "name": "OpenAI Agents API",
+      "released": "2026-09-10",
+      "source": "https://openai.com/index/introducing-the-agents-api/",
+      "facts": [
+        "OpenAI describes the service as the Codex harness and infrastructure exposed through an API.",
+        "The public description emphasizes context management, tool use, subagent coordination, long-running execution, files, code and saved intermediate results."
+      ],
+      "evidence_boundary": "A hosted product description does not expose every production scheduler, persistence or safety implementation detail."
+    },
+    {
+      "id": "deepseek.v4-1-flash",
+      "category": "frontier_model",
+      "name": "DeepSeek-V4.1-Flash",
+      "released": "2026-09-10",
+      "source": "https://www.deepseek.com/en/news/deepseek-v4-1-flash/",
+      "facts": [
+        "552B-parameter MoE.",
+        "New Causal Encoder-Decoder architecture with 8B active parameters for input and 16B for output.",
+        "DeepSeek reports KV cache requirements of one quarter the HBM and one eighth the SSD storage of the previous generation.",
+        "The release explicitly credits new pretraining methods and larger-scale RL post-training, and includes native visual understanding."
+      ],
+      "evidence_boundary": "Vendor benchmark claims remain vendor-reported until independently reproduced."
+    },
+    {
+      "id": "google.gemini-3-5-flash-computer-use",
+      "category": "computer_use",
+      "name": "Gemini 3.5 Flash built-in computer use",
+      "released": "2026-06-24",
+      "source": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/introducing-computer-use-gemini-3-5-flash/",
+      "facts": [
+        "Google integrated computer use as a built-in tool in the main Gemini 3.5 Flash model rather than keeping it only as a separate computer-use model.",
+        "The official description targets browser, mobile and desktop environments and long-horizon enterprise automation."
+      ],
+      "evidence_boundary": "Product-level capability does not reveal the complete visual grounding, action policy or safety implementation."
+    },
+    {
+      "id": "mcp.2026-07-28",
+      "category": "protocol",
+      "name": "Model Context Protocol 2026-07-28",
+      "released": "2026-07-28",
+      "source": "https://blog.modelcontextprotocol.io/posts/2026-07-28/",
+      "facts": [
+        "The core protocol became stateless request/response and retired the required initialize/initialized session handshake.",
+        "The release added server/discover, header-based routing, cache hints for list results, authorization hardening and a formal extensions framework.",
+        "Tasks moved to an extension for long-running work."
+      ],
+      "evidence_boundary": "Implementations targeting older 2025 lifecycle/session semantics must not be described as 2026-07-28 compliant."
+    },
+    {
+      "id": "a2a.1-0-0",
+      "category": "protocol",
+      "name": "Agent2Agent Protocol 1.0.0",
+      "released": "2026",
+      "source": "https://a2a-protocol.org/latest/specification/",
+      "facts": [
+        "A2A 1.0.0 defines a vendor- and framework-independent data model for agent discovery, messages, tasks, artifacts and interoperability.",
+        "The 1.0 specification separates abstract operations from concrete protocol bindings such as JSON-RPC, gRPC and HTTP/REST."
+      ],
+      "evidence_boundary": "A2A defines interoperability semantics; it is not a planner, memory system or agent policy."
+    },
+    {
+      "id": "vllm.serving-stack-2026",
+      "category": "inference_system",
+      "name": "vLLM serving feature set",
+      "released": "2026",
+      "source": "https://docs.vllm.ai/en/stable/",
+      "facts": [
+        "Current vLLM documents PagedAttention, continuous batching, chunked prefill and prefix caching as core serving features.",
+        "It also documents speculative decoding, multiple optimized attention kernels, distributed tensor/pipeline/data/expert/context parallelism and disaggregated prefill/decode."
+      ],
+      "evidence_boundary": "Feature presence does not imply every backend/model combination has identical maturity or performance."
+    }
+  ]
+}

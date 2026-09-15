@@ -1,5 +1,6 @@
 """From-scratch educational runtime for modern LLM and agent systems."""
 
+from .batch_executor import BatchedDecodeState, HomogeneousBatchExecutor
 from .benchmark import BenchmarkCase, BenchmarkHarness, BenchmarkRecord, ExactAnswerGrader, Grade
 from .config import ModelConfig
 from .context import ContextFragment, ContextStore, FragmentKind
@@ -22,6 +23,9 @@ from .posttraining import (
     sft_batch_loss,
     sft_step,
 )
+from .repository_eval import RepositoryEvalRecord, RepositoryFixture, RepositoryFixtureHarness, RepositoryGrade
+from .rlvr import GroupRelativeResult, grpo_style_objective, group_relative_advantages
+from .runtime import DurableAgentRuntime, RuntimeExecutionRecord
 from .runtime_queue import DurableWorkQueue, WorkItem, WorkStatus
 from .sampling import SamplingConfig
 from .scheduler import (
@@ -45,6 +49,7 @@ from .verification import (
 __all__ = [
     "AggregateMetrics",
     "BatchKind",
+    "BatchedDecodeState",
     "BenchmarkCase",
     "BenchmarkHarness",
     "BenchmarkRecord",
@@ -56,6 +61,7 @@ __all__ = [
     "ContextStore",
     "DPOResult",
     "DecoderOnlyTransformer",
+    "DurableAgentRuntime",
     "DurableThreadStore",
     "DurableWorkQueue",
     "ExactAnswerGrader",
@@ -63,7 +69,9 @@ __all__ = [
     "FragmentKind",
     "GenerationEngine",
     "Grade",
+    "GroupRelativeResult",
     "GuardedToolExecutor",
+    "HomogeneousBatchExecutor",
     "IGNORE_INDEX",
     "ModelConfig",
     "ModelOutput",
@@ -74,9 +82,14 @@ __all__ = [
     "ReferencePagedGenerationEngine",
     "ReferencePagedKVCache",
     "ReferenceRequestScheduler",
+    "RepositoryEvalRecord",
+    "RepositoryFixture",
+    "RepositoryFixtureHarness",
+    "RepositoryGrade",
     "RequestMetrics",
     "RequestState",
     "RequestStatus",
+    "RuntimeExecutionRecord",
     "SamplingConfig",
     "ScheduledBatch",
     "SequenceLogProbs",
@@ -95,6 +108,8 @@ __all__ = [
     "dpo_batch_loss",
     "dpo_from_logprobs",
     "dpo_step",
+    "grpo_style_objective",
+    "group_relative_advantages",
     "sequence_logprobs",
     "sft_batch_loss",
     "sft_step",

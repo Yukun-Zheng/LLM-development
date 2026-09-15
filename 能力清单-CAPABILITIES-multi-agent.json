@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "extends": "能力清单-CAPABILITIES.json",
+  "capabilities": [
+    {
+      "id": "multi_agent.persistent_agent_graph",
+      "track": "multi_agent",
+      "title": "Persistent AgentGraph / Lifecycle / Parent-Child Provenance",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "智能体-agent/06-多智能体与协调-multi-agent.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/21-持久AgentGraph与并行Mailbox-multi-agent-runtime.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/agent_graph.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_agent_graph.py"
+      ],
+      "evidence": [
+        "Fast CPU Capstone CI run 214: 163 passed, 14 skipped, 1 warning in 10.06s; Ruff correctness lint passed. Tests cover restart persistence, parent/child lineage, lifecycle transitions, cross-thread negative controls and subtree cancellation."
+      ],
+      "next": [
+        "link Agent IDs into Rollout Trace provenance",
+        "remote actor/process identity",
+        "agent resource quotas and permission profiles",
+        "A2A-backed cross-runtime handoff"
+      ]
+    },
+    {
+      "id": "multi_agent.durable_mailbox",
+      "track": "multi_agent",
+      "title": "Durable Point-to-Point Agent Mailbox / Lease / Reclaim",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "智能体-agent/06-多智能体与协调-multi-agent.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/21-持久AgentGraph与并行Mailbox-multi-agent-runtime.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/agent_graph.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_agent_graph.py"
+      ],
+      "evidence": [
+        "Fast CPU Capstone CI run 214 validates message lease exclusion, expiry reclaim, stale-owner ACK rejection, release-to-pending, kind filtering and restart-persistent ACK results within the 163-pass suite."
+      ],
+      "next": [
+        "lease generation / fencing token",
+        "broadcast and topic mailboxes",
+        "message deduplication and idempotency keys",
+        "remote transport / A2A bridge"
+      ]
+    },
+    {
+      "id": "multi_agent.parallel_coordinator",
+      "track": "multi_agent",
+      "title": "Real Parallel One-Task-Per-Agent Coordinator",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "智能体-agent/06-多智能体与协调-multi-agent.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/21-持久AgentGraph与并行Mailbox-multi-agent-runtime.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/parallel_agents.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/agent_graph.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_parallel_agents.py"
+      ],
+      "evidence": [
+        "Fast CPU Capstone CI run 214: 163 passed, 14 skipped; a threading.Barrier test requires two worker callbacks to overlap in wall-clock time, per-agent peak concurrency is constrained to one, worker exceptions isolate the failed agent while surviving workers continue, and wrong task identity is converted to an explicit failed result."
+      ],
+      "next": [
+        "worker-specific Git worktrees",
+        "patch artifacts and independent reviewer",
+        "merge/conflict coordinator",
+        "1/2/4/8-agent controlled success/cost/wall-time benchmark",
+        "process/remote-worker execution"
+      ]
+    }
+  ]
+}

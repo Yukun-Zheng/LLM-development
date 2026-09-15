@@ -6,33 +6,41 @@
 
 # 1　当前总览
 
-截至本次更新，Reference System 已经不再只是 `Transformer + Agent loop`，而形成五条真正可运行的纵向链：
+Reference System 现在已经形成六条可运行纵向链：
 
 ```text
 Model:
 raw checkpoint → own Transformer → logits parity
 
 Inference:
-contiguous KV → reference paged KV → scheduler → real homogeneous batched forward
+contiguous KV → reference paged KV → prefix reuse → scheduler
+→ real homogeneous batched forward → speculative decoding reference path
 
 Post-training:
 masked SFT → DPO → GRPO-style group-relative objective primitive
 
 Agent Runtime:
-submission → durable Thread → leased WorkItem → TurnExecutor → checkpoint / ACK
+submission → durable Thread → leased WorkItem → TurnExecutor
+→ journaled tools → checkpoint / recovery / ACK
+→ live steering / lease heartbeat
+
+Control Plane / Artifacts:
+JSON-RPC App Server → thread control → runtime execution
+→ content-addressed artifact snapshots
 
 Evaluation:
-toy case/grader → deterministic repository fixture → independent final-state verification
+toy case/grader → deterministic repository fixture
+→ independent final-state verification
 ```
 
-Fast CPU CI run 66：
+最新已核验 Fast CPU CI（run 91）：
 
 ```text
-61 passed, 1 warning in 3.67s
+86 passed, 1 warning in 5.14s
 Ruff correctness lint: All checks passed
 ```
 
-这 61 个 tests 同时覆盖模型数学、cache parity、真实 checkpoint、工具、MCP、Codex harness、durability、security、evaluation、serving scheduler、batched execution、SFT/DPO 与 group-relative RL primitive。
+这 86 个 tests 覆盖模型数学、cache/parity、真实 checkpoint、推理 primitives、post-training、工具/MCP、Codex harness、durability、tool idempotency、live steering、worker lease、artifact integrity、App Server、security、evaluation 与 repository final-state grading。
 
 ---
 
@@ -72,21 +80,22 @@ Ruff correctness lint: All checks passed
 
 ## 3.2　Reference Paged KV
 
-`paged_cache.py`：
+`paged_cache.py` 已实现 logical pages、page growth 与 reference materialization，并验证 paged prefill/decode 与 full recomputation 对齐。
+
+**未声称 production benefit**：当前 reference path 仍可 materialize 为 contiguous K/V；它不是 vLLM-style physical block allocator + page-aware attention kernel。
+
+## 3.3　Prefix Cache
+
+`prefix_cache.py` 已支持 longest-prefix reuse。已有测试证明：
 
 ```text
-logical pages
-→ per-layer K/V page table
-→ append only new suffix
-→ reconstruct reference past_key_values
-→ decode
+partial prefix reuse → logits / K/V parity
+exact prefix hit     → no extra model forward
 ```
 
-测试证明 paged path 的 prefill/decode logits 与 full recomputation 对齐。
+下一步是 radix/block-hash index、eviction、physical block sharing 与 scheduler integration。
 
-**未声称** production benefit：当前仍会 `torch.cat` 回 contiguous K/V；还不是 vLLM-style physical block allocator / block-table kernel。
-
-## 3.3　Reference Request Scheduler
+## 3.4　Reference Request Scheduler
 
 `scheduler.py`：
 
@@ -97,43 +106,24 @@ WAITING
 → FINISHED / CANCELLED
 ```
 
-已实现并测试：
+已实现并测试 max batch size、prefill token budget、decode-first、cancellation、TTFT、TPOT 与 total latency。
+
+## 3.5　真实 Batched Model Forward
+
+`batch_executor.py` 能让多个等长 request 共用一次真实 batched forward，并把 K/V 拆回独立 request state。
+
+当前限制：同一 decode batch 仍要求相同 cached sequence length。真正 heterogeneous continuous batching 需要 per-request lengths / block tables / specialized attention backend。
+
+## 3.6　Speculative Decoding
+
+`speculative.py` 已进入 reference implementation + tests 阶段。后续重点不再是“有这个函数”，而是：
 
 ```text
-max_batch_size
-prefill token budget
-decode-first scheduling
-cancellation
-TTFT
-TPOT
-total latency
+draft / target distribution correctness
+accept/reject parity
+speedup crossover
+real latency benchmark
 ```
-
-## 3.4　真实 Batched Model Forward
-
-`batch_executor.py` 已经越过“只调度、不执行”的阶段。
-
-当前 `HomogeneousBatchExecutor` 能真正执行：
-
-```text
-request A ─┐
-request B ─┼→ ONE batched model forward
-request C ─┘
-```
-
-并把 batched K/V 拆回每个 request 的独立 decode state。
-
-自动测试验证：
-
-```text
-batched prefill logits
-== individual prefill logits
-
-batched decode logits
-== individual full-recomputation logits
-```
-
-**当前限制**：同一 decode batch 中各 request 必须有相同 cached sequence length。真正 variable-length continuous batching 仍需要 per-request length / block table / specialized attention backend。
 
 ---
 
@@ -147,14 +137,13 @@ batched decode logits
 logits [B,T,V]
 + labels [B,T]
 → causal shift
-→ mask prompt/user target (-100)
+→ prompt/user masking
 → CE
 → backward
-→ optional grad clipping
 → optimizer step
 ```
 
-测试：uniform logits 下 masked CE=`log(V)`；真实 AdamW step 更新 tiny Transformer 参数。
+已测试 uniform logits 下 masked CE=`log(V)`，且真实 AdamW step 更新 tiny Transformer 参数。
 
 ## DPO
 
@@ -163,37 +152,16 @@ policy chosen/rejected log p
 reference chosen/rejected log p
 → implicit reward margin
 → -log sigmoid(margin)
-→ update policy
+→ policy update
 ```
 
-测试：
-
-```text
-policy == reference → loss = log(2)
-policy weights      → changed
-reference weights   → unchanged
-```
+已测试 `policy == reference → loss = log(2)`；policy 更新而 reference 保持冻结。
 
 ## GRPO-style / RLVR primitive
 
-`rlvr.py` 目前实现：
+当前实现 verifier rewards → group-relative advantage → clipped surrogate → optional reference KL。
 
-```text
-verifier rewards [B,G]
-→ group-relative advantage
-→ policy ratio
-→ clipped surrogate
-→ optional reference KL penalty
-```
-
-测试验证：
-
-- [x] advantage 每个 prompt group 内中心化；
-- [x] 同组 reward 全相等时 advantage=0；
-- [x] `new policy == old policy` 时 objective 数值可以为 0，但 high/low reward 样本仍产生方向正确的独立 gradient；
-- [x] clipping 与 KL penalty 显式可观测。
-
-**边界**：这是 objective primitive，不是完整 RLVR training pipeline。尚缺 rollout generation、old-policy snapshot、真正 verifier environment、token-level objective、optimizer loop 与 held-out evaluator。
+**边界**：仍是 objective primitive，不是完整 RLVR pipeline；尚缺 rollout generation、old-policy snapshot、真实 verifier environment、optimizer loop 与 held-out evaluator。
 
 ---
 
@@ -220,7 +188,7 @@ TURN_STARTED
 
 # 6　Durable Agent Kernel
 
-## Thread / Event Store
+## 6.1 Thread / Event Store
 
 `durable.py`：
 
@@ -234,7 +202,7 @@ TURN_STARTED
 - [x] parent provenance (`parent_thread_id`, `parent_event_id`)
 - [x] child cancellation 与 parent 独立
 
-## Work Queue
+## 6.2 Work Queue / Lease
 
 `runtime_queue.py`：
 
@@ -247,61 +215,72 @@ PENDING
 └─ lease expires → another worker reclaim
 ```
 
-## Integrated Runtime
+`runtime_control.py` 新增 `LeaseHeartbeat`：worker 可以延长自己的 lease，测试证明续约期间另一个 worker 不能提前 reclaim。
 
-`runtime.py` 已经把原本分散的 primitive 第一次串成：
+**边界**：当前 integrated runtime 在 model sampling 边界续约。若单个外部 tool/RPC 本身运行时间超过 lease，还需要 background heartbeat 或 tool-owned lease，不能把当前实现宣传成完整 distributed liveness。
+
+## 6.3 Durable Tool Journal / Crash Recovery
+
+`tool_journal.py` 已实现稳定 scope + call index 的 durable execution record：
+
+- [x] completed tool call 可 replay，不重复执行 side effect；
+- [x] restart 后 replay 仍成立；
+- [x] key rebinding 被拒绝；
+- [x] STARTED-only 非幂等调用标为 in-doubt，不盲目 retry；
+- [x] recovered turn 可复用 active TurnId；
+- [x] `turn_finished` checkpoint 可直接完成 work，不重新 model sampling。
+
+这仍不等于通用 exactly-once；外部服务如果“已提交但本地 COMPLETED 尚未落盘”，仍需要 tool-specific reconciliation / external idempotency key。
+
+## 6.4 Live Steering
+
+新增 `steering.py`：
 
 ```text
-submit
-→ Thread event
-→ durable WorkItem
-→ worker lease
-→ TURN_STARTED
-→ CodexHarness
-→ checkpoint final result
-→ TURN_COMPLETED
-→ work ACK
+PENDING
+→ CONSUMED
+or
+→ CANCELLED
 ```
 
-测试还覆盖：
+新增 `ControlledBackend`：每次 model sampling 前：
 
-- [x] 多 submission 顺序执行；
-- [x] terminal/cancelled thread 的 pending work 不执行；
-- [x] model-step limit 同时落到 failed work + failed thread；
-- [x] runtime 关闭后 Thread projection/checkpoint 仍能从 SQLite 恢复。
+```text
+heartbeat
+→ atomically consume pending steering
+→ append steering to transcript
+→ model.generate(...)
+```
 
-**关键未解问题**：worker 如果在 `TURN_STARTED` 后、side-effecting tool 执行期间突然死亡，当前 runtime 不会自动重跑该 turn。自动 at-least-once 重跑可能造成重复副作用；下一步必须引入 durable tool-execution records / idempotency semantics，而不是简单 retry。
+自动测试专门模拟 steering 在 tool body 执行期间到达，并验证**下一次** model sampling 能看到新要求，不必重启整个 turn。
+
+当前 steering 有独立 durable inbox；下一步会把 consumption 同步进 Thread event stream，形成统一 replay provenance。
 
 ---
 
-# 7　Context / Memory
+# 7　Context / Memory / Artifact
 
 `memory.py`：persistent event history。  
-`context.py`：model-visible context provenance。
+`context.py`：model-visible context provenance。  
+`artifacts.py`：immutable content-addressed work products。
 
-Typed fragments：
+Context fragments 支持 raw observation、note、summary、artifact、retrieval、instruction，并保证 compaction summary 可沿 lineage 找回原始证据。
 
-```text
-RAW_EVENT
-NOTE
-SUMMARY
-ARTIFACT
-RETRIEVAL
-INSTRUCTION
-```
-
-Compaction：
+Artifact Store 使用 SHA-256 对 bytes 做 content-addressed snapshot：
 
 ```text
-raw A ─┐
-raw B ─┼→ summary S
-raw C ─┘      │
-              └→ parent lineage
+artifact_id
+thread_id
+kind
+sha256
+size_bytes
+metadata
+created_at
 ```
 
-测试保证 summary 不覆盖 raw evidence，能够沿 lineage 追回原观察。
+相同 bytes 可复用同一 object；读取时重新校验 checksum，篡改会直接报错。
 
-下一步：persistent notes、semantic index、artifact provenance、token-budget context builder、historical-window retrieval。
+重要边界：checksum 只能证明 bytes 完整性，不能证明语义正确性；语义正确仍需要 verifier / grader / review。
 
 ---
 
@@ -321,40 +300,43 @@ Tool Proposal
 
 DENY / approval reject 时，底层 tool body 不执行。
 
-这只是 application-layer execution gate。真实 sandbox 仍缺：
-
-```text
-process isolation
-filesystem namespace/policy
-network isolation
-credential scope
-resource limits
-audit / escape tests
-```
+真实 sandbox 仍缺：process isolation、filesystem namespace/policy、network isolation、credential scope、resource limits、audit/escape tests。
 
 ---
 
-# 9　Evaluation
+# 9　App Server / 外部控制面
 
-## 通用 trajectory / case grader
+新增 `app_server.py`，把 UI/CLI/IDE 与 Agent Kernel 解耦成最小 JSON-RPC control plane。
 
-`evaluation.py` + `benchmark.py` 已有：
+当前方法：
 
 ```text
-BenchmarkCase
-→ Executor
-→ trajectory
-→ Grader
-→ Grade
-→ BenchmarkRecord
-→ AggregateMetrics
+server/discover
+thread/create
+thread/get
+thread/submit
+thread/steer
+thread/pause
+thread/resume
+thread/cancel
+thread/fork
+runtime/runOne
+artifact/list
 ```
 
-## Level-1 Repository Fixture
+测试验证 thread lifecycle、runtime execution、steering、artifact metadata、fork provenance 与 protocol errors。
 
-新增 `repository_eval.py`。
+**边界**：当前只有 in-process transport；没有 HTTP/WebSocket、streaming subscription、auth、multi-tenant ACL，因此不声称 API-compatible/production App Server。
 
-一个可复现 coding case 现在可以固定：
+配套课程：[`教程-lessons/09-实时Steering租约与AppServer-live-control-plane.md`](教程-lessons/09-实时Steering租约与AppServer-live-control-plane.md)。
+
+---
+
+# 10　Evaluation
+
+`evaluation.py` + `benchmark.py` 已提供 trajectory metrics 和 case/grader abstraction。
+
+`repository_eval.py` 提供 deterministic coding fixture：
 
 ```text
 initial files
@@ -363,81 +345,57 @@ verify argv
 expected final files
 ```
 
-执行后**独立于 Agent 自我陈述**运行 final-state grader。
-
-自动测试专门构造两种情况：
+独立 final-state grader 已测试：
 
 ```text
-Agent says "I fixed it" but never edits
-→ FAIL
-
-Agent performs real edit + command verification
-→ PASS
+Agent says "I fixed it" but never edits → FAIL
+real edit + command verification      → PASS
 ```
-
-因此现在已经真正跨过：
-
-```text
-final answer
-!=
-final repository state
-```
-
-这一道评测门槛。
 
 下一步：multi-file hidden-test fixtures → patch artifacts → SWE-bench adapter。
 
 ---
 
-# 10　Protocols / Multi-Agent / Computer Use
+# 11　Protocols / Multi-Agent / Computer Use
 
-已实现：minimal MCP JSON-RPC discover/list/call；task DAG、coordinator、worktree primitive。
+已实现：minimal MCP JSON-RPC discover/list/call；task DAG、coordinator、worktree primitive；最小 App Server control plane。
 
 仍未实现：完整 MCP transports/auth/tasks/extensions、A2A runtime、persistent AgentGraph/mailbox、parallel reviewer/merge、JS browser、DOM/A11y、screenshot/grounding、mouse/keyboard、Computer Use verifier。
 
 ---
 
-# 11　最新硬证据
+# 12　最新硬证据
 
-Fast CPU CI run 66：
+Fast CPU CI run 91：
 
 ```text
-61 passed, 1 warning in 3.67s
+86 passed, 1 warning in 5.14s
 Ruff correctness lint: All checks passed
 ```
 
-这一次总回归已经同时包含：
+本轮新增回归覆盖：
 
 ```text
-real checkpoint parity primitives
-contiguous/paged KV
-scheduler
-real homogeneous batched forward
-SFT/DPO
-GRPO-style objective
-Codex turn harness
-durable replay/fork/cancel
-leased work queue
-integrated runtime
-context provenance
-permission enforcement
-benchmark substrate
-repository final-state grading
+worker lease heartbeat
+mid-turn live steering
+artifact checksum / dedup / tamper detection
+JSON-RPC App Server thread lifecycle
+App Server steering + artifact listing
+thread fork provenance through control plane
 ```
 
 ---
 
-# 12　下一批最高优先级
+# 13　下一批最高优先级
 
 ## Inference
 
 - [ ] heterogeneous / variable-length batching
 - [ ] scheduler ↔ batch executor 完整 request-state integration
-- [ ] real block allocator / free list / prefix sharing
-- [ ] prefix cache
-- [ ] chunked/disaggregated prefill
-- [ ] speculative decoding
-- [ ] actual throughput / memory / fairness benchmark
+- [ ] real physical block allocator / free list / prefix sharing
+- [ ] chunked / disaggregated prefill
+- [ ] speculative decoding real speed/distribution benchmark
+- [ ] throughput / memory / fairness benchmark
 
 ## Post-training
 
@@ -447,15 +405,21 @@ repository final-state grading
 - [ ] actual tiny-policy group-relative update
 - [ ] train-reward vs held-out evaluator separation experiment
 
-## Agent OS
+## Agent OS / Control Plane
 
-- [ ] durable tool-execution record / idempotency key
-- [ ] crash recovery after `TURN_STARTED`
-- [ ] pending live steering
-- [ ] worker heartbeat / lease renewal
+- [x] durable tool execution journal / idempotency semantics
+- [x] crash recovery for completed side effects / finished checkpoints
+- [x] pending live steering primitive
+- [x] worker lease renewal primitive
+- [x] content-addressed artifact store
+- [x] minimal in-process App Server
+- [ ] background heartbeat for long single tool/RPC execution
+- [ ] steering → unified Thread event provenance
 - [ ] scoped `AGENTS.md` resolver + provenance
-- [ ] App Server / external control plane
-- [ ] artifact / rollout store
+- [ ] streaming Event subscription
+- [ ] stdio / HTTP / WebSocket transport
+- [ ] auth / session / multi-tenant permission model
+- [ ] rollout trace linked to artifacts
 
 ## Security / General Agent
 

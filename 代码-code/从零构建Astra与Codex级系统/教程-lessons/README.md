@@ -17,6 +17,8 @@
 | 08 | 副作用幂等与崩溃恢复 | `tool_journal.py`, `runtime.py` | completed side effect 不重复执行，in-doubt 不盲重试 |
 | 09 | 实时 Steering、租约与 App Server | `steering.py`, `runtime_control.py`, `artifacts.py`, `app_server.py` | mid-turn steering / heartbeat / artifact / JSON-RPC |
 | 10 | 可重放事件流与 HTTP 控制面 | `event_stream.py`, `http_app_server.py`, `app_server.py` | cursor replay / live harness events / real localhost HTTP |
+| 11 | 控制面认证与授权 | `control_auth.py`, `app_server.py`, `http_app_server.py` | bearer identity / method scope / thread scope / HTTP policy parity |
+| 12 | AGENTS.md 作用域与来源 | `instructions.py`, `coding.py` | root→cwd hierarchy / override / budget / sibling negative control / provenance |
 
 对应文件：
 
@@ -32,6 +34,8 @@
 08-副作用幂等与崩溃恢复-idempotency.md
 09-实时Steering租约与AppServer-live-control-plane.md
 10-可重放事件流与HTTP控制面-event-stream-http.md
+11-控制面认证与授权-control-plane-auth.md
+12-AGENTS作用域与指令来源-agents-md-provenance.md
 ```
 
 ## 课程成熟度规则

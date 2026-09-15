@@ -26,6 +26,7 @@
 | 17 | 物理前缀缓存与计算复用 | `physical_prefix_cache.py`, `kv_tensor_pool.py` | exact hit 0 forward / suffix-only compute / block sharing / COW / source release |
 | 18 | Page-Aware Attention 与异长 Decode | `page_aware_decode.py` | 禁止 materialize K/V / mixed length / logits+cache parity |
 | 19 | Continuous Batching 调度闭环 | `continuous_batching.py`, `scheduler.py` | decode+new prefill 同轮推进 / terminal block release / TTFT+TPOT |
+| 20 | 统一 Rollout Trace 与证据链 | `rollout_trace.py`, `rollout_trace_collector.py` | model/tool/steering/artifact/verifier provenance + hash-chain integrity |
 
 对应文件：
 
@@ -50,14 +51,15 @@
 17-物理前缀缓存与计算复用-physical-prefix-cache.md
 18-PageAwareAttention与异长Decode-page-aware-decode.md
 19-ContinuousBatching调度闭环-continuous-batching.md
+20-统一RolloutTrace与证据链-rollout-trace.md
 ```
 
 ## 当前硬证据
 
-普通 Fast CPU Capstone CI run 189：
+普通 Fast CPU Capstone CI run 207：
 
 ```text
-145 passed, 14 skipped, 1 warning in 8.74s
+153 passed, 14 skipped, 1 warning in 9.06s
 Ruff correctness lint: All checks passed
 ```
 
@@ -73,6 +75,18 @@ contiguous KV
 → interleaved continuous-batching lifecycle
 ```
 
+Agent / evaluation 主线也开始形成独立证据链：
+
+```text
+Durable Thread / WorkItem
+→ model + tool runtime events
+→ steering consumption
+→ immutable artifacts
+→ independent verifier
+→ Rollout Trace
+→ hash-chain integrity check
+```
+
 关键自动验收包括：
 
 ```text
@@ -85,9 +99,14 @@ page-aware logits + per-layer K/V == full recomputation
 old request decode + newly arrived request prefill → same serving iteration
 finished/cancelled request → physical blocks released
 scheduler metrics → TTFT / TPOT / total latency
+rollout trace close/reopen → evidence persists
+same work-item → cannot rebind to another thread
+trace payload tampering → hash-chain verification fails
+second trace sync → zero duplicate evidence
+verifier result → explicit parent edge to artifact evidence
 ```
 
-这里仍然是 reference serving engine，而不是 production vLLM/SGLang 等价物。当前 prefill 仍是逐请求 reference path，page-aware attention 仍有 Python request/block loops，也没有 chunked prefill、preemption/swap、batch-wide reservation、GPU fused kernel 或真实并发 workload benchmark。
+这里仍然是 reference serving/agent system，而不是 production vLLM/SGLang/Codex/Astra 等价物。当前 prefill 仍是逐请求 reference path，page-aware attention 仍有 Python request/block loops，也没有 chunked prefill、preemption/swap、GPU fused kernel 或真实并发 workload benchmark。Rollout Trace 的 SHA-256 链只能提供 tamper-evident 语义；如果攻击者能重写整个数据库并重新计算所有 hash，仍需要外部可信 digest anchor 才能建立更强审计边界。
 
 Docker/Bubblewrap runtime tests 会按环境能力跳过，因此另有专门的 security workflow。Docker tested boundary 使用 shared Linux kernel，不能宣传成 VM-grade hostile-code containment；Bubblewrap backend 在 runner 禁止 namespace 时会显式 skip，而不是把“无法启动”当成“隔离成功”。
 

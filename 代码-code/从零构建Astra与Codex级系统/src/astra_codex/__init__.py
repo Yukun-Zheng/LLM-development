@@ -1,5 +1,6 @@
 """From-scratch educational runtime for modern LLM and agent systems."""
 
+from .artifacts import ArtifactRecord, ArtifactStore
 from .batch_executor import BatchedDecodeState, HomogeneousBatchExecutor
 from .benchmark import BenchmarkCase, BenchmarkHarness, BenchmarkRecord, ExactAnswerGrader, Grade
 from .config import ModelConfig
@@ -33,6 +34,7 @@ from .prefix_cache import (
 from .repository_eval import RepositoryEvalRecord, RepositoryFixture, RepositoryFixtureHarness, RepositoryGrade
 from .rlvr import GroupRelativeResult, grpo_style_objective, group_relative_advantages
 from .runtime import DurableAgentRuntime, RuntimeExecutionRecord
+from .runtime_control import ControlledBackend, LeaseHeartbeat
 from .runtime_queue import DurableWorkQueue, WorkItem, WorkStatus
 from .sampling import SamplingConfig
 from .scheduler import (
@@ -44,6 +46,7 @@ from .scheduler import (
     ScheduledBatch,
 )
 from .security import GuardedToolExecutor, PermissionDecision, PermissionProfile
+from .steering import DurableSteeringQueue, SteeringMessage, SteeringStatus
 from .tokenizer import ByteBPETokenizer, ByteTokenizer
 from .tool_journal import (
     DurableToolJournal,
@@ -62,6 +65,8 @@ from .verification import (
 
 __all__ = [
     "AggregateMetrics",
+    "ArtifactRecord",
+    "ArtifactStore",
     "BatchKind",
     "BatchedDecodeState",
     "BenchmarkCase",
@@ -73,9 +78,11 @@ __all__ = [
     "CompositeVerifier",
     "ContextFragment",
     "ContextStore",
+    "ControlledBackend",
     "DPOResult",
     "DecoderOnlyTransformer",
     "DurableAgentRuntime",
+    "DurableSteeringQueue",
     "DurableThreadStore",
     "DurableToolJournal",
     "DurableWorkQueue",
@@ -90,6 +97,7 @@ __all__ = [
     "HomogeneousBatchExecutor",
     "IGNORE_INDEX",
     "JournaledToolExecutor",
+    "LeaseHeartbeat",
     "ModelConfig",
     "ModelOutput",
     "PermissionDecision",
@@ -116,6 +124,8 @@ __all__ = [
     "ScheduledBatch",
     "SequenceLogProbs",
     "SequentialCoordinator",
+    "SteeringMessage",
+    "SteeringStatus",
     "StepStatus",
     "ThreadProjection",
     "ThreadStatus",

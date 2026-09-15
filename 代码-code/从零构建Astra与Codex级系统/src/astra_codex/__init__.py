@@ -23,6 +23,13 @@ from .posttraining import (
     sft_batch_loss,
     sft_step,
 )
+from .prefix_cache import (
+    PrefixCacheEntry,
+    PrefixCacheStats,
+    PrefixPrefillResult,
+    ReferencePrefixCacheEngine,
+    ReferencePrefixKVStore,
+)
 from .repository_eval import RepositoryEvalRecord, RepositoryFixture, RepositoryFixtureHarness, RepositoryGrade
 from .rlvr import GroupRelativeResult, grpo_style_objective, group_relative_advantages
 from .runtime import DurableAgentRuntime, RuntimeExecutionRecord
@@ -43,6 +50,7 @@ from .tool_journal import (
     ExecutionStatus,
     JournaledToolExecutor,
     ToolExecutionRecord,
+    TurnScopedJournaledTools,
 )
 from .verification import (
     CommandVerifier,
@@ -88,8 +96,13 @@ __all__ = [
     "PermissionProfile",
     "PlanGraph",
     "PlanStep",
+    "PrefixCacheEntry",
+    "PrefixCacheStats",
+    "PrefixPrefillResult",
     "ReferencePagedGenerationEngine",
     "ReferencePagedKVCache",
+    "ReferencePrefixCacheEngine",
+    "ReferencePrefixKVStore",
     "ReferenceRequestScheduler",
     "RepositoryEvalRecord",
     "RepositoryFixture",
@@ -108,6 +121,7 @@ __all__ = [
     "ThreadStatus",
     "ToolExecutionRecord",
     "TrajectoryMetrics",
+    "TurnScopedJournaledTools",
     "VerificationResult",
     "Verdict",
     "WorkItem",

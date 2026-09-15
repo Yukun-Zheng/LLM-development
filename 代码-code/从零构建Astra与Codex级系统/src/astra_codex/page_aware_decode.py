@@ -12,22 +12,15 @@ from .model import DecoderOnlyTransformer
 class HeterogeneousPageAwareDecodeReference:
     """One-token mixed-length decode over physical K/V block tables.
 
-    This reference path is the first inference backend in the project whose
-    attention computation reads K/V history directly from ``PhysicalKVTensorPool``
-    block ids. It does **not** call ``pool.materialize`` before attention.
+    Historical K/V is read directly from ``PhysicalKVTensorPool`` block ids; the
+    path does not call ``pool.materialize`` before attention. Q/K/V projections
+    and FFNs run as a normal batch, while the reference attention reduction walks
+    each request's own block table.
 
-    Q/K/V projections and FFNs run as a normal batch. The attention reduction is
-    intentionally performed request-by-request because each request can have a
-    different block table and cached sequence length. That makes the semantics
-    inspectable before introducing a fused page-table kernel.
-
-    Historical K/V chunks are never concatenated into one contiguous K/V tensor.
-    Only attention *scores* are concatenated along the logical token dimension so
-    one softmax can normalize across all blocks plus the current token.
-
-    This is therefore a page-aware **reference** decode path, not yet a production
-    continuous-batching kernel: there is no fused GPU gather, scheduler ownership,
-    request preemption, or transactional multi-request reservation.
+    Before model math starts, the whole batch performs one physical-block
+    capacity preflight including COW demand. In this single-thread reference
+    executor that prevents ordinary OOM from producing a partially committed
+    batch. It is still not a distributed reservation/fencing protocol.
     """
 
     def __init__(
@@ -99,8 +92,6 @@ class HeterogeneousPageAwareDecodeReference:
         scale = 1.0 / math.sqrt(self.model.config.head_dim)
 
         for entry in self.pool.allocator.block_table(request_id):
-            # Tensor slab layout is [L, block, H_kv, block_size, D].
-            # Add only a batch dimension; do not concatenate blocks into K/V.
             k_block = self.pool.keys[
                 layer_index,
                 entry.block_id,
@@ -125,8 +116,6 @@ class HeterogeneousPageAwareDecodeReference:
         scores.append(torch.matmul(q, k_current.transpose(-2, -1)) * scale)
         values.append(v_current)
 
-        # It is safe to concatenate the scalar attention scores. The expensive
-        # cached K/V tensors themselves remain in physical blocks.
         all_scores = torch.cat(scores, dim=-1)
         probabilities = F.softmax(all_scores.float(), dim=-1).to(dtype=q.dtype)
 
@@ -147,16 +136,7 @@ class HeterogeneousPageAwareDecodeReference:
         request_ids: list[str],
         token_ids: torch.Tensor,
     ) -> torch.Tensor:
-        """Decode one token for requests with arbitrary cached sequence lengths.
-
-        Args:
-            request_ids: Request ids in batch order. Each must already have a
-                physical cache in ``pool``.
-            token_ids: ``[B,1]`` token ids aligned with ``request_ids``.
-
-        Returns:
-            Next-token logits ``[B,V]`` after consuming each supplied token.
-        """
+        """Decode one token for requests with arbitrary cached sequence lengths."""
 
         if not request_ids:
             raise ValueError("request_ids cannot be empty")
@@ -174,6 +154,12 @@ class HeterogeneousPageAwareDecodeReference:
             if length + 1 > self.model.config.max_seq_len:
                 raise ValueError(f"request {request_id!r} would exceed max_seq_len")
             old_lengths.append(length)
+
+        # COW can require an extra block even when a partial tail has free slots.
+        # Check the sum for every request before any model or allocator mutation.
+        self.pool.require_batch_append_capacity(
+            {request_id: 1 for request_id in request_ids}
+        )
 
         x = self.model.embed_tokens(token_ids)
         new_pairs: dict[str, list[KVPair]] = {request_id: [] for request_id in request_ids}
@@ -213,12 +199,7 @@ class HeterogeneousPageAwareDecodeReference:
             x = x + block.ffn(block.ffn_norm(x))
 
         logits = self.model.lm_head(self.model.final_norm(x))[:, -1, :]
-
-        # Commit each request's one-token K/V only after all layer math succeeds.
-        # This is per-request safe, but not yet an atomic reservation across the
-        # whole heterogeneous batch. A production scheduler/allocator integration
-        # must reserve capacity before model execution.
-        for request_id in request_ids:
-            self.pool.append_delta(request_id, tuple(new_pairs[request_id]))
-
+        self.pool.append_batch_delta(
+            {request_id: tuple(new_pairs[request_id]) for request_id in request_ids}
+        )
         return logits

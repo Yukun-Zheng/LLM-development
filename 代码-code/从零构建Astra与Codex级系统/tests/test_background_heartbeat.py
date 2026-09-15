@@ -11,25 +11,35 @@ from astra_codex.structured import ToolSpec
 from astra_codex.tools import ToolRegistry
 
 
+LEASE_SECONDS = 0.5
+HEARTBEAT_INTERVAL_SECONDS = 0.05
+BLOCKING_SECONDS = 0.65
+
+
 def test_background_heartbeat_keeps_lease_alive_without_foreground_sampling(tmp_path) -> None:
     path = tmp_path / "work.sqlite"
     with DurableWorkQueue(path) as queue:
         item_id = queue.enqueue("thr", "turn", {"content": "slow"})
-        claimed = queue.claim("worker_a", lease_seconds=0.12)
+        claimed = queue.claim("worker_a", lease_seconds=LEASE_SECONDS)
         assert claimed is not None
 
         with BackgroundLeaseHeartbeat(
             str(path),
             item_id,
             "worker_a",
-            lease_seconds=0.12,
-            interval_seconds=0.03,
+            lease_seconds=LEASE_SECONDS,
+            interval_seconds=HEARTBEAT_INTERVAL_SECONDS,
         ) as heartbeat:
-            time.sleep(0.18)
+            # The protected section exceeds the original lease. The margin is
+            # intentionally much larger than a scheduler quantum so this tests
+            # lease semantics rather than CI timing luck.
+            time.sleep(BLOCKING_SECONDS)
             with DurableWorkQueue(path) as competitor:
                 assert competitor.claim("worker_b") is None
 
-        assert heartbeat.renewals >= 2
+        # start() performs one synchronous renewal and waits for one successful
+        # renewal by the background thread before returning.
+        assert heartbeat.renewals >= 3
         assert heartbeat.last_error is None
 
 
@@ -42,7 +52,7 @@ class BlockingProbeBackend:
         del messages, tools
         # Longer than the original lease. Without a background renewal thread,
         # worker_b could legally reclaim this work while model.generate blocks.
-        time.sleep(0.18)
+        time.sleep(BLOCKING_SECONDS)
         with DurableWorkQueue(self.queue_path) as competitor:
             self.competitor_claim = competitor.claim("worker_b")
         return "done after slow model call"
@@ -55,7 +65,7 @@ def test_integrated_runtime_background_heartbeat_covers_one_long_model_call(tmp_
     with DurableAgentRuntime(state, backend, ToolRegistry([])) as runtime:
         thread_id = runtime.create_thread("thr_slow")
         runtime.submit(thread_id, "slow turn", item_id="work_slow")
-        result = runtime.run_one("worker_a", lease_seconds=0.12)
+        result = runtime.run_one("worker_a", lease_seconds=LEASE_SECONDS)
 
         assert result is not None
         assert result.status == "completed"
@@ -67,5 +77,5 @@ def test_integrated_runtime_background_heartbeat_covers_one_long_model_call(tmp_
             topics={"work.background_heartbeat_summary"},
         )
         assert len(summaries) == 1
-        assert summaries[0].payload["renewals"] >= 2
+        assert summaries[0].payload["renewals"] >= 3
         assert summaries[0].payload["error"] is None

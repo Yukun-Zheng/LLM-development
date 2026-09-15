@@ -32,6 +32,12 @@ from .kv_tensor_pool import PhysicalBlockGenerationEngine, PhysicalKVTensorPool,
 from .model import DecoderOnlyTransformer, ModelOutput
 from .multi_agent import SequentialCoordinator, WorkerResult
 from .paged_cache import ReferencePagedGenerationEngine, ReferencePagedKVCache
+from .physical_prefix_cache import (
+    PhysicalPrefixCacheEngine,
+    PhysicalPrefixPrefillResult,
+    PrefixMatch,
+    TokenPrefixIndex,
+)
 from .planning import PlanGraph, PlanStep, StepStatus
 from .posttraining import (
     DPOResult,
@@ -157,10 +163,13 @@ __all__ = [
     "PhysicalBlock",
     "PhysicalBlockGenerationEngine",
     "PhysicalKVTensorPool",
+    "PhysicalPrefixCacheEngine",
+    "PhysicalPrefixPrefillResult",
     "PlanGraph",
     "PlanStep",
     "PrefixCacheEntry",
     "PrefixCacheStats",
+    "PrefixMatch",
     "PrefixPrefillResult",
     "Principal",
     "ProjectInstructionResolver",
@@ -197,6 +206,7 @@ __all__ = [
     "TensorPoolStats",
     "ThreadProjection",
     "ThreadStatus",
+    "TokenPrefixIndex",
     "ToolExecutionRecord",
     "TrajectoryMetrics",
     "TurnScopedJournaledTools",

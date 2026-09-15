@@ -68,20 +68,21 @@
         "Codex源码解剖-codex-anatomy/03-工具执行审批与沙箱-tools-approval-sandbox.md"
       ],
       "code": [
-        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/docker_sandbox.py"
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/docker_sandbox.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/coding.py"
       ],
       "tests": [
         "代码-code/从零构建Astra与Codex级系统/tests/test_docker_sandbox.py"
       ],
       "evidence": [
-        "Sandbox security workflow run 6 passed both jobs on GitHub-hosted Ubuntu 24.04; Docker container job passed 7 escape-oriented tests and Ruff",
+        "Sandbox security workflow run 8 completed successfully on GitHub-hosted Ubuntu 24.04; Docker container job passed 8 tests and Ruff, including an end-to-end Coding Agent → sandbox_exec → Docker container path",
         "Tested runtime: Docker Engine 28.0.4, containerd 2.3.4, runc 1.5.1, python:3.12-slim registry digest sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea, local image id sha256:ec7d6c95cd3692a2e2d228a8b1ca74e4025b54121fcc4c5da6f09cfa473315ad",
         "Behavioral tests validate host-secret invisibility, declared workspace write, read-only workspace/rootfs rejection, --network none isolation from host loopback, parent-secret environment non-inheritance, CapEff=0 and NoNewPrivs=1",
+        "Fast CPU Capstone run 167 also completed successfully: 119 passed, 14 skipped, 1 warning; Ruff passed. Docker-only tests are intentionally skipped in the ordinary CPU job and executed in the dedicated security workflow",
         "Validated claim is limited to this Docker/shared-kernel threat model; it is not VM-grade hostile-code containment and does not claim resistance to kernel or container-runtime vulnerabilities"
       ],
       "next": [
         "pin immutable image digest in runtime policy",
-        "integrate DockerSandboxExecTool into build_coding_agent",
         "custom seccomp/AppArmor or equivalent policy",
         "short-lived credential broker",
         "artifact-only output mode and per-path write capabilities",
@@ -112,7 +113,6 @@
         "The umbrella capability remains partial because VM-grade isolation, custom syscall/LSM policy, distributed credential isolation and broader escape testing are not implemented"
       ],
       "next": [
-        "container backend integration into the default high-risk coding path",
         "custom seccomp/AppArmor or equivalent enforcement",
         "credential broker and secret lease model",
         "self-hosted namespace evidence",

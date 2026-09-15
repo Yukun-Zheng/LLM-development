@@ -24,9 +24,18 @@ class RequestBlockTable:
 
 
 @dataclass(frozen=True, slots=True)
+class KVBlockReservation:
+    """Concrete physical block ids fenced away from the ordinary free list."""
+
+    reservation_id: int
+    block_ids: tuple[int, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class AllocatorMetrics:
     total_blocks: int
     allocated_blocks: int
+    reserved_blocks: int
     free_blocks: int
     logical_requests: int
     logical_tokens: int
@@ -45,21 +54,13 @@ class AllocatorMetrics:
 class KVBlockAllocator:
     """Reference physical-block allocator for paged KV-cache semantics.
 
-    This allocator deliberately models *metadata and ownership*, not the actual
-    K/V tensors. It establishes the contracts a page-aware attention backend
-    must preserve:
+    Besides request ownership/refcounts/COW, the allocator now supports a local
+    concrete-block reservation. Reserved ids are removed from the ordinary free
+    list before model execution, so another allocation through the same allocator
+    cannot steal capacity that a batch has already fenced.
 
-    - a finite physical block pool;
-    - per-request block tables;
-    - free-list allocation/reclamation;
-    - prefix sharing through block reference counts;
-    - copy-on-write when appending to a shared partial final block;
-    - deterministic, append-atomic out-of-memory behavior;
-    - observable fragmentation/utilization metrics.
-
-    The absence of tensor storage is intentional. A later optimized engine can
-    attach one K/V tensor slab to each physical block id without changing the
-    request/block ownership semantics tested here.
+    This remains an in-process reference mechanism. It is not a distributed
+    lease, cross-process transaction, or multi-node cache-coherence protocol.
     """
 
     def __init__(self, total_blocks: int, *, block_size: int = 16) -> None:
@@ -71,6 +72,9 @@ class KVBlockAllocator:
         self.block_size = block_size
         self.blocks = [PhysicalBlock(block_id=i) for i in range(total_blocks)]
         self._free: list[int] = list(reversed(range(total_blocks)))
+        self._reserved: set[int] = set()
+        self._reservations: dict[int, list[int]] = {}
+        self._next_reservation_id = 1
         self.requests: dict[str, RequestBlockTable] = {}
 
     def create_request(self, request_id: str) -> None:
@@ -86,15 +90,78 @@ class KVBlockAllocator:
         except KeyError as exc:
             raise KeyError(f"unknown request: {request_id}") from exc
 
-    def _allocate_block(self, used_tokens: int = 0) -> int:
+    def reserve_blocks(self, count: int) -> KVBlockReservation:
+        """Remove concrete block ids from the free list until release/consume."""
+
+        if count < 0:
+            raise ValueError("reservation count cannot be negative")
+        if count > len(self._free):
+            raise MemoryError(
+                f"KV block pool exhausted: reservation needs {count} free blocks, "
+                f"only {len(self._free)} available"
+            )
+        reservation_id = self._next_reservation_id
+        self._next_reservation_id += 1
+        block_ids = [self._free.pop() for _ in range(count)]
+        self._reserved.update(block_ids)
+        self._reservations[reservation_id] = list(block_ids)
+        reservation = KVBlockReservation(reservation_id, tuple(block_ids))
+        self.assert_invariants()
+        return reservation
+
+    def reservation_remaining(self, reservation: KVBlockReservation) -> int:
+        pending = self._reservation_list(reservation)
+        return len(pending)
+
+    def _reservation_list(self, reservation: KVBlockReservation) -> list[int]:
+        try:
+            pending = self._reservations[reservation.reservation_id]
+        except KeyError as exc:
+            raise RuntimeError("reservation is unknown or already released") from exc
+        if set(pending) - set(reservation.block_ids):
+            raise RuntimeError("reservation metadata corruption")
+        return pending
+
+    def release_reservation(self, reservation: KVBlockReservation) -> None:
+        pending = self._reservation_list(reservation)
+        for block_id in pending:
+            if block_id not in self._reserved:
+                raise RuntimeError("reserved block tracking corruption")
+            block = self.blocks[block_id]
+            if block.refcount != 0 or block.used_tokens != 0:
+                raise RuntimeError("unconsumed reserved block has allocated state")
+            self._reserved.remove(block_id)
+            self._free.append(block_id)
+        del self._reservations[reservation.reservation_id]
+        self.assert_invariants()
+
+    def _take_reserved_block(self, reservation: KVBlockReservation) -> int:
+        pending = self._reservation_list(reservation)
+        if not pending:
+            raise MemoryError("KV block reservation exhausted")
+        block_id = pending.pop()
+        if block_id not in self._reserved:
+            raise RuntimeError("reserved block tracking corruption")
+        self._reserved.remove(block_id)
+        return block_id
+
+    def _allocate_block(
+        self,
+        used_tokens: int = 0,
+        *,
+        reservation: KVBlockReservation | None = None,
+    ) -> int:
         if not 0 <= used_tokens <= self.block_size:
             raise ValueError("used_tokens outside block capacity")
-        if not self._free:
-            raise MemoryError("KV block pool exhausted")
-        block_id = self._free.pop()
+        if reservation is None:
+            if not self._free:
+                raise MemoryError("KV block pool exhausted")
+            block_id = self._free.pop()
+        else:
+            block_id = self._take_reserved_block(reservation)
         block = self.blocks[block_id]
         if block.refcount != 0 or block.used_tokens != 0:
-            raise RuntimeError("free-list corruption: block is not actually free")
+            raise RuntimeError("allocator selected a block that is not actually free")
         block.used_tokens = used_tokens
         block.refcount = 1
         return block_id
@@ -114,7 +181,12 @@ class KVBlockAllocator:
             block.used_tokens = 0
             self._free.append(block_id)
 
-    def _copy_on_write_last_block(self, table: RequestBlockTable) -> None:
+    def _copy_on_write_last_block(
+        self,
+        table: RequestBlockTable,
+        *,
+        reservation: KVBlockReservation | None = None,
+    ) -> None:
         if not table.entries:
             return
         last = table.entries[-1]
@@ -122,7 +194,10 @@ class KVBlockAllocator:
         if block.refcount <= 1 or last.logical_tokens >= self.block_size:
             return
 
-        cloned_id = self._allocate_block(last.logical_tokens)
+        cloned_id = self._allocate_block(
+            last.logical_tokens,
+            reservation=reservation,
+        )
         table.entries[-1] = BlockTableEntry(cloned_id, last.logical_tokens)
         self._release_ref(last.block_id)
 
@@ -138,7 +213,7 @@ class KVBlockAllocator:
             if last.logical_tokens < self.block_size:
                 block = self.blocks[last.block_id]
                 if block.refcount > 1:
-                    required += 1  # copy-on-write clone
+                    required += 1
                 free_slots = self.block_size - last.logical_tokens
                 consumed = min(free_slots, remaining)
                 remaining -= consumed
@@ -146,7 +221,13 @@ class KVBlockAllocator:
             required += (remaining + self.block_size - 1) // self.block_size
         return required
 
-    def append_tokens(self, request_id: str, token_count: int) -> None:
+    def append_tokens(
+        self,
+        request_id: str,
+        token_count: int,
+        *,
+        reservation: KVBlockReservation | None = None,
+    ) -> None:
         if token_count < 0:
             raise ValueError("token_count cannot be negative")
         if token_count == 0:
@@ -154,10 +235,16 @@ class KVBlockAllocator:
         table = self._table(request_id)
 
         required = self._required_blocks_for_append(table, token_count)
-        if required > len(self._free):
+        available = (
+            len(self._free)
+            if reservation is None
+            else self.reservation_remaining(reservation)
+        )
+        if required > available:
+            source = "free blocks" if reservation is None else "reserved blocks"
             raise MemoryError(
-                f"KV block pool exhausted: append needs {required} free blocks, "
-                f"only {len(self._free)} available"
+                f"KV block pool exhausted: append needs {required} {source}, "
+                f"only {available} available"
             )
 
         remaining = token_count
@@ -165,7 +252,10 @@ class KVBlockAllocator:
             if table.entries:
                 last = table.entries[-1]
                 if last.logical_tokens < self.block_size:
-                    self._copy_on_write_last_block(table)
+                    self._copy_on_write_last_block(
+                        table,
+                        reservation=reservation,
+                    )
                     last = table.entries[-1]
                     block = self.blocks[last.block_id]
                     free_slots = self.block_size - last.logical_tokens
@@ -178,7 +268,7 @@ class KVBlockAllocator:
                     continue
 
             take = min(self.block_size, remaining)
-            block_id = self._allocate_block(take)
+            block_id = self._allocate_block(take, reservation=reservation)
             table.entries.append(BlockTableEntry(block_id, take))
             table.sequence_length += take
             remaining -= take
@@ -215,9 +305,6 @@ class KVBlockAllocator:
                     remaining -= entry.logical_tokens
                     continue
 
-                # Prefix ends inside this block. Sharing the whole physical block
-                # would bind the target to suffix contents it does not logically
-                # own, so the partial tail is copied into a private block.
                 cloned = self._allocate_block(remaining)
                 allocated_partial.append(cloned)
                 target.entries.append(BlockTableEntry(cloned, remaining))
@@ -255,9 +342,6 @@ class KVBlockAllocator:
             block = self.blocks[entry.block_id]
             if block.refcount == 1:
                 block.used_tokens = remaining
-            # With a shared block, shorten only this request's logical view. The
-            # physical block may contain a longer sibling prefix; future append
-            # to this request will trigger copy-on-write.
             kept.append(BlockTableEntry(entry.block_id, remaining))
             remaining = 0
 
@@ -287,6 +371,7 @@ class KVBlockAllocator:
         return AllocatorMetrics(
             total_blocks=self.total_blocks,
             allocated_blocks=len(allocated),
+            reserved_blocks=len(self._reserved),
             free_blocks=len(self._free),
             logical_requests=len(self.requests),
             logical_tokens=logical_tokens,
@@ -300,6 +385,16 @@ class KVBlockAllocator:
         free_set = set(self._free)
         if len(free_set) != len(self._free):
             raise RuntimeError("free list contains duplicate block ids")
+        if free_set & self._reserved:
+            raise RuntimeError("block cannot be both free and reserved")
+
+        reservation_union: set[int] = set()
+        reservation_count = 0
+        for pending in self._reservations.values():
+            reservation_union.update(pending)
+            reservation_count += len(pending)
+        if reservation_union != self._reserved or reservation_count != len(self._reserved):
+            raise RuntimeError("reservation block tracking is inconsistent")
 
         expected_refs = [0 for _ in self.blocks]
         for request_id, table in self.requests.items():
@@ -333,10 +428,17 @@ class KVBlockAllocator:
                     f"block {block.block_id}: refcount {block.refcount} != {expected}"
                 )
             if expected == 0:
-                if block.block_id not in free_set or block.used_tokens != 0:
-                    raise RuntimeError(f"free block {block.block_id} has stale state")
+                location_count = int(block.block_id in free_set) + int(
+                    block.block_id in self._reserved
+                )
+                if location_count != 1 or block.used_tokens != 0:
+                    raise RuntimeError(
+                        f"unallocated block {block.block_id} is neither exclusively free nor reserved"
+                    )
             else:
-                if block.block_id in free_set:
-                    raise RuntimeError(f"allocated block {block.block_id} is on free list")
+                if block.block_id in free_set or block.block_id in self._reserved:
+                    raise RuntimeError(
+                        f"allocated block {block.block_id} is free/reserved"
+                    )
                 if not 1 <= block.used_tokens <= self.block_size:
                     raise RuntimeError(f"allocated block {block.block_id} has invalid use")

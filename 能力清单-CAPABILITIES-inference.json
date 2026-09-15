@@ -23,7 +23,6 @@
         "Allocator tests cover finite free-list allocation, fragmentation metrics, exact prefix block sharing/refcounts, partial-prefix private tails, copy-on-write for shared partial final blocks, truncate/release semantics and append-atomic OOM behavior"
       ],
       "next": [
-        "page-aware attention kernel",
         "scheduler integration and request preemption",
         "block-hash/radix production index",
         "eviction and swap policy",
@@ -51,10 +50,9 @@
         "Physical tensor slabs are indexed as [layer, block, H_kv, block_size, D], preserve shared-prefix COW semantics, zero released private blocks, and match full-recomputation decode logits in the tested tiny Transformer path"
       ],
       "next": [
-        "page-aware attention gather/kernel without contiguous materialization",
         "GPU slab benchmark",
-        "prefix-index integration",
-        "scheduler-owned allocation lifecycle"
+        "scheduler-owned allocation lifecycle",
+        "fused block-table attention kernel"
       ]
     },
     {
@@ -87,22 +85,61 @@
       ]
     },
     {
+      "id": "inference.page_aware_heterogeneous_decode",
+      "track": "inference",
+      "title": "Page-aware Mixed-length Decode over Physical K/V Blocks",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "教材-book/10-推理服务系统-inference-systems.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/18-PageAwareAttention与异长Decode-page-aware-decode.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/page_aware_decode.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/kv_tensor_pool.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_page_aware_decode.py"
+      ],
+      "evidence": [
+        "Fast CPU Capstone run 184 completed successfully: 140 passed, 14 skipped, 1 warning; Ruff passed",
+        "Mixed cached lengths are decoded through one batch API while historical K/V is read directly from physical block tables; tests forbid pool.materialize during decode and still match full-recomputation logits; per-layer stored K/V also matches full use_cache; shared partial-prefix state preserves the parent via copy-on-write"
+      ],
+      "next": [
+        "fused GPU block-table attention kernel",
+        "batch-level capacity reservation",
+        "scheduler integration",
+        "request preemption and live admission",
+        "mixed-length throughput benchmark"
+      ]
+    },
+    {
       "id": "inference.heterogeneous_continuous_batching",
       "track": "inference",
       "title": "Heterogeneous Variable-length Continuous Batching",
-      "status": "planned",
+      "status": "partial",
       "maturity": "L1",
       "theory": [
-        "教材-book/10-推理服务系统-inference-systems.md"
+        "教材-book/10-推理服务系统-inference-systems.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/18-PageAwareAttention与异长Decode-page-aware-decode.md"
       ],
-      "code": [],
-      "tests": [],
-      "evidence": [],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/page_aware_decode.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/scheduler.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_page_aware_decode.py",
+        "代码-code/从零构建Astra与Codex级系统/tests/test_scheduler_benchmark.py"
+      ],
+      "evidence": [
+        "The page-aware decode reference now supports heterogeneous cached lengths, but request arrival/finish/preemption are not yet integrated into one continuously mutating scheduler-executor loop"
+      ],
       "next": [
-        "bind scheduler request state to physical block tables",
-        "support per-request cached lengths in one decode batch",
-        "page-aware attention mask/indexing",
-        "measure TTFT/TPOT/throughput/fairness under mixed prompt lengths"
+        "bind scheduler request state to physical block tables and prefix cache",
+        "reserve blocks before execution",
+        "admit new requests between decode iterations",
+        "free completed request blocks immediately",
+        "measure TTFT/TPOT/throughput/fairness under mixed prompt lengths and arrivals"
       ]
     }
   ]

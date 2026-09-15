@@ -10,6 +10,15 @@ from .app_server import AgentAppServer, AppTransport
 from .runtime import DurableAgentRuntime
 
 
+def _bearer_token(header: str | None) -> str | None:
+    if header is None:
+        return None
+    scheme, separator, value = header.partition(" ")
+    if not separator or scheme.lower() != "bearer" or not value.strip():
+        return None
+    return value.strip()
+
+
 class LocalHTTPAppServer:
     """Small stdlib HTTP transport for the educational App Server.
 
@@ -20,11 +29,13 @@ class LocalHTTPAppServer:
     SQLite connections are thread-affine by default. Rather than disabling that
     safety check globally, the HTTP server opens its *own* DurableAgentRuntime
     handle inside the server thread, pointing at the same durable state files.
-    This mirrors a real external control-plane process more closely than sharing
-    Python connection objects across threads.
+    The prototype App Server's authorizer is preserved, so bearer identity is
+    checked in the same policy layer for in-process and HTTP transports.
 
-    There is intentionally no TLS, authentication, CORS policy or
-    internet-facing hardening. Those must be added before any non-local use.
+    There is intentionally no TLS, CORS policy or internet-facing hardening.
+    Bearer authentication over plaintext HTTP is only acceptable here because
+    the reference server binds to loopback; remote deployment needs TLS and a
+    stronger identity/session design.
     """
 
     def __init__(
@@ -57,7 +68,10 @@ class LocalHTTPAppServer:
                     payload = json.loads(raw.decode("utf-8"))
                     if not isinstance(payload, dict):
                         raise ValueError("JSON-RPC request must be an object")
-                    response = outer._thread_app_server.handle(payload)
+                    response = outer._thread_app_server.handle(
+                        payload,
+                        bearer_token=_bearer_token(self.headers.get("Authorization")),
+                    )
                     self._write_json(200, response)
                 except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
                     self._write_json(
@@ -108,7 +122,10 @@ class LocalHTTPAppServer:
                 max_model_steps=prototype_runtime.max_model_steps,
                 retryable_in_doubt_tools=retryable,
             ) as runtime_handle:
-                self._thread_app_server = AgentAppServer(runtime_handle)
+                self._thread_app_server = AgentAppServer(
+                    runtime_handle,
+                    authorizer=self.prototype.authorizer,
+                )
                 self._ready.set()
                 self.server.serve_forever()
         finally:
@@ -147,18 +164,28 @@ class LocalHTTPAppServer:
 class HTTPAppTransport(AppTransport):
     """Synchronous JSON-RPC-over-HTTP client transport."""
 
-    def __init__(self, rpc_url: str, *, timeout_s: float = 10.0) -> None:
+    def __init__(
+        self,
+        rpc_url: str,
+        *,
+        timeout_s: float = 10.0,
+        bearer_token: str | None = None,
+    ) -> None:
         if timeout_s <= 0:
             raise ValueError("timeout_s must be positive")
         self.rpc_url = rpc_url
         self.timeout_s = timeout_s
+        self.bearer_token = bearer_token
 
     def request(self, payload: dict[str, Any]) -> dict[str, Any]:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        if self.bearer_token is not None:
+            headers["Authorization"] = f"Bearer {self.bearer_token}"
         request = Request(
             self.rpc_url,
             data=body,
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method="POST",
         )
         with urlopen(request, timeout=self.timeout_s) as response:  # noqa: S310 - explicit local educational transport

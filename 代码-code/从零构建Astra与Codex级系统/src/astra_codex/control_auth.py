@@ -10,9 +10,8 @@ class Principal:
     """Authenticated control-plane identity and explicit capability scope.
 
     ``allowed_methods=None`` means all App-Server methods. ``thread_ids=None``
-    means all threads. A finite ``thread_ids`` set is intentionally restrictive:
-    methods that cannot be scoped to a target thread (for example the current
-    global ``runtime/runOne`` worker claim) are rejected for such principals.
+    means all threads. A finite ``thread_ids`` set requires every resource-bearing
+    request to identify a thread that belongs to the principal's scope.
     """
 
     subject: str
@@ -83,13 +82,17 @@ class BearerTokenAuthorizer:
         if method == "server/discover":
             return
 
-        # The current worker endpoint claims the next global work item and does
-        # not accept a thread selector. It cannot safely be used by a scoped
-        # principal until the queue supports an authorized thread filter.
+        # A scoped worker must name exactly which authorized thread it may claim.
+        # The App Server passes this scope into DurableWorkQueue.claim(), so the
+        # queue itself cannot lease an out-of-scope item.
         if method == "runtime/runOne":
-            raise AuthorizationError(
-                "thread-scoped principals cannot call global runtime/runOne"
-            )
+            requested = params.get("threadId")
+            if not isinstance(requested, str) or not requested:
+                raise AuthorizationError(
+                    "thread-scoped principals must supply threadId to runtime/runOne"
+                )
+            self._require_thread(principal, requested)
+            return
 
         if method == "thread/create":
             requested = params.get("threadId")

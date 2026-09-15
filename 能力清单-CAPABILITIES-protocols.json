@@ -19,7 +19,7 @@
         "代码-code/从零构建Astra与Codex级系统/tests/test_a2a.py"
       ],
       "evidence": [
-        "Pinned to a2aproject/A2A commit 6d6640c29b102f7a8d23784901351b5d2454fe71 specification/a2a.proto; A2A core tests are included in Fast CI run 241 (184 passed, 14 skipped)"
+        "Pinned to a2aproject/A2A commit 6d6640c29b102f7a8d23784901351b5d2454fe71 specification/a2a.proto; A2A core tests are included in Fast CI run 246 (187 passed, 14 skipped)"
       ],
       "next": [
         "INPUT_REQUIRED / AUTH_REQUIRED continuation experiments",
@@ -44,10 +44,9 @@
         "代码-code/从零构建Astra与Codex级系统/tests/test_a2a_http.py"
       ],
       "evidence": [
-        "Fast CI run 235/241: real localhost HTTP validates /.well-known/agent-card.json, POST /message:send, GET /tasks/{id}, GET /tasks, POST /tasks/{id}:cancel, source-aligned ListTasks status/pageSize/pageToken/historyLength semantics, opaque pagination and Ruff"
+        "Fast CI run 246 includes real localhost HTTP coverage for /.well-known/agent-card.json, POST /message:send, GET /tasks/{id}, GET /tasks, POST /tasks/{id}:cancel and source-aligned ListTasks status/pageSize/pageToken/historyLength/statusTimestampAfter/includeArtifacts semantics"
       ],
       "next": [
-        "GET /tasks/{id}:subscribe",
         "tenant-prefixed bindings",
         "security schemes and TLS",
         "official conformance comparison"
@@ -71,7 +70,7 @@
         "代码-code/从零构建Astra与Codex级系统/tests/test_a2a_runtime_bridge.py"
       ],
       "evidence": [
-        "Fast CI run 241: A2A SendMessage executes a real Durable Thread → WorkItem → Turn, preserves queue-level thread fencing, maps result metadata/status back to A2A, defers returnImmediately correctly and rejects raw media without an explicit policy"
+        "Fast CI run 246 includes A2A SendMessage → real Durable Thread → WorkItem → Turn, queue-level thread fencing, returnImmediately deferred processing and explicit raw-media rejection"
       ],
       "next": [
         "interrupted INPUT_REQUIRED/AUTH_REQUIRED continuations",
@@ -97,7 +96,7 @@
         "代码-code/从零构建Astra与Codex级系统/tests/test_a2a_runtime_http.py"
       ],
       "evidence": [
-        "Fast CI run 235: real TCP/HTTP POST /message:send traverses A2A Task → server-thread-owned DurableAgentRuntime → Thread/WorkItem/Turn → A2A response; committed runtime and A2A task state survive server restart; full suite 182 passed, 14 skipped, Ruff passed"
+        "Fast CI run 246 includes real TCP/HTTP POST /message:send → server-thread-owned DurableAgentRuntime → Thread/WorkItem/Turn → A2A response, with committed runtime and A2A task state surviving server restart"
       ],
       "next": [
         "runtime/backend factory instead of sharing a prototype backend object",
@@ -123,13 +122,38 @@
         "代码-code/从零构建Astra与Codex级系统/tests/test_a2a_streaming.py"
       ],
       "evidence": [
-        "Fast CI run 241: real POST /message:stream uses text/event-stream, flushes a durable SUBMITTED Task before a deliberately blocked handler completes, then emits artifactUpdate before final statusUpdate; full suite 184 passed, 14 skipped and Ruff passed"
+        "Fast CI run 246 includes real POST /message:stream using text/event-stream, durable SUBMITTED first-frame delivery before a blocked handler completes, artifactUpdate before final statusUpdate, and Ruff correctness"
       ],
       "next": [
         "executor-native WORKING/intermediate updates",
-        "GET /tasks/{id}:subscribe",
-        "durable update replay/reconnect cursor",
-        "stream authentication and cancellation"
+        "stream authentication and cancellation",
+        "shared durable update source with remote runtime execution"
+      ]
+    },
+    {
+      "id": "protocol.a2a_subscribe_task",
+      "track": "protocol",
+      "title": "A2A v1 Durable SubscribeToTask / SSE Replay",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "智能体-agent/09-Agent协议与互操作-agent-protocols.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/23-A2Av1远程任务与HTTP绑定-a2a-runtime.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/a2a_subscription.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_a2a_subscription.py"
+      ],
+      "evidence": [
+        "Fast CI run 246: append-only A2A Task snapshot journal + real GET /tasks/{id}:subscribe SSE replays SUBMITTED then live terminal Task update across separate SQLite connections, de-duplicates identical snapshots and rejects a fresh subscription to an already-terminal Task; full suite 187 passed, 14 skipped, Ruff passed"
+      ],
+      "next": [
+        "Last-Event-ID reconnect replay regression in the latest suite",
+        "executor-native WORKING/artifact deltas",
+        "subscription authentication/tenant scope",
+        "push notification configuration"
       ]
     }
   ]

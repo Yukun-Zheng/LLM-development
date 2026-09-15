@@ -96,8 +96,9 @@ class GuardedToolExecutor:
             policy_metadata["approved"] = True
 
         result = self.registry.execute(tool_name, arguments)
+        result_metadata = result.metadata or {}
         return ToolResult(
             result.ok,
             result.output,
-            {**result.metadata, **policy_metadata},
+            {**result_metadata, **policy_metadata},
         )

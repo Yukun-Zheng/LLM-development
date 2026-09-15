@@ -60,6 +60,7 @@ from .scheduler import (
     ScheduledBatch,
 )
 from .security import GuardedToolExecutor, PermissionDecision, PermissionProfile
+from .sse_events import LocalSSEEventServer, SSEEventClient, SSEMessage
 from .steering import DurableSteeringQueue, SteeringMessage, SteeringStatus
 from .tokenizer import ByteBPETokenizer, ByteTokenizer
 from .tool_journal import (
@@ -124,6 +125,7 @@ __all__ = [
     "JournaledToolExecutor",
     "LeaseHeartbeat",
     "LocalHTTPAppServer",
+    "LocalSSEEventServer",
     "ModelConfig",
     "ModelOutput",
     "PermissionDecision",
@@ -150,6 +152,8 @@ __all__ = [
     "ResolvedInstructions",
     "RuntimeEvent",
     "RuntimeExecutionRecord",
+    "SSEEventClient",
+    "SSEMessage",
     "SamplingConfig",
     "ScheduledBatch",
     "SequenceLogProbs",

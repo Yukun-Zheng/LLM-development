@@ -31,6 +31,7 @@ from .kv_block_allocator import (
 from .kv_tensor_pool import PhysicalBlockGenerationEngine, PhysicalKVTensorPool, TensorPoolStats
 from .model import DecoderOnlyTransformer, ModelOutput
 from .multi_agent import SequentialCoordinator, WorkerResult
+from .page_aware_decode import HeterogeneousPageAwareDecodeReference
 from .paged_cache import ReferencePagedGenerationEngine, ReferencePagedKVCache
 from .physical_prefix_cache import (
     PhysicalPrefixCacheEngine,
@@ -147,6 +148,7 @@ __all__ = [
     "GroupRelativeResult",
     "GuardedToolExecutor",
     "HTTPAppTransport",
+    "HeterogeneousPageAwareDecodeReference",
     "HomogeneousBatchExecutor",
     "IGNORE_INDEX",
     "InProcessAppTransport",

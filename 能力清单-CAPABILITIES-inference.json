@@ -105,9 +105,38 @@
       ],
       "next": [
         "fused GPU block-table attention kernel",
-        "batch-level capacity reservation",
+        "scheduler-owned reservation/fencing",
         "request preemption",
         "mixed-length throughput benchmark"
+      ]
+    },
+    {
+      "id": "inference.batch_kv_capacity_preflight",
+      "track": "inference",
+      "title": "Batch-wide Physical KV OOM Preflight",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "教材-book/10-推理服务系统-inference-systems.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/18-PageAwareAttention与异长Decode-page-aware-decode.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/19-ContinuousBatching调度闭环-continuous-batching.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/kv_tensor_pool.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/page_aware_decode.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_batch_kv_preflight.py"
+      ],
+      "evidence": [
+        "Fast CPU Capstone run 195 completed successfully: 148 passed, 14 skipped, 1 warning; Ruff passed",
+        "The mixed decode path checks aggregate COW/new-block capacity before embedding/model math or any cache mutation; deliberate zero-free-block tests raise MemoryError with unchanged block tables, sequence lengths and K/V slabs; a sufficient-capacity batch commits every request and matches full use_cache state"
+      ],
+      "next": [
+        "replace conservative preflight with scheduler-owned concrete block-id reservation",
+        "reservation token commit/rollback",
+        "fencing against concurrent allocator users",
+        "preemption and admission policy under memory pressure"
       ]
     },
     {
@@ -136,7 +165,7 @@
         "The reference engine interleaves an old decode lane with new prompt admission in the same iteration, uses mixed-length page-aware decode, frees physical blocks immediately at terminal state, handles cancellation, records TTFT/TPOT/latency, and terminates multi-request runs without leaked blocks"
       ],
       "next": [
-        "batch-wide physical-block reservation before execution",
+        "scheduler-owned concrete block reservation before execution",
         "chunked prefill under a unified token budget",
         "request preemption/swap",
         "prefix-cache eviction/admission policy",

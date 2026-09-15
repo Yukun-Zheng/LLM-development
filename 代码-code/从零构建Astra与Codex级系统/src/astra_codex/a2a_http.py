@@ -29,7 +29,6 @@ from urllib.request import Request, urlopen
 
 from .a2a import (
     A2AAgentCard,
-    A2AMessage,
     A2AProtocolError,
     A2ASendMessageConfiguration,
     A2ASendMessageRequest,

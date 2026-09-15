@@ -1,6 +1,22 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
+from astra_codex.agent import Message
+from astra_codex.coding import build_coding_agent
 from astra_codex.instructions import ProjectInstructionResolver
+from astra_codex.structured import ToolSpec
+
+
+@dataclass
+class RecordingBackend:
+    output: str
+    calls: list[list[Message]] = field(default_factory=list)
+
+    def generate(self, messages: list[Message], tools: list[ToolSpec]) -> str:
+        del tools
+        self.calls.append(list(messages))
+        return self.output
 
 
 def test_instruction_resolver_collects_root_to_cwd_with_provenance(tmp_path) -> None:
@@ -106,3 +122,26 @@ def test_resolver_never_walks_above_nearest_project_root(tmp_path) -> None:
     resolved = ProjectInstructionResolver().resolve(cwd)
 
     assert [source.contents for source in resolved.sources] == ["repo"]
+
+
+def test_coding_agent_injects_only_in_scope_project_instructions(tmp_path) -> None:
+    root = tmp_path / "repo"
+    cwd = root / "packages" / "api"
+    sibling = root / "packages" / "web"
+    cwd.mkdir(parents=True)
+    sibling.mkdir(parents=True)
+    (root / ".git").mkdir()
+    (root / "AGENTS.md").write_text("ROOT-INSTRUCTION", encoding="utf-8")
+    (cwd / "AGENTS.md").write_text("API-INSTRUCTION", encoding="utf-8")
+    (sibling / "AGENTS.md").write_text("WEB-MUST-NOT-APPEAR", encoding="utf-8")
+
+    backend = RecordingBackend("done")
+    agent = build_coding_agent(backend, root, working_directory=cwd)
+    run = agent.run("inspect the repository")
+
+    assert run.final_answer == "done"
+    system_message = backend.calls[0][0]
+    assert system_message.role == "system"
+    assert "ROOT-INSTRUCTION" in system_message.content
+    assert "API-INSTRUCTION" in system_message.content
+    assert "WEB-MUST-NOT-APPEAR" not in system_message.content

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from .durable import ThreadProjection
+from .event_stream import RuntimeEvent
 from .runtime import DurableAgentRuntime, RuntimeExecutionRecord
 
 
@@ -69,12 +70,27 @@ def _execution_payload(record: RuntimeExecutionRecord | None) -> dict[str, Any] 
     }
 
 
+def _runtime_event_payload(event: RuntimeEvent) -> dict[str, Any]:
+    return {
+        "eventId": event.event_id,
+        "topic": event.topic,
+        "payload": event.payload,
+        "threadId": event.thread_id,
+        "turnId": event.turn_id,
+        "createdAt": event.created_at,
+    }
+
+
 class AgentAppServer:
     """Minimal JSON-RPC control plane over ``DurableAgentRuntime``.
 
-    It intentionally exposes runtime state instead of importing UI concerns into
-    the agent kernel.  This is an educational App-Server slice: in-process only,
-    no authentication, streaming transport, subscriptions or multi-tenant ACLs.
+    This layer keeps UI/IDE concerns outside the agent kernel. It now exposes a
+    durable cursor-based event feed through ``event/poll``. Polling is useful for
+    deterministic reconnect/replay and is intentionally implemented before a
+    websocket/SSE push transport.
+
+    Current boundary: no authentication, authorization, multi-tenant ACLs or
+    network transport in this module. Those are separate control-plane layers.
     """
 
     def __init__(self, runtime: DurableAgentRuntime) -> None:
@@ -134,7 +150,7 @@ class AgentAppServer:
     def _dispatch(self, method: str, params: dict[str, Any]) -> Any:
         if method == "server/discover":
             return {
-                "serverInfo": {"name": "astra-codex-app-server", "version": "0.1.0"},
+                "serverInfo": {"name": "astra-codex-app-server", "version": "0.2.0"},
                 "methods": [
                     "thread/create",
                     "thread/get",
@@ -146,7 +162,13 @@ class AgentAppServer:
                     "thread/fork",
                     "runtime/runOne",
                     "artifact/list",
+                    "event/poll",
                 ],
+                "eventFeed": {
+                    "mode": "cursor-poll",
+                    "cursor": "eventId",
+                    "replayable": True,
+                },
             }
 
         if method == "thread/create":
@@ -188,11 +210,15 @@ class AgentAppServer:
             if not isinstance(reason, str):
                 raise AppServerError(-32602, "reason must be a string")
             self.runtime.thread_store.pause(thread_id, reason)
+            self.runtime._emit(  # control-plane mirror of authoritative thread event
+                "thread.paused", {"reason": reason}, thread_id=thread_id
+            )
             return _projection_payload(self.runtime.thread_store.project(thread_id))
 
         if method == "thread/resume":
             thread_id = self._require_str(params, "threadId")
             self.runtime.thread_store.resume(thread_id)
+            self.runtime._emit("thread.resumed", {}, thread_id=thread_id)
             return _projection_payload(self.runtime.thread_store.project(thread_id))
 
         if method == "thread/cancel":
@@ -201,6 +227,9 @@ class AgentAppServer:
             if not isinstance(reason, str):
                 raise AppServerError(-32602, "reason must be a string")
             self.runtime.thread_store.cancel_thread(thread_id, reason)
+            self.runtime._emit(
+                "thread.cancelled", {"reason": reason}, thread_id=thread_id
+            )
             return _projection_payload(self.runtime.thread_store.project(thread_id))
 
         if method == "thread/fork":
@@ -215,6 +244,11 @@ class AgentAppServer:
                 thread_id,
                 new_thread_id=new_thread_id,
                 through_event_id=through,
+            )
+            self.runtime._emit(
+                "thread.forked",
+                {"parentThreadId": thread_id, "throughEventId": through},
+                thread_id=child,
             )
             return _projection_payload(self.runtime.thread_store.project(child))
 
@@ -241,6 +275,36 @@ class AgentAppServer:
                     }
                     for item in self.runtime.artifact_store.list_thread(thread_id)
                 ]
+            }
+
+        if method == "event/poll":
+            after = params.get("afterEventId", 0)
+            limit = params.get("limit", 100)
+            thread_id = params.get("threadId")
+            topics = params.get("topics")
+            if not isinstance(after, int) or after < 0:
+                raise AppServerError(-32602, "afterEventId must be a non-negative integer")
+            if not isinstance(limit, int) or limit <= 0 or limit > 1000:
+                raise AppServerError(-32602, "limit must be an integer between 1 and 1000")
+            if thread_id is not None and not isinstance(thread_id, str):
+                raise AppServerError(-32602, "threadId must be a string")
+            if topics is not None and (
+                not isinstance(topics, list)
+                or not all(isinstance(topic, str) and topic for topic in topics)
+            ):
+                raise AppServerError(-32602, "topics must be a list of non-empty strings")
+
+            events = self.runtime.event_stream.read(
+                after_id=after,
+                limit=limit,
+                thread_id=thread_id,
+                topics=topics,
+            )
+            next_after = events[-1].event_id if events else after
+            return {
+                "events": [_runtime_event_payload(event) for event in events],
+                "nextAfterEventId": next_after,
+                "highWatermark": self.runtime.event_stream.high_watermark,
             }
 
         raise AppServerError(-32601, f"Method not found: {method}")

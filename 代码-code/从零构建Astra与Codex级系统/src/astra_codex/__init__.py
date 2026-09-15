@@ -38,6 +38,12 @@ from .scheduler import (
 )
 from .security import GuardedToolExecutor, PermissionDecision, PermissionProfile
 from .tokenizer import ByteBPETokenizer, ByteTokenizer
+from .tool_journal import (
+    DurableToolJournal,
+    ExecutionStatus,
+    JournaledToolExecutor,
+    ToolExecutionRecord,
+)
 from .verification import (
     CommandVerifier,
     CompositeVerifier,
@@ -63,8 +69,10 @@ __all__ = [
     "DecoderOnlyTransformer",
     "DurableAgentRuntime",
     "DurableThreadStore",
+    "DurableToolJournal",
     "DurableWorkQueue",
     "ExactAnswerGrader",
+    "ExecutionStatus",
     "FileExistsVerifier",
     "FragmentKind",
     "GenerationEngine",
@@ -73,6 +81,7 @@ __all__ = [
     "GuardedToolExecutor",
     "HomogeneousBatchExecutor",
     "IGNORE_INDEX",
+    "JournaledToolExecutor",
     "ModelConfig",
     "ModelOutput",
     "PermissionDecision",
@@ -97,6 +106,7 @@ __all__ = [
     "StepStatus",
     "ThreadProjection",
     "ThreadStatus",
+    "ToolExecutionRecord",
     "TrajectoryMetrics",
     "VerificationResult",
     "Verdict",

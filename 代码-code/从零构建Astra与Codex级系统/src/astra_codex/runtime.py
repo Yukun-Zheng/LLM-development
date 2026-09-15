@@ -6,8 +6,9 @@ from typing import Any
 
 from .agent import ModelBackend
 from .artifacts import ArtifactStore
-from .codex_harness import CodexHarness, CodexTurnResult
+from .codex_harness import CodexHarness, CodexTurnResult, HarnessEvent
 from .durable import DurableThreadStore, TERMINAL_THREAD_STATUSES, ThreadStatus
+from .event_stream import DurableEventStream
 from .runtime_control import ControlledBackend, LeaseHeartbeat
 from .runtime_queue import DurableWorkQueue, WorkItem, WorkStatus
 from .steering import DurableSteeringQueue
@@ -37,10 +38,14 @@ class DurableAgentRuntime:
         submission -> thread event -> work item -> worker lease -> turn/checkpoint
         -> journaled tool calls -> final checkpoint -> turn completion -> work ACK
 
-    The runtime now also owns a durable steering inbox and a content-addressed
-    artifact store. Before every model sampling step, ``ControlledBackend``
-    renews the worker lease and injects steering messages that arrived while the
-    turn was executing.
+    The runtime owns a durable steering inbox, content-addressed artifact store
+    and an append-only *control-plane* event feed. ``DurableThreadStore`` remains
+    the source of truth for reconstructing thread state; ``DurableEventStream``
+    is a replayable integration surface for UIs, IDEs and remote clients.
+
+    Before every model sampling step, ``ControlledBackend`` renews the worker
+    lease and injects steering messages that arrived while the turn was running.
+    Harness events are published to the event stream as they happen.
 
     Completed tool calls are keyed by the stable work-item id and call index. If
     a worker disappears and the lease is later reclaimed, completed calls can be
@@ -64,11 +69,13 @@ class DurableAgentRuntime:
     ) -> None:
         root = Path(state_dir).resolve()
         root.mkdir(parents=True, exist_ok=True)
+        self.state_dir = root
         self.thread_store = DurableThreadStore(root / "threads.sqlite")
         self.work_queue = DurableWorkQueue(root / "work.sqlite")
         self.tool_journal = DurableToolJournal(root / "tool-journal.sqlite")
         self.steering_queue = DurableSteeringQueue(root / "steering.sqlite")
         self.artifact_store = ArtifactStore(root / "artifacts")
+        self.event_stream = DurableEventStream(root / "events.sqlite")
         self.journaled_tools = JournaledToolExecutor(
             tools,
             self.tool_journal,
@@ -77,8 +84,27 @@ class DurableAgentRuntime:
         self.backend = backend
         self.max_model_steps = max_model_steps
 
+    def _emit(
+        self,
+        topic: str,
+        payload: dict[str, Any] | None = None,
+        *,
+        thread_id: str | None = None,
+        turn_id: str | None = None,
+        now: float | None = None,
+    ) -> int:
+        return self.event_stream.append(
+            topic,
+            payload,
+            thread_id=thread_id,
+            turn_id=turn_id,
+            now=now,
+        )
+
     def create_thread(self, thread_id: str | None = None) -> str:
-        return self.thread_store.create_thread(thread_id)
+        created = self.thread_store.create_thread(thread_id)
+        self._emit("thread.created", {"threadId": created}, thread_id=created)
+        return created
 
     def submit(
         self,
@@ -89,13 +115,20 @@ class DurableAgentRuntime:
         now: float | None = None,
     ) -> str:
         self.thread_store.submit(thread_id, content)
-        return self.work_queue.enqueue(
+        created = self.work_queue.enqueue(
             thread_id,
             "turn",
             {"content": content},
             item_id=item_id,
             now=now,
         )
+        self._emit(
+            "thread.submitted",
+            {"workItemId": created, "content": content},
+            thread_id=thread_id,
+            now=now,
+        )
+        return created
 
     def steer(
         self,
@@ -110,12 +143,19 @@ class DurableAgentRuntime:
             raise RuntimeError(
                 f"cannot steer terminal thread: {projection.status.value}"
             )
-        return self.steering_queue.submit(
+        created = self.steering_queue.submit(
             thread_id,
             content,
             steering_id=steering_id,
             now=now,
         )
+        self._emit(
+            "thread.steering_submitted",
+            {"steeringId": created, "content": content},
+            thread_id=thread_id,
+            now=now,
+        )
+        return created
 
     def snapshot_artifact(
         self,
@@ -128,7 +168,7 @@ class DurableAgentRuntime:
         now: float | None = None,
     ) -> str:
         self.thread_store.project(thread_id)
-        return self.artifact_store.snapshot_file(
+        created = self.artifact_store.snapshot_file(
             thread_id,
             source,
             kind=kind,
@@ -136,6 +176,19 @@ class DurableAgentRuntime:
             artifact_id=artifact_id,
             now=now,
         )
+        record = self.artifact_store.get(created)
+        self._emit(
+            "artifact.created",
+            {
+                "artifactId": created,
+                "kind": record.kind,
+                "sha256": record.sha256,
+                "sizeBytes": record.size_bytes,
+            },
+            thread_id=thread_id,
+            now=now,
+        )
+        return created
 
     @staticmethod
     def _checkpoint_state(projection) -> dict[str, Any]:  # type: ignore[no-untyped-def]
@@ -186,6 +239,18 @@ class DurableAgentRuntime:
             )
             status = "completed_from_checkpoint"
 
+        self._emit(
+            "work.finished",
+            {
+                "workItemId": item.item_id,
+                "workerId": worker_id,
+                "status": status,
+                "recoveredFromCheckpoint": True,
+            },
+            thread_id=item.thread_id,
+            turn_id=turn_id,
+            now=now,
+        )
         return RuntimeExecutionRecord(
             work_item_id=item.item_id,
             thread_id=item.thread_id,
@@ -211,10 +276,27 @@ class DurableAgentRuntime:
         if item is None:
             return None
 
+        self._emit(
+            "work.claimed",
+            {
+                "workItemId": item.item_id,
+                "workerId": worker_id,
+                "leaseUntil": item.lease_until,
+            },
+            thread_id=item.thread_id,
+            now=now,
+        )
+
         projection = self.thread_store.project(item.thread_id)
         if projection.status in TERMINAL_THREAD_STATUSES:
             if item.status is WorkStatus.LEASED:
                 self.work_queue.cancel(item.item_id, now=now)
+            self._emit(
+                "work.cancelled",
+                {"workItemId": item.item_id, "reason": "thread_terminal"},
+                thread_id=item.thread_id,
+                now=now,
+            )
             return RuntimeExecutionRecord(
                 work_item_id=item.item_id,
                 thread_id=item.thread_id,
@@ -230,6 +312,13 @@ class DurableAgentRuntime:
         if recovering:
             if checkpoint_state.get("work_item_id") != item.item_id:
                 self.work_queue.release(item.item_id, worker_id, now=now)
+                self._emit(
+                    "work.deferred",
+                    {"workItemId": item.item_id, "reason": "thread_not_ready"},
+                    thread_id=item.thread_id,
+                    turn_id=projection.active_turn_id,
+                    now=now,
+                )
                 return RuntimeExecutionRecord(
                     work_item_id=item.item_id,
                     thread_id=item.thread_id,
@@ -263,8 +352,22 @@ class DurableAgentRuntime:
                     "turn_id": turn_id,
                 },
             )
+            self._emit(
+                "turn.opened",
+                {"workItemId": item.item_id, "workerId": worker_id},
+                thread_id=item.thread_id,
+                turn_id=turn_id,
+                now=now,
+            )
         else:
             self.work_queue.release(item.item_id, worker_id, now=now)
+            self._emit(
+                "work.deferred",
+                {"workItemId": item.item_id, "reason": projection.status.value},
+                thread_id=item.thread_id,
+                turn_id=projection.active_turn_id,
+                now=now,
+            )
             return RuntimeExecutionRecord(
                 work_item_id=item.item_id,
                 thread_id=item.thread_id,
@@ -287,7 +390,15 @@ class DurableAgentRuntime:
         )
 
         def beat() -> float:
-            return heartbeat.renew(now=now) if now is not None else heartbeat.renew()
+            lease_until = heartbeat.renew(now=now) if now is not None else heartbeat.renew()
+            self._emit(
+                "work.heartbeat",
+                {"workItemId": item.item_id, "leaseUntil": lease_until},
+                thread_id=item.thread_id,
+                turn_id=turn_id,
+                now=now,
+            )
+            return lease_until
 
         controlled_backend = ControlledBackend(
             self.backend,
@@ -295,9 +406,19 @@ class DurableAgentRuntime:
             steering_queue=self.steering_queue,
             thread_id=item.thread_id,
         )
+
+        def publish_harness_event(event: HarnessEvent) -> None:
+            self._emit(
+                f"harness.{event.kind.value}",
+                dict(event.payload),
+                thread_id=item.thread_id,
+                turn_id=turn_id,
+            )
+
         harness = CodexHarness(
             controlled_backend,
             scoped_tools,  # type: ignore[arg-type]
+            event_sink=publish_harness_event,
             max_model_steps=self.max_model_steps,
         )
 
@@ -342,6 +463,18 @@ class DurableAgentRuntime:
                     now=now,
                 )
                 status = "completed_recovered" if recovering else "completed"
+            self._emit(
+                "work.finished",
+                {
+                    "workItemId": item.item_id,
+                    "workerId": worker_id,
+                    "status": status,
+                    "modelSteps": result.model_steps,
+                },
+                thread_id=item.thread_id,
+                turn_id=turn_id,
+                now=now,
+            )
             return RuntimeExecutionRecord(
                 work_item_id=item.item_id,
                 thread_id=item.thread_id,
@@ -361,6 +494,18 @@ class DurableAgentRuntime:
                 item.thread_id,
                 f"{type(exc).__name__}: {exc}",
             )
+            self._emit(
+                "work.failed",
+                {
+                    "workItemId": item.item_id,
+                    "workerId": worker_id,
+                    "exception": type(exc).__name__,
+                    "message": str(exc),
+                },
+                thread_id=item.thread_id,
+                turn_id=turn_id,
+                now=now,
+            )
             raise
 
     def close(self) -> None:
@@ -369,6 +514,7 @@ class DurableAgentRuntime:
         self.tool_journal.close()
         self.steering_queue.close()
         self.artifact_store.close()
+        self.event_stream.close()
 
     def __enter__(self) -> "DurableAgentRuntime":
         return self

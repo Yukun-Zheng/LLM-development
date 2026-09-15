@@ -6,9 +6,11 @@ on:
     paths:
       - '代码-code/从零构建Astra与Codex级系统/src/astra_codex/sandbox.py'
       - '代码-code/从零构建Astra与Codex级系统/src/astra_codex/bubblewrap_sandbox.py'
+      - '代码-code/从零构建Astra与Codex级系统/src/astra_codex/docker_sandbox.py'
       - '代码-code/从零构建Astra与Codex级系统/src/astra_codex/coding.py'
       - '代码-code/从零构建Astra与Codex级系统/tests/test_sandbox.py'
       - '代码-code/从零构建Astra与Codex级系统/tests/test_bubblewrap_sandbox.py'
+      - '代码-code/从零构建Astra与Codex级系统/tests/test_docker_sandbox.py'
       - '.github/workflows/sandbox-security.yml'
   workflow_dispatch:
 
@@ -50,8 +52,48 @@ jobs:
       - name: Restricted-process guards
         run: pytest -q tests/test_sandbox.py
 
-      - name: Namespace escape-oriented tests
-        run: pytest -q tests/test_bubblewrap_sandbox.py
+      - name: Namespace capability / escape-oriented tests
+        run: pytest -q -rs tests/test_bubblewrap_sandbox.py
 
       - name: Ruff correctness lint
         run: ruff check src tests/test_sandbox.py tests/test_bubblewrap_sandbox.py --select E4,E7,E9,F
+
+  docker-container-sandbox:
+    runs-on: ubuntu-24.04
+    env:
+      ASTRA_CODEX_DOCKER_SECURITY_TESTS: '1'
+      ASTRA_CODEX_DOCKER_IMAGE: 'python:3.12-slim'
+    defaults:
+      run:
+        working-directory: 代码-code/从零构建Astra与Codex级系统
+
+    steps:
+      - name: 检出仓库 / Checkout
+        uses: actions/checkout@v4
+
+      - name: 配置 Python / Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: 代码-code/从零构建Astra与Codex级系统/pyproject.toml
+
+      - name: Docker runtime evidence
+        run: |
+          docker version
+          docker pull "$ASTRA_CODEX_DOCKER_IMAGE"
+          docker image inspect --format '{{.Id}}' "$ASTRA_CODEX_DOCKER_IMAGE"
+
+      - name: 安装 CPU PyTorch / Install CPU PyTorch
+        run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: 安装教学运行时 / Install runtime
+        run: |
+          python -m pip install pytest ruff
+          python -m pip install -e . --no-deps
+
+      - name: Container escape-oriented tests
+        run: pytest -q tests/test_docker_sandbox.py
+
+      - name: Ruff correctness lint
+        run: ruff check src tests/test_docker_sandbox.py --select E4,E7,E9,F

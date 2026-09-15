@@ -1,48 +1,53 @@
 # Theory ↔ Code ↔ Source ↔ Test ↔ Eval 学习地图 v3
 
-> **用途**：把教材、原论文/官方源码、Reference System、自动测试与真实能力评测连接起来。  
+> **用途**：把教材、原论文/官方源码、Reference System、自动测试与能力评测连接成同一张图。  
 > 机器可读状态：[`能力清单-CAPABILITIES.json`](能力清单-CAPABILITIES.json)。  
-> 下表中的 `src/...` 默认位于 `代码-code/从零构建Astra与Codex级系统/src/astra_codex/`。
+> `src/...` 默认位于 `代码-code/从零构建Astra与Codex级系统/src/astra_codex/`。
 
 ---
 
-# 1　模型核心
+# 1　Model Core
 
-| 主题 | 理论 | Source | 源码 | Test / Parity | 下一 Eval |
+| 主题 | 理论 | Primary / Official Source | Reference Code | Test / Parity | 下一 Eval |
 |---|---|---|---|---|---|
 | Tokenization / BPE | [`教材 13`](教材-book/13-词元化与数据工程-tokenization-data.md) | Sennrich / SentencePiece | `tokenizer.py` | tokenizer tests | 中文/代码 fertility |
 | Transformer | [`教材 01`](教材-book/01-Transformer基础-foundations-transformer.md) | Vaswani 2017 + [`Source Card`](原始论文-paper-notes/2017-Attention-Is-All-You-Need.md) | `model.py` | model/cache tests | activation parity |
 | RMSNorm / RoPE / GQA / SwiGLU | [`教材 04`](教材-book/04-现代LLM架构-modern-architecture.md) | original papers | `model.py` | SmolLM2 parity | architecture matrix |
 | Public Checkpoint Mapping | [`18A`](教材-book/18A-模型运行时源码导读-runtime-walkthrough.md) | public config / safetensors | `weights.py`, `public_checkpoint.py` | strict load + shape audit | more model families |
-| **SmolLM2 real runtime** | [`18A`](教材-book/18A-模型运行时源码导读-runtime-walkthrough.md) | `HuggingFaceTB/SmolLM2-135M` | `public_checkpoint.py` | **max_abs=0, mean_abs=0, argmax=1.0** | generation/tokenizer parity |
+| **SmolLM2 real runtime** | [`18A`](教材-book/18A-模型运行时源码导读-runtime-walkthrough.md) | `HuggingFaceTB/SmolLM2-135M` | `public_checkpoint.py` | **max_abs=0, mean_abs=0, argmax=1.0** | tokenizer/generation parity |
 
 ---
 
 # 2　Inference Systems
 
+代码实验：[`Lab 05`](代码-code/从零构建Astra与Codex级系统/教程-lessons/05-PagedKV与调度-serving-runtime.md)
+
 | 主题 | 理论 | Source | 当前代码 | 正确性证据 | 下一系统指标 |
 |---|---|---|---|---|---|
 | Contiguous KV | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | inference implementations | `cache.py`, `engine.py` | cached-vs-full logits parity | bytes/token |
-| Paged KV | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | vLLM / PagedAttention | — | todo | fragmentation / HBM |
-| Prefix Cache | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | serving systems | — | todo | hit rate / TTFT |
-| Continuous Batching | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | serving runtimes | — | todo | throughput / fairness |
-| Chunked / Disaggregated Prefill | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | serving runtimes | — | todo | TTFT / TPOT |
+| **Reference Paged KV** | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | PagedAttention / vLLM | `paged_cache.py` | **paged prefill/decode vs full logits parity** | fragmentation / HBM / block reuse |
+| **Request Scheduler** | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | serving runtimes | `scheduler.py` | **admission/decode/cancel/TTFT/TPOT tests** | actual batched execution / throughput |
+| Prefix Cache | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | serving runtimes | — | todo | hit rate / TTFT |
+| Continuous Batching Executor | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | vLLM/SGLang | scheduler only | executor todo | throughput / fairness |
+| Chunked / Disaggregated Prefill | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | serving systems | — | todo | TTFT / TPOT |
 | Speculative Decoding | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | original papers | — | todo | accepted tokens / speedup |
 | Flash / SDPA | [`教材 16`](教材-book/16-硬件内核与基础设施-hardware-kernels.md) | FlashAttention 1/2/3 | explicit reference attention | backend parity todo | bandwidth / latency |
 
-最终统一记录：`TTFT / TPOT / ITL / throughput / memory / scheduler fairness`。
+最终统一记录：`TTFT / TPOT / ITL / throughput / memory / queueing / batch occupancy / fairness`。
 
 ---
 
 # 3　Post-training
 
-| 主题 | 理论 | Source | 当前实现 | 下一最小闭环 |
-|---|---|---|---|---|
-| SFT | [`教材 03`](教材-book/03-对齐与ChatGPT-alignment-chatgpt.md) | FLAN/T0/InstructGPT | — | tiny conversation SFT |
-| Reward / PPO | [`教材 03`](教材-book/03-对齐与ChatGPT-alignment-chatgpt.md), [`附录 C`](附录-appendices/C-后训练数学-post-training-math.md) | Christiano/PPO/InstructGPT | verifier primitive | reward model + toy PPO |
-| DPO | [`教材 03`](教材-book/03-对齐与ChatGPT-alignment-chatgpt.md) | DPO paper | — | pairwise dataset + loss parity |
-| GRPO / RLVR | [`教材 08`](教材-book/08-推理模型时代-reasoning-era.md) | DeepSeekMath / R1 | verifier infrastructure | verifiable reward + policy update |
-| Agentic RL | [`A8`](智能体-agent/08-环境学习与AgenticRL-agentic-rl.md) | environment/RL sources | — | trajectory store + toy loop |
+代码实验：[`Lab 04`](代码-code/从零构建Astra与Codex级系统/教程-lessons/04-从SFT到DPO-post-training.md)
+
+| 主题 | 理论 | Source | 当前实现 | 自动证据 | 下一闭环 |
+|---|---|---|---|---|---|
+| **SFT** | [`教材 03`](教材-book/03-对齐与ChatGPT-alignment-chatgpt.md) | FLAN / T0 / InstructGPT | `posttraining.py` masked CE + optimizer step | hand-check `log(V)` + parameter update | conversation dataset / checkpoint loop |
+| Reward / PPO | [`教材 03`](教材-book/03-对齐与ChatGPT-alignment-chatgpt.md), [`附录 C`](附录-appendices/C-后训练数学-post-training-math.md) | Christiano / PPO / InstructGPT | verifier primitive | — | reward model + toy PPO |
+| **DPO** | [`教材 03`](教材-book/03-对齐与ChatGPT-alignment-chatgpt.md) | DPO paper | `posttraining.py` | **policy==reference → loss=log(2); policy updates, reference frozen** | pairwise dataset / preference eval |
+| GRPO / RLVR | [`教材 08`](教材-book/08-推理模型时代-reasoning-era.md) | DeepSeekMath / R1 | verifier infrastructure | — | verifiable reward + group-relative update |
+| Agentic RL | [`A8`](智能体-agent/08-环境学习与AgenticRL-agentic-rl.md) | environment/RL sources | trajectory/eval substrate | — | rollout store + held-out eval |
 
 **不做 frontier-scale training，不等于不实现 training algorithms。**
 
@@ -58,21 +63,30 @@
 | Neural Memory | [`教材 19`](教材-book/19-Post-Transformer架构-post-transformer.md) | Titans | — | test-time memory lab |
 | Diffusion LM | [`教材 20`](教材-book/20-扩散语言模型-diffusion-language-models.md) | discrete diffusion / LLaDA | — | corruption → denoise → remask |
 
-比较目标：state/KV bytes、FLOPs/token、bandwidth、parallelism、retrieval/retention 与 decode complexity。
-
 ---
 
-# 5　Agent Kernel
+# 5　Durable Agent Kernel
+
+代码实验：[`Lab 06`](代码-code/从零构建Astra与Codex级系统/教程-lessons/06-从AgentLoop到DurableRuntime-durable-agent.md)
 
 | Capability | 理论 / Industrial Source | 源码 | 自动验证 | 下一层 |
 |---|---|---|---|---|
 | Minimal Agent Loop | [`A1`](智能体-agent/01-智能体基础-agent-foundations.md) / ReAct | `agent.py` | scripted backend | baseline only |
-| Codex-style Turn | [`C01`](Codex源码解剖-codex-anatomy/01-核心AgentLoop-agent-loop.md) | `codex_harness.py` | follow-up / approval / stop | async submissions/events |
-| **Durable Thread / Event Store** | [`C02`](Codex源码解剖-codex-anatomy/02-会话线程与事件协议-session-thread-events.md) | `durable.py` | **DB reopen replay + transition tests** | fork / cancel / lease |
+| Codex-style Turn | [`C01`](Codex源码解剖-codex-anatomy/01-核心AgentLoop-agent-loop.md) | `codex_harness.py` | follow-up / approval / stop | event stream / steering |
+| **Durable Thread / Event Store** | [`C02`](Codex源码解剖-codex-anatomy/02-会话线程与事件协议-session-thread-events.md) | `durable.py` | **restart replay + fork + cancellation + transition tests** | queue/turn integration |
+| **Durable Work Queue** | [`C02`](Codex源码解剖-codex-anatomy/02-会话线程与事件协议-session-thread-events.md) | `runtime_queue.py` | **lease exclusion / expiry reclaim / ACK / cancel** | heartbeat / async workers |
+| **Context Provenance** | [`A4`](智能体-agent/04-记忆与上下文-memory-context.md), [`C04`](Codex源码解剖-codex-anatomy/04-指令上下文压缩与记忆-context-memory.md) | `context.py` | **compaction lineage keeps raw evidence** | notes / semantic index / token budget |
+| Persistent Event Memory | [`A4`](智能体-agent/04-记忆与上下文-memory-context.md) | `memory.py` | SQLite tests | artifact retrieval |
 | Planning DAG | [`A3`](智能体-agent/03-规划反思与验证-planning-reflection-verification.md) | `planning.py` | dependency/cycle/failure | dynamic replan |
 | Verifier | [`A3`](智能体-agent/03-规划反思与验证-planning-reflection-verification.md) | `verification.py` | file/command/composite | artifact graders |
-| Persistent Memory | [`A4`](智能体-agent/04-记忆与上下文-memory-context.md) | `memory.py` | SQLite tests | notes/index/provenance/compaction |
 | Coding Agent | [`A5`](智能体-agent/05-编程智能体-coding-agents.md) | `coding.py`, tools/edit/repo-map | primitives | tree-sitter/LSP/SWE-bench |
+
+Agent OS 下一组合目标：
+
+```text
+Submission → Thread → WorkQueue → Worker → TurnExecutor
+→ Events → ContextBuilder → Action → Checkpoint
+```
 
 ---
 
@@ -81,9 +95,9 @@
 | 主题 | 理论 / Spec | 当前代码 | 证据 | 下一步 |
 |---|---|---|---|---|
 | Filesystem / Shell / Git | [`A2`](智能体-agent/02-工具与环境-tool-use-environments.md) | `tools.py` | rooted path / command tests | sandbox integration |
-| **Permission / Approval** | [`A7`](智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md), [`C03`](Codex源码解剖-codex-anatomy/03-工具执行审批与沙箱-tools-approval-sandbox.md) | `security.py` | **deny/reject prevents dispatch** | credentials + OS sandbox |
+| **Permission / Approval** | [`A7`](智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md), [`C03`](Codex源码解剖-codex-anatomy/03-工具执行审批与沙箱-tools-approval-sandbox.md) | `security.py` | **deny/reject prevents dispatch** | credential scope + OS sandbox |
 | OS / Container Sandbox | [`C03`](Codex源码解剖-codex-anatomy/03-工具执行审批与沙箱-tools-approval-sandbox.md) | — | — | process/fs/network/secret isolation |
-| MCP | [`A9`](智能体-agent/09-Agent协议与互操作-agent-protocols.md) | `mcp.py` subset | discover/list/call tests | 2026 semantics / transport/auth/tasks |
+| MCP | [`A9`](智能体-agent/09-Agent协议与互操作-agent-protocols.md) | `mcp.py` subset | discover/list/call tests | 2026 semantics / transports/auth/tasks |
 | A2A | [`A9`](智能体-agent/09-Agent协议与互操作-agent-protocols.md) | — | — | AgentCard / Message / Task / Artifact |
 | Browser | [`A10`](智能体-agent/10-浏览器与计算机使用-browser-computer-use.md) | `general_tools.py` HTTP only | no GUI claim | JS + DOM/A11y |
 | Computer Use | [`A10`](智能体-agent/10-浏览器与计算机使用-browser-computer-use.md) | — | — | screenshot/grounding/actions/verifier |
@@ -94,11 +108,11 @@
 
 | 主题 | 理论 / Source | 源码 | 当前证据 | 真正研究问题 |
 |---|---|---|---|---|
-| Coordinator | [`A6`](智能体-agent/06-多智能体与协调-multi-agent.md) | `multi_agent.py` | deterministic tests | scheduler policy |
+| Coordinator | [`A6`](智能体-agent/06-多智能体与协调-multi-agent.md) | `multi_agent.py` | deterministic tests | scheduling policy |
 | Worktree | [`C06`](Codex源码解剖-codex-anatomy/06-多智能体与工作树-multi-agent-worktree.md) | `worktree.py` | primitive tests | concurrent repo safety |
 | AgentGraph / Mailbox | [`C06`](Codex源码解剖-codex-anatomy/06-多智能体与工作树-multi-agent-worktree.md) | — | — | parent/child lifecycle |
 | Reviewer / Merge | Coding track | — | — | verifier-based merge |
-| Scaling Agents | [`评测实验室`](评测-eval/README.md) | metrics exists | — | **1/2/4/8 Agent success-time-cost comparison** |
+| Scaling Agents | [`评测实验室`](评测-eval/README.md) | metrics/harness exists | controlled eval todo | **1/2/4/8 Agent success-time-cost** |
 
 Agent 数量本身不是能力证据。
 
@@ -110,14 +124,15 @@ Agent 数量本身不是能力证据。
 
 | Capability | 源码 | Test | 下一 Benchmark |
 |---|---|---|---|
-| **Trajectory Metrics** | `evaluation.py` | summary + aggregation tests | all Agent evals |
+| **Trajectory Metrics** | `evaluation.py` | summary + aggregation | all Agent evals |
+| **Benchmark Case / Grader Harness** | `benchmark.py` | executor/grader separation + toy aggregate | repository fixtures |
 | Coding Eval | — | — | SWE-bench adapter |
 | Browser Eval | — | — | WebArena-style adapter |
 | Computer Eval | — | — | OSWorld-style adapter |
-| Recovery Eval | `durable.py` | restart replay | crash/timeout/retry tasks |
-| Cost / Latency | fields exist | aggregate test | real instrumentation |
+| Recovery Eval | `durable.py` | restart/fork/cancel | crash/timeout/retry benchmark |
+| Cost / Latency | fields exist | aggregate tests | real instrumentation |
 
-统一证据：`trajectory + environment state + artifact + grader + cost`。
+统一证据：`trajectory + final environment state + artifact + grader + cost`。
 
 ---
 
@@ -139,9 +154,9 @@ Official Source
 
 # 10　Industrial Reference Implementations
 
-Codex 被定义为：**Industrial Reference #1 — Coding Agent Runtime**，不是 Agent 世界唯一答案。
+Codex 是：**Industrial Reference #1 — Coding Agent Runtime**，不是 Agent 世界唯一答案。
 
-后续采用同一种 Source Anatomy 方法：
+同一 Source Anatomy 方法后续用于：
 
 ```text
 vLLM / SGLang   → Inference Runtime

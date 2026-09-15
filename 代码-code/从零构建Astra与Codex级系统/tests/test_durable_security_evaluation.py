@@ -69,6 +69,47 @@ def test_durable_thread_rejects_invalid_transition(tmp_path) -> None:
             store.complete_thread(thread_id)
 
 
+def test_durable_thread_fork_replays_independent_prefix(tmp_path) -> None:
+    with DurableThreadStore(tmp_path / "thread.sqlite") as store:
+        parent = store.create_thread("thr_parent")
+        store.submit(parent, "investigate bug")
+        turn = store.start_turn(parent, "turn_parent")
+        store.checkpoint(parent, {"phase": "diagnosis"})
+        fork_point = store.project(parent).last_event_id
+
+        child = store.fork_thread(
+            parent,
+            new_thread_id="thr_child",
+            through_event_id=fork_point,
+        )
+        child_state = store.project(child)
+        assert child_state.parent_thread_id == parent
+        assert child_state.parent_event_id == fork_point
+        assert child_state.status is ThreadStatus.RUNNING
+        assert child_state.active_turn_id == turn
+        assert child_state.submissions == ("investigate bug",)
+        assert child_state.last_checkpoint is not None
+        assert child_state.last_checkpoint["state"]["phase"] == "diagnosis"
+
+        store.cancel_thread(child, "explore another branch")
+        assert store.project(child).status is ThreadStatus.CANCELLED
+        assert store.project(parent).status is ThreadStatus.RUNNING
+
+
+def test_cancelled_thread_is_terminal(tmp_path) -> None:
+    with DurableThreadStore(tmp_path / "thread.sqlite") as store:
+        thread_id = store.create_thread("thr_cancel")
+        store.submit(thread_id, "long task")
+        store.cancel_thread(thread_id, "user requested stop")
+        state = store.project(thread_id)
+        assert state.status is ThreadStatus.CANCELLED
+        assert state.cancellation_reason == "user requested stop"
+        with pytest.raises(RuntimeError):
+            store.submit(thread_id, "should be rejected")
+        with pytest.raises(RuntimeError):
+            store.checkpoint(thread_id, {"late": True})
+
+
 def test_permission_deny_prevents_underlying_tool_execution() -> None:
     tool = CountingTool()
     guarded = GuardedToolExecutor(

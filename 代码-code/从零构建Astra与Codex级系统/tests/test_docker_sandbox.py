@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import socket
@@ -8,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from astra_codex.agent import ScriptedBackend
+from astra_codex.coding import build_coding_agent
 from astra_codex.docker_sandbox import (
     DockerSandbox,
     DockerSandboxExecTool,
@@ -206,3 +209,32 @@ def test_docker_tool_records_exact_container_boundary(tmp_path) -> None:
     assert result.metadata["read_only_root"] is True
     assert result.metadata["security_boundary"] == "docker-container-shared-kernel"
     assert str(result.metadata["image_id"]).startswith("sha256:")
+
+
+def test_coding_agent_can_execute_inside_docker_sandbox(tmp_path) -> None:
+    (tmp_path / ".git").mkdir()
+    sandbox = _sandbox(tmp_path)
+    call = json.dumps(
+        {
+            "tool": "sandbox_exec",
+            "arguments": {
+                "argv": [GUEST_PYTHON, "-c", "print('agent-in-container')"],
+            },
+        }
+    )
+    backend = ScriptedBackend([call, "container verification complete"])
+    agent = build_coding_agent(
+        backend,
+        tmp_path,
+        execution_sandbox=sandbox,
+        max_steps=3,
+    )
+
+    tool_names = {spec.name for spec in agent.tools.specs}
+    assert "sandbox_exec" in tool_names
+    assert "shell" not in tool_names
+    run = agent.run("verify command execution")
+    assert run.final_answer == "container verification complete"
+    observations = [m.content for m in run.messages if m.role == "tool"]
+    assert len(observations) == 1
+    assert "agent-in-container" in observations[0]

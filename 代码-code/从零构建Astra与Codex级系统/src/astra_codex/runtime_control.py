@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from .agent import Message, ModelBackend
 from .runtime_queue import DurableWorkQueue
-from .steering import DurableSteeringQueue
+from .steering import DurableSteeringQueue, SteeringMessage
 from .structured import ToolSpec
 
 
@@ -144,6 +144,9 @@ class BackgroundLeaseHeartbeat:
         self.close()
 
 
+SteeringObserver = Callable[[tuple[SteeringMessage, ...]], object]
+
+
 class ControlledBackend:
     """ModelBackend decorator for foreground heartbeat + durable live steering.
 
@@ -151,7 +154,8 @@ class ControlledBackend:
 
     1. renew the current worker lease;
     2. atomically consume pending steering messages for the thread;
-    3. append those messages to the same transcript seen by the harness.
+    3. notify an observer so provenance can be recorded durably;
+    4. append those messages to the same transcript seen by the harness.
 
     The explicit foreground heartbeat remains useful for deterministic tests and
     event visibility. ``BackgroundLeaseHeartbeat`` covers long blocking calls
@@ -166,6 +170,7 @@ class ControlledBackend:
         steering_queue: DurableSteeringQueue | None = None,
         thread_id: str | None = None,
         steering_prefix: str = "[Steering update] ",
+        steering_observer: SteeringObserver | None = None,
     ) -> None:
         if steering_queue is not None and not thread_id:
             raise ValueError("thread_id is required when steering_queue is set")
@@ -174,6 +179,7 @@ class ControlledBackend:
         self.steering_queue = steering_queue
         self.thread_id = thread_id
         self.steering_prefix = steering_prefix
+        self.steering_observer = steering_observer
 
     def generate(self, messages: list[Message], tools: list[ToolSpec]) -> str:
         if self.heartbeat is not None:
@@ -182,6 +188,8 @@ class ControlledBackend:
         if self.steering_queue is not None:
             assert self.thread_id is not None
             pending = self.steering_queue.consume_pending(self.thread_id)
+            if pending and self.steering_observer is not None:
+                self.steering_observer(pending)
             for steering in pending:
                 messages.append(
                     Message("user", self.steering_prefix + steering.content)

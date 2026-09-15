@@ -1,147 +1,165 @@
-# Theory ↔ Code ↔ Paper/Source ↔ Test 学习地图
+# Theory ↔ Code ↔ Source ↔ Test ↔ Eval 学习地图 v3
 
-> **用途**：把教材章节、原始论文/官方源码、我们的 clean-room 实现与自动验证连接成同一张图。  
-> 真正掌握一个主题，不应停在任意一列；至少要能从原始资料追到机制，再从机制追到实现和证据。
-
-源码表中的 `src/...` 默认指：`代码-code/从零构建Astra与Codex级系统/src/astra_codex/`。
+> **用途**：把教材、原论文/官方源码、Reference System、自动测试与真实能力评测连接起来。  
+> 机器可读状态：[`能力清单-CAPABILITIES.json`](能力清单-CAPABILITIES.json)。  
+> 下表中的 `src/...` 默认位于 `代码-code/从零构建Astra与Codex级系统/src/astra_codex/`。
 
 ---
 
 # 1　模型核心
 
-| 主题 | 理论入口 | 原始资料 | 我们的源码 | 验证 |
+| 主题 | 理论 | Source | 源码 | Test / Parity | 下一 Eval |
+|---|---|---|---|---|---|
+| Tokenization / BPE | [`教材 13`](教材-book/13-词元化与数据工程-tokenization-data.md) | Sennrich / SentencePiece | `tokenizer.py` | tokenizer tests | 中文/代码 fertility |
+| Transformer | [`教材 01`](教材-book/01-Transformer基础-foundations-transformer.md) | Vaswani 2017 + [`Source Card`](原始论文-paper-notes/2017-Attention-Is-All-You-Need.md) | `model.py` | model/cache tests | activation parity |
+| RMSNorm / RoPE / GQA / SwiGLU | [`教材 04`](教材-book/04-现代LLM架构-modern-architecture.md) | original papers | `model.py` | SmolLM2 parity | architecture matrix |
+| Public Checkpoint Mapping | [`18A`](教材-book/18A-模型运行时源码导读-runtime-walkthrough.md) | public config / safetensors | `weights.py`, `public_checkpoint.py` | strict load + shape audit | more model families |
+| **SmolLM2 real runtime** | [`18A`](教材-book/18A-模型运行时源码导读-runtime-walkthrough.md) | `HuggingFaceTB/SmolLM2-135M` | `public_checkpoint.py` | **max_abs=0, mean_abs=0, argmax=1.0** | generation/tokenizer parity |
+
+---
+
+# 2　Inference Systems
+
+| 主题 | 理论 | Source | 当前代码 | 正确性证据 | 下一系统指标 |
+|---|---|---|---|---|---|
+| Contiguous KV | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | inference implementations | `cache.py`, `engine.py` | cached-vs-full logits parity | bytes/token |
+| Paged KV | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | vLLM / PagedAttention | — | todo | fragmentation / HBM |
+| Prefix Cache | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | serving systems | — | todo | hit rate / TTFT |
+| Continuous Batching | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | serving runtimes | — | todo | throughput / fairness |
+| Chunked / Disaggregated Prefill | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | serving runtimes | — | todo | TTFT / TPOT |
+| Speculative Decoding | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | original papers | — | todo | accepted tokens / speedup |
+| Flash / SDPA | [`教材 16`](教材-book/16-硬件内核与基础设施-hardware-kernels.md) | FlashAttention 1/2/3 | explicit reference attention | backend parity todo | bandwidth / latency |
+
+最终统一记录：`TTFT / TPOT / ITL / throughput / memory / scheduler fairness`。
+
+---
+
+# 3　Post-training
+
+| 主题 | 理论 | Source | 当前实现 | 下一最小闭环 |
 |---|---|---|---|---|
-| Tokenization / BPE | [`教材 13`](教材-book/13-词元化与数据工程-tokenization-data.md) | Sennrich / SentencePiece，见 [`Primary Sources`](参考文献-references/00-原始资料总索引-primary-sources.md) | `tokenizer.py` | `tests/test_tokenizer.py` |
-| Transformer | [`教材 01`](教材-book/01-Transformer基础-foundations-transformer.md) | Vaswani et al. 2017 + [`Source Card`](原始论文-paper-notes/2017-Attention-Is-All-You-Need.md) | `model.py` | `tests/test_model_and_cache.py` |
-| RMSNorm | [`教材 04`](教材-book/04-现代LLM架构-modern-architecture.md) | Zhang & Sennrich 2019 | `model.py::RMSNorm` | real checkpoint parity |
-| RoPE | [`教材 04`](教材-book/04-现代LLM架构-modern-architecture.md) | RoFormer 2021 | `model.py::RotaryEmbedding` | half-split/interleaved tests |
-| GQA | [`教材 04`](教材-book/04-现代LLM架构-modern-architecture.md) | Ainslie et al. 2023 | `model.py::GroupedQueryAttention` | cache + SmolLM2 parity |
-| SwiGLU | [`教材 04`](教材-book/04-现代LLM架构-modern-architecture.md) | Shazeer 2020 | `model.py::SwiGLU` | SmolLM2 parity |
-| Decoder-only LM | [`教材 01`](教材-book/01-Transformer基础-foundations-transformer.md) | GPT-1/2/3 | `model.py::DecoderOnlyTransformer` | full-forward tests |
-| KV Cache | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md), [`18A`](教材-book/18A-模型运行时源码导读-runtime-walkthrough.md) | inference systems sources | `cache.py`, `engine.py` | cached vs full parity |
-| Sampling | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | decoding literature | `sampling.py` | unit tests |
-| Public checkpoint mapping | [`教材 18`](教材-book/18-从零构建Astra与Codex级系统-capstone.md) | SmolLM2 public config/weights | `weights.py`, `public_checkpoint.py` | strict load + shape audit |
-| **真实 Llama-family runtime** | [`18A`](教材-book/18A-模型运行时源码导读-runtime-walkthrough.md) | `HuggingFaceTB/SmolLM2-135M` | `public_checkpoint.py` | **max_abs=0, mean_abs=0, argmax=1.0** |
+| SFT | [`教材 03`](教材-book/03-对齐与ChatGPT-alignment-chatgpt.md) | FLAN/T0/InstructGPT | — | tiny conversation SFT |
+| Reward / PPO | [`教材 03`](教材-book/03-对齐与ChatGPT-alignment-chatgpt.md), [`附录 C`](附录-appendices/C-后训练数学-post-training-math.md) | Christiano/PPO/InstructGPT | verifier primitive | reward model + toy PPO |
+| DPO | [`教材 03`](教材-book/03-对齐与ChatGPT-alignment-chatgpt.md) | DPO paper | — | pairwise dataset + loss parity |
+| GRPO / RLVR | [`教材 08`](教材-book/08-推理模型时代-reasoning-era.md) | DeepSeekMath / R1 | verifier infrastructure | verifiable reward + policy update |
+| Agentic RL | [`A8`](智能体-agent/08-环境学习与AgenticRL-agentic-rl.md) | environment/RL sources | — | trajectory store + toy loop |
+
+**不做 frontier-scale training，不等于不实现 training algorithms。**
 
 ---
 
-# 2　后训练与推理
+# 4　Hybrid Sequence Architecture
 
-| 主题 | 理论入口 | 原始资料 | 当前代码状态 | 下一复现 |
+| 主题 | 理论 | Source | Reference Code | 下一验证 |
 |---|---|---|---|---|
-| Instruction Tuning | [`教材 03`](教材-book/03-对齐与ChatGPT-alignment-chatgpt.md) | FLAN / T0 / InstructGPT | 理论为主 | tiny SFT |
-| RLHF / PPO | [`教材 03`](教材-book/03-对齐与ChatGPT-alignment-chatgpt.md), [`附录 C`](附录-appendices/C-后训练数学-post-training-math.md) | Christiano / PPO / InstructGPT | 数学推导 | toy reward model + PPO |
-| DPO | [`教材 03`](教材-book/03-对齐与ChatGPT-alignment-chatgpt.md) | Rafailov et al. | 数学推导 | pairwise preference lab |
-| GRPO / RLVR | [`教材 08`](教材-book/08-推理模型时代-reasoning-era.md) | DeepSeekMath / R1 | verifier primitive | verifiable RL trajectory |
-| Test-Time Compute | [`教材 08`](教材-book/08-推理模型时代-reasoning-era.md) | CoT / self-consistency / test-time compute | verifier 可复用 | search-budget experiments |
+| S4 | [`教材 19`](教材-book/19-Post-Transformer架构-post-transformer.md) | S4 | — | recurrent ↔ matrix parity |
+| Mamba / Mamba-2 | [`教材 19`](教材-book/19-Post-Transformer架构-post-transformer.md) | original + official code | — | scan / matrix / chunked equivalence |
+| RWKV / xLSTM | [`教材 19`](教材-book/19-Post-Transformer架构-post-transformer.md) | papers/repos | — | state size / latency |
+| Neural Memory | [`教材 19`](教材-book/19-Post-Transformer架构-post-transformer.md) | Titans | — | test-time memory lab |
+| Diffusion LM | [`教材 20`](教材-book/20-扩散语言模型-diffusion-language-models.md) | discrete diffusion / LLaDA | — | corruption → denoise → remask |
+
+比较目标：state/KV bytes、FLOPs/token、bandwidth、parallelism、retrieval/retention 与 decode complexity。
 
 ---
 
-# 3　系统工程
+# 5　Agent Kernel
 
-| 主题 | 理论入口 | 原始资料 | 当前代码 | 下一实现 |
+| Capability | 理论 / Industrial Source | 源码 | 自动验证 | 下一层 |
 |---|---|---|---|---|
-| FlashAttention | [`教材 16`](教材-book/16-硬件内核与基础设施-hardware-kernels.md) | FlashAttention 1/2/3 | explicit attention reference | SDPA parity → Flash backend |
-| Distributed Training | [`教材 09`](教材-book/09-训练系统-training-systems.md) | ZeRO / Megatron / FSDP | 未从零实现 | communication simulator |
-| Paged KV | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | vLLM / PagedAttention | contiguous KV | page allocator + parity |
-| Continuous Batching | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | serving systems | single-request engine | request scheduler |
-| Speculative Decoding | [`教材 10`](教材-book/10-推理服务系统-inference-systems.md) | original papers | 未实现 | draft/target acceptance lab |
-| Hardware Roofline | [`教材 16`](教材-book/16-硬件内核与基础设施-hardware-kernels.md) | hardware/system originals | 未实现 | bytes/FLOPs profiler |
+| Minimal Agent Loop | [`A1`](智能体-agent/01-智能体基础-agent-foundations.md) / ReAct | `agent.py` | scripted backend | baseline only |
+| Codex-style Turn | [`C01`](Codex源码解剖-codex-anatomy/01-核心AgentLoop-agent-loop.md) | `codex_harness.py` | follow-up / approval / stop | async submissions/events |
+| **Durable Thread / Event Store** | [`C02`](Codex源码解剖-codex-anatomy/02-会话线程与事件协议-session-thread-events.md) | `durable.py` | **DB reopen replay + transition tests** | fork / cancel / lease |
+| Planning DAG | [`A3`](智能体-agent/03-规划反思与验证-planning-reflection-verification.md) | `planning.py` | dependency/cycle/failure | dynamic replan |
+| Verifier | [`A3`](智能体-agent/03-规划反思与验证-planning-reflection-verification.md) | `verification.py` | file/command/composite | artifact graders |
+| Persistent Memory | [`A4`](智能体-agent/04-记忆与上下文-memory-context.md) | `memory.py` | SQLite tests | notes/index/provenance/compaction |
+| Coding Agent | [`A5`](智能体-agent/05-编程智能体-coding-agents.md) | `coding.py`, tools/edit/repo-map | primitives | tree-sitter/LSP/SWE-bench |
 
 ---
 
-# 4　Post-Transformer 与 Diffusion
+# 6　Environment / Protocol / Security
 
-| 主题 | 理论入口 | 原始资料 | 当前代码 | 下一实现 |
+| 主题 | 理论 / Spec | 当前代码 | 证据 | 下一步 |
 |---|---|---|---|---|
-| S4 | [`教材 19`](教材-book/19-Post-Transformer架构-post-transformer.md) | [`资料 02`](参考文献-references/02-PostTransformer与扩散语言模型原始资料.md) | 未实现 | recurrent/matrix parity |
-| Mamba | [`教材 19`](教材-book/19-Post-Transformer架构-post-transformer.md) | original + official code | 未实现 | selective scan |
-| Mamba-2 / SSD | [`教材 19`](教材-book/19-Post-Transformer架构-post-transformer.md) | Mamba-2 | 未实现 | recurrent/matrix/chunked equivalence |
-| RWKV | [`教材 19`](教材-book/19-Post-Transformer架构-post-transformer.md) | paper + official repo | 未实现 | recurrence lab |
-| xLSTM | [`教材 19`](教材-book/19-Post-Transformer架构-post-transformer.md) | paper + code | 未实现 | sLSTM/mLSTM toy blocks |
-| Titans / Neural Memory | [`教材 19`](教材-book/19-Post-Transformer架构-post-transformer.md) | Titans | 未实现 | test-time memory lab |
-| Diffusion LM | [`教材 20`](教材-book/20-扩散语言模型-diffusion-language-models.md) | discrete diffusion / LLaDA | 未实现 | corruption → denoise → remask |
+| Filesystem / Shell / Git | [`A2`](智能体-agent/02-工具与环境-tool-use-environments.md) | `tools.py` | rooted path / command tests | sandbox integration |
+| **Permission / Approval** | [`A7`](智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md), [`C03`](Codex源码解剖-codex-anatomy/03-工具执行审批与沙箱-tools-approval-sandbox.md) | `security.py` | **deny/reject prevents dispatch** | credentials + OS sandbox |
+| OS / Container Sandbox | [`C03`](Codex源码解剖-codex-anatomy/03-工具执行审批与沙箱-tools-approval-sandbox.md) | — | — | process/fs/network/secret isolation |
+| MCP | [`A9`](智能体-agent/09-Agent协议与互操作-agent-protocols.md) | `mcp.py` subset | discover/list/call tests | 2026 semantics / transport/auth/tasks |
+| A2A | [`A9`](智能体-agent/09-Agent协议与互操作-agent-protocols.md) | — | — | AgentCard / Message / Task / Artifact |
+| Browser | [`A10`](智能体-agent/10-浏览器与计算机使用-browser-computer-use.md) | `general_tools.py` HTTP only | no GUI claim | JS + DOM/A11y |
+| Computer Use | [`A10`](智能体-agent/10-浏览器与计算机使用-browser-computer-use.md) | — | — | screenshot/grounding/actions/verifier |
 
 ---
 
-# 5　Agent 通识核心
+# 7　Multi-Agent
 
-| 主题 | 理论入口 | 原始资料 | 我们的源码 | 验证 |
+| 主题 | 理论 / Source | 源码 | 当前证据 | 真正研究问题 |
 |---|---|---|---|---|
-| Agent Loop | [`A1`](智能体-agent/01-智能体基础-agent-foundations.md), [`18B`](教材-book/18B-智能体运行时源码导读-agent-walkthrough.md) | ReAct | `agent.py` | scripted backend tests |
-| Structured Actions | [`A2`](智能体-agent/02-工具与环境-tool-use-environments.md) | Toolformer / tool-use originals | `structured.py` | schema/tool tests |
-| Filesystem / Shell / Git | [`A2`](智能体-agent/02-工具与环境-tool-use-environments.md) | environment interfaces | `tools.py` | rooted path + exec tests |
-| Safe Editing | [`A5`](智能体-agent/05-编程智能体-coding-agents.md) | SWE-agent | `editing.py` | ambiguity-safe tests |
-| Repo Map | [`A5`](智能体-agent/05-编程智能体-coding-agents.md) | SWE-agent / coding work | `repo_map.py` | AST/Markdown tests |
-| Planning DAG | [`A3`](智能体-agent/03-规划反思与验证-planning-reflection-verification.md) | planning literature | `planning.py` | DAG/cycle/failure tests |
-| Verifier | [`A3`](智能体-agent/03-规划反思与验证-planning-reflection-verification.md) | verifier/coding work | `verification.py` | file/command/composite tests |
-| Persistent Memory | [`A4`](智能体-agent/04-记忆与上下文-memory-context.md) | MemGPT / Generative Agents | `memory.py` | SQLite tests |
-| Coding Agent | [`A5`](智能体-agent/05-编程智能体-coding-agents.md) | SWE-bench / SWE-agent | `coding.py` | repo-loop tests |
-| Worktree | [`A6`](智能体-agent/06-多智能体与协调-multi-agent.md) | Git/worktree engineering | `worktree.py` | primitive tests |
-| Coordinator | [`A6`](智能体-agent/06-多智能体与协调-multi-agent.md) | CAMEL / AutoGen + explicit DAG | `multi_agent.py` | coordinator tests |
+| Coordinator | [`A6`](智能体-agent/06-多智能体与协调-multi-agent.md) | `multi_agent.py` | deterministic tests | scheduler policy |
+| Worktree | [`C06`](Codex源码解剖-codex-anatomy/06-多智能体与工作树-multi-agent-worktree.md) | `worktree.py` | primitive tests | concurrent repo safety |
+| AgentGraph / Mailbox | [`C06`](Codex源码解剖-codex-anatomy/06-多智能体与工作树-multi-agent-worktree.md) | — | — | parent/child lifecycle |
+| Reviewer / Merge | Coding track | — | — | verifier-based merge |
+| Scaling Agents | [`评测实验室`](评测-eval/README.md) | metrics exists | — | **1/2/4/8 Agent success-time-cost comparison** |
+
+Agent 数量本身不是能力证据。
 
 ---
 
-# 6　Agent Protocols 与 Computer Use
+# 8　Evaluation
 
-| 主题 | 理论入口 | 原始资料 | 当前源码 | 下一实现 |
-|---|---|---|---|---|
-| JSON-RPC / MCP | [`A9`](智能体-agent/09-Agent协议与互操作-agent-protocols.md) | [`Agent Sources`](参考文献-references/01-智能体原始资料-agent-sources.md) | `mcp.py`: discover/list/call/in-process | stdio → HTTP → auth |
-| A2A | [`A9`](智能体-agent/09-Agent协议与互操作-agent-protocols.md) | A2A spec | 未实现 | AgentCard/Message/Task/Artifact |
-| Browser | [`A10`](智能体-agent/10-浏览器与计算机使用-browser-computer-use.md) | WebArena | `general_tools.py`: HTTP text only | JS + DOM/A11y |
-| Computer Use | [`A10`](智能体-agent/10-浏览器与计算机使用-browser-computer-use.md) | OSWorld | 未实现 | screenshot + grounding + actions |
+独立事实层：[`评测-eval/README.md`](评测-eval/README.md)。
 
----
+| Capability | 源码 | Test | 下一 Benchmark |
+|---|---|---|---|
+| **Trajectory Metrics** | `evaluation.py` | summary + aggregation tests | all Agent evals |
+| Coding Eval | — | — | SWE-bench adapter |
+| Browser Eval | — | — | WebArena-style adapter |
+| Computer Eval | — | — | OSWorld-style adapter |
+| Recovery Eval | `durable.py` | restart replay | crash/timeout/retry tasks |
+| Cost / Latency | fields exist | aggregate test | real instrumentation |
 
-# 7　OpenAI Codex：官方源码 ↔ Clean-room 重建
-
-官方源码索引：[`参考文献 03`](参考文献-references/03-OpenAI-Codex官方源码索引-codex-source-map.md)  
-课程入口：[`Codex 源码解剖`](Codex源码解剖-codex-anatomy/README.md)  
-Source Card：[`OpenAI Codex Harness`](原始论文-paper-notes/2025-2026-OpenAI-Codex-Harness.md)
-
-| 公开 Codex 机制 | 源码解剖 | 官方一手资料 | 我们的实现 | 验证/状态 |
-|---|---|---|---|---|
-| Task / Turn loop | [`C01`](Codex源码解剖-codex-anatomy/01-核心AgentLoop-agent-loop.md) | `core/src/session/turn.rs` | `codex_harness.py` | tool follow-up ✓ |
-| Event model | [`C02`](Codex源码解剖-codex-anatomy/02-会话线程与事件协议-session-thread-events.md) | `docs/protocol_v1.md` | `HarnessEvent` | ordering tests ✓; async queue todo |
-| Approval | [`C03`](Codex源码解剖-codex-anatomy/03-工具执行审批与沙箱-tools-approval-sandbox.md) | `tools/approvals.rs` | `ApprovalDecision` / `TurnSettings` | allow/deny tests ✓ |
-| Sandbox | [`C03`](Codex源码解剖-codex-anatomy/03-工具执行审批与沙箱-tools-approval-sandbox.md) | `tools/sandboxing.rs`, sandbox crates | metadata enum only | **OS enforcement todo** |
-| AGENTS.md / scoped instructions | [`C04`](Codex源码解剖-codex-anatomy/04-指令上下文压缩与记忆-context-memory.md) | base instructions | — | resolver todo |
-| Context compaction | [`C04`](Codex源码解剖-codex-anatomy/04-指令上下文压缩与记忆-context-memory.md) | `compact*` | event memory only | compact/resume todo |
-| MCP integration | [`C05`](Codex源码解剖-codex-anatomy/05-MCP与AppServer-mcp-app-server.md) | `codex-mcp`, `rmcp-client` | `mcp.py` subset | in-process ✓; transport/auth todo |
-| App Server | [`C02`](Codex源码解剖-codex-anatomy/02-会话线程与事件协议-session-thread-events.md), [`C05`](Codex源码解剖-codex-anatomy/05-MCP与AppServer-mcp-app-server.md) | app-server protocol | — | todo |
-| Multi-Agent semantics | [`C06`](Codex源码解剖-codex-anatomy/06-多智能体与工作树-multi-agent-worktree.md) | `multi_agents.rs` | `multi_agent.py` primitive | persistent AgentGraph todo |
-| Worktree | [`C06`](Codex源码解剖-codex-anatomy/06-多智能体与工作树-multi-agent-worktree.md) | `worktree/` | `worktree.py` | primitive ✓; parallel merge todo |
-| Clean-room parity program | [`C07`](Codex源码解剖-codex-anatomy/07-CleanRoom重建与Parity-clean-room-parity.md) | pinned `openai/codex` source | current capstone | **Fast CI 30 passed** |
-
-这个表明确区分 `✓ / partial / todo`。存在同名 class 绝不等于已经复刻生产能力。
+统一证据：`trajectory + environment state + artifact + grader + cost`。
 
 ---
 
-# 8　安全、评测与可解释性
+# 9　Frontier Observatory
 
-| 主题 | 理论入口 | 代码/实验状态 |
-|---|---|---|
-| LLM Evaluation | [`教材 11`](教材-book/11-评测与安全-evaluation-safety.md) | benchmark harness 待扩 |
-| Agent Evaluation | [`A7`](智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md) | SWE-bench/WebArena/OSWorld harness 待实现 |
-| Interpretability | [`教材 15`](教材-book/15-可解释性与机制研究-interpretability.md) | activation patch / SAE lab 待实现 |
-| Agent Safety | [`A7`](智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md), [`C03`](Codex源码解剖-codex-anatomy/03-工具执行审批与沙箱-tools-approval-sandbox.md) | approval v1 ✓; enforced sandbox todo |
-
----
-
-# 9　怎么使用这张图
+快速变化事实进入 [`观测站-observatory/frontier-snapshot.json`](观测站-observatory/frontier-snapshot.json)：
 
 ```text
-1. Read Theory / Source Anatomy
-      ↓
-2. Read Original Paper / Official Source
-      ↓
-3. Rebuild Code
-      ↓
-4. Run Test / Reproduction / Parity
-      ↓
-5. Record Gap / Counterexample
+Official Source
+→ machine-readable fact
+→ evidence boundary
+→ freshness age
+→ drift report
 ```
 
-如果第四步不存在，质量看板通常不会把它标到 L2。
+审计：[`工具-scripts/前沿漂移审计-frontier_drift_audit.py`](工具-scripts/前沿漂移审计-frontier_drift_audit.py)。
 
-总成熟度入口：[`质量看板-QUALITY.md`](质量看板-QUALITY.md)
+---
+
+# 10　Industrial Reference Implementations
+
+Codex 被定义为：**Industrial Reference #1 — Coding Agent Runtime**，不是 Agent 世界唯一答案。
+
+后续采用同一种 Source Anatomy 方法：
+
+```text
+vLLM / SGLang   → Inference Runtime
+Qwen / DeepSeek → Public Model Architecture
+MCP / A2A       → Protocol Runtime
+```
+
+---
+
+# 11　固定学习闭环
+
+```text
+Read Theory
+→ Read Primary / Official Source
+→ Rebuild Reference Code
+→ Unit / Numerical / Protocol Parity
+→ Capability / Systems Evaluation
+→ Failure Cases / Ablation
+```
+
+如果后半段没有发生，就还没有从“读懂”走到“研究级掌握”。

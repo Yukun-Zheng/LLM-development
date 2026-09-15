@@ -67,6 +67,8 @@ from .prefix_cache import (
 )
 from .repository_eval import RepositoryEvalRecord, RepositoryFixture, RepositoryFixtureHarness, RepositoryGrade
 from .rlvr import GroupRelativeResult, grpo_style_objective, group_relative_advantages
+from .rollout_trace import RolloutTrace, RolloutTraceEvent, RolloutTraceStore
+from .rollout_trace_collector import RolloutTraceCollector, TraceSyncResult
 from .runtime import DurableAgentRuntime, RuntimeExecutionRecord
 from .runtime_control import BackgroundLeaseHeartbeat, ControlledBackend, LeaseHeartbeat
 from .runtime_queue import DurableWorkQueue, WorkItem, WorkStatus
@@ -200,6 +202,10 @@ __all__ = [
     "RequestStatus",
     "ResolvedInstructions",
     "RestrictedSubprocessSandbox",
+    "RolloutTrace",
+    "RolloutTraceCollector",
+    "RolloutTraceEvent",
+    "RolloutTraceStore",
     "RuntimeEvent",
     "RuntimeExecutionRecord",
     "SSEEventClient",
@@ -220,6 +226,7 @@ __all__ = [
     "ThreadStatus",
     "TokenPrefixIndex",
     "ToolExecutionRecord",
+    "TraceSyncResult",
     "TrajectoryMetrics",
     "TurnScopedJournaledTools",
     "VerificationResult",

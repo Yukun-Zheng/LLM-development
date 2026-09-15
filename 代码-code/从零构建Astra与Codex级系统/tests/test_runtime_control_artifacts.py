@@ -9,7 +9,7 @@ from astra_codex.agent import Message
 from astra_codex.artifacts import ArtifactStore
 from astra_codex.codex_harness import CodexHarness
 from astra_codex.runtime_control import ControlledBackend, LeaseHeartbeat
-from astra_codex.runtime_queue import DurableWorkQueue, WorkStatus
+from astra_codex.runtime_queue import DurableWorkQueue
 from astra_codex.steering import DurableSteeringQueue, SteeringStatus
 from astra_codex.structured import ToolSpec
 from astra_codex.tools import ToolRegistry, ToolResult

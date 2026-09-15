@@ -31,7 +31,7 @@ class WorkItem:
 
 
 class DurableWorkQueue:
-    """SQLite-backed work queue with lease, retry and cancellation semantics."""
+    """SQLite-backed work queue with lease, retry and scoped claim semantics."""
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
@@ -120,9 +120,20 @@ class DurableWorkQueue:
         lease_seconds: float = 60.0,
         now: float | None = None,
         kinds: set[str] | None = None,
+        thread_ids: set[str] | None = None,
     ) -> WorkItem | None:
+        """Atomically claim the oldest eligible work item.
+
+        ``thread_ids`` is applied inside the SQL selection transaction. This is
+        important for authorization: a thread-scoped worker never receives an
+        out-of-scope item and therefore cannot rely on a later application-layer
+        check to undo a capability leak.
+        """
+
         if lease_seconds <= 0:
             raise ValueError("lease_seconds must be positive")
+        if thread_ids is not None and not thread_ids:
+            return None
         now = time.time() if now is None else now
 
         self.connection.execute("BEGIN IMMEDIATE")
@@ -144,6 +155,10 @@ class DurableWorkQueue:
                 placeholders = ",".join("?" for _ in kinds)
                 query += f" AND kind IN ({placeholders})"
                 params.extend(sorted(kinds))
+            if thread_ids is not None:
+                placeholders = ",".join("?" for _ in thread_ids)
+                query += f" AND thread_id IN ({placeholders})"
+                params.extend(sorted(thread_ids))
             query += " ORDER BY created_at ASC, item_id ASC LIMIT 1"
 
             row = self.connection.execute(query, params).fetchone()

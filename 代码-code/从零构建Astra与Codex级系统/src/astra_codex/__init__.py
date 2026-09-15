@@ -14,6 +14,7 @@ from .control_auth import (
     BearerTokenAuthorizer,
     Principal,
 )
+from .docker_sandbox import DockerSandbox, DockerSandboxExecTool, DockerSandboxPolicy
 from .durable import DurableThreadStore, ThreadProjection, ThreadStatus
 from .engine import GenerationEngine
 from .evaluation import AggregateMetrics, TrajectoryMetrics, aggregate_metrics, summarize_codex_turn
@@ -116,6 +117,9 @@ __all__ = [
     "ControlledBackend",
     "DPOResult",
     "DecoderOnlyTransformer",
+    "DockerSandbox",
+    "DockerSandboxExecTool",
+    "DockerSandboxPolicy",
     "DurableAgentRuntime",
     "DurableEventStream",
     "DurableSteeringQueue",

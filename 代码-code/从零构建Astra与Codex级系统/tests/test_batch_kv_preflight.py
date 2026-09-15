@@ -95,6 +95,30 @@ def test_batch_capacity_preflight_rejects_before_any_request_mutation() -> None:
     _assert_snapshot_equal(pool, before)
 
 
+def test_concrete_reservation_fences_blocks_from_unrelated_allocations() -> None:
+    model = _tiny_model()
+    pool = _pool(model, total_blocks=4)
+    _prefill(pool, model, "a", torch.tensor([[1, 2]]))
+    _prefill(pool, model, "b", torch.tensor([[3, 4]]))
+
+    reservation = pool.reserve_batch_append({"a": 1, "b": 1})
+    metrics = pool.allocator.metrics()
+    assert metrics.reserved_blocks == 2
+    assert metrics.free_blocks == 0
+    assert set(reservation.block_ids)
+
+    pool.create_request("unrelated")
+    with pytest.raises(MemoryError, match="exhausted"):
+        pool.allocator.append_tokens("unrelated", 1)
+
+    pool.release_batch_reservation(reservation)
+    metrics = pool.allocator.metrics()
+    assert metrics.reserved_blocks == 0
+    assert metrics.free_blocks == 2
+    pool.allocator.append_tokens("unrelated", 1)
+    assert pool.allocator.requests["unrelated"].sequence_length == 1
+
+
 def test_page_aware_decode_oom_fails_before_model_math_and_cache_mutation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -121,7 +145,27 @@ def test_page_aware_decode_oom_fails_before_model_math_and_cache_mutation(
     _assert_snapshot_equal(pool, before)
 
 
-def test_batch_delta_preflight_succeeds_then_commits_every_request() -> None:
+def test_page_aware_model_failure_releases_unconsumed_reservation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = _tiny_model()
+    pool = _pool(model, total_blocks=3)
+    _prefill(pool, model, "a", torch.tensor([[5, 6]]))
+    before = _snapshot(pool)
+
+    def fail_after_reservation(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise RuntimeError("synthetic model failure")
+
+    monkeypatch.setattr(model.embed_tokens, "forward", fail_after_reservation)
+    executor = HeterogeneousPageAwareDecodeReference(model, pool)
+    with pytest.raises(RuntimeError, match="synthetic model failure"):
+        executor.decode_batch(["a"], torch.tensor([[9]]))
+
+    _assert_snapshot_equal(pool, before)
+    assert pool.allocator.metrics().reserved_blocks == 0
+
+
+def test_batch_delta_reservation_succeeds_then_commits_every_request() -> None:
     model = _tiny_model()
     pool = _pool(model, total_blocks=4)
     _prefill(pool, model, "a", torch.tensor([[1, 2]]))
@@ -139,13 +183,16 @@ def test_batch_delta_preflight_succeeds_then_commits_every_request() -> None:
             for key, value in output.past_key_values
         )
 
-    required = pool.require_batch_append_capacity({"a": 1, "b": 1})
-    assert required == 2
-    pool.append_batch_delta(deltas)
+    reservation = pool.reserve_batch_append({"a": 1, "b": 1})
+    assert pool.allocator.reservation_remaining(reservation) == 2
+    pool.append_batch_delta(deltas, reservation=reservation)
+    assert pool.allocator.reservation_remaining(reservation) == 0
+    pool.release_batch_reservation(reservation)
 
     assert pool.allocator.requests["a"].sequence_length == 3
     assert pool.allocator.requests["b"].sequence_length == 3
     assert pool.allocator.metrics().free_blocks == 0
+    assert pool.allocator.metrics().reserved_blocks == 0
     for request_id, output in outputs.items():
         assert output.past_key_values is not None
         actual = pool.materialize(request_id)

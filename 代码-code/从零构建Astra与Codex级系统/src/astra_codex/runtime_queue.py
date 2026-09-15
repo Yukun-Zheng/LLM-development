@@ -187,6 +187,55 @@ class DurableWorkQueue:
             self.connection.execute("ROLLBACK")
             raise
 
+    def renew_lease(
+        self,
+        item_id: str,
+        worker_id: str,
+        *,
+        lease_seconds: float,
+        now: float | None = None,
+    ) -> float:
+        """Atomically extend an unexpired lease owned by ``worker_id``."""
+
+        if lease_seconds <= 0:
+            raise ValueError("lease_seconds must be positive")
+        timestamp = time.time() if now is None else now
+        new_until = timestamp + lease_seconds
+
+        self.connection.execute("BEGIN IMMEDIATE")
+        try:
+            current = self.get(item_id)
+            if current.status is not WorkStatus.LEASED:
+                raise RuntimeError(f"work item is not leased: {current.status.value}")
+            if current.lease_owner != worker_id:
+                raise PermissionError(
+                    f"lease belongs to {current.lease_owner!r}, not {worker_id!r}"
+                )
+            if current.lease_until is not None and current.lease_until < timestamp:
+                raise RuntimeError("cannot renew an already expired lease")
+
+            cursor = self.connection.execute(
+                """
+                UPDATE work_items
+                SET lease_until = ?, updated_at = ?
+                WHERE item_id = ? AND status = ? AND lease_owner = ?
+                """,
+                (
+                    new_until,
+                    timestamp,
+                    item_id,
+                    WorkStatus.LEASED.value,
+                    worker_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError("lease changed while renewal was in progress")
+            self.connection.execute("COMMIT")
+            return new_until
+        except Exception:
+            self.connection.execute("ROLLBACK")
+            raise
+
     def _finish(
         self,
         item_id: str,

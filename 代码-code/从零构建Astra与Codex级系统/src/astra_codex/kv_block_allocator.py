@@ -54,7 +54,7 @@ class KVBlockAllocator:
     - free-list allocation/reclamation;
     - prefix sharing through block reference counts;
     - copy-on-write when appending to a shared partial final block;
-    - deterministic out-of-memory behavior;
+    - deterministic, append-atomic out-of-memory behavior;
     - observable fragmentation/utilization metrics.
 
     The absence of tensor storage is intentional. A later optimized engine can
@@ -122,10 +122,29 @@ class KVBlockAllocator:
         if block.refcount <= 1 or last.logical_tokens >= self.block_size:
             return
 
-        # Allocate first so allocation failure leaves the original table intact.
         cloned_id = self._allocate_block(last.logical_tokens)
         table.entries[-1] = BlockTableEntry(cloned_id, last.logical_tokens)
         self._release_ref(last.block_id)
+
+    def _required_blocks_for_append(
+        self, table: RequestBlockTable, token_count: int
+    ) -> int:
+        if token_count <= 0:
+            return 0
+        remaining = token_count
+        required = 0
+        if table.entries:
+            last = table.entries[-1]
+            if last.logical_tokens < self.block_size:
+                block = self.blocks[last.block_id]
+                if block.refcount > 1:
+                    required += 1  # copy-on-write clone
+                free_slots = self.block_size - last.logical_tokens
+                consumed = min(free_slots, remaining)
+                remaining -= consumed
+        if remaining > 0:
+            required += (remaining + self.block_size - 1) // self.block_size
+        return required
 
     def append_tokens(self, request_id: str, token_count: int) -> None:
         if token_count < 0:
@@ -133,6 +152,13 @@ class KVBlockAllocator:
         if token_count == 0:
             return
         table = self._table(request_id)
+
+        required = self._required_blocks_for_append(table, token_count)
+        if required > len(self._free):
+            raise MemoryError(
+                f"KV block pool exhausted: append needs {required} free blocks, "
+                f"only {len(self._free)} available"
+            )
 
         remaining = token_count
         while remaining > 0:
@@ -189,9 +215,9 @@ class KVBlockAllocator:
                     remaining -= entry.logical_tokens
                     continue
 
-                # Prefix ends inside this block. Sharing the whole block would
-                # expose logical tokens outside the requested prefix, so clone
-                # only the requested prefix portion into a private block.
+                # Prefix ends inside this block. Sharing the whole physical block
+                # would bind the target to suffix contents it does not logically
+                # own, so the partial tail is copied into a private block.
                 cloned = self._allocate_block(remaining)
                 allocated_partial.append(cloned)
                 target.entries.append(BlockTableEntry(cloned, remaining))
@@ -229,12 +255,10 @@ class KVBlockAllocator:
             block = self.blocks[entry.block_id]
             if block.refcount == 1:
                 block.used_tokens = remaining
-                kept.append(BlockTableEntry(entry.block_id, remaining))
-            else:
-                # A shared physical block may be used by a longer sibling. Keep
-                # the physical contents and shorten only this request's logical
-                # view; future append will trigger COW.
-                kept.append(BlockTableEntry(entry.block_id, remaining))
+            # With a shared block, shorten only this request's logical view. The
+            # physical block may contain a longer sibling prefix; future append
+            # to this request will trigger copy-on-write.
+            kept.append(BlockTableEntry(entry.block_id, remaining))
             remaining = 0
 
         table.entries = kept

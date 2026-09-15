@@ -27,6 +27,7 @@
 | 18 | Page-Aware Attention 与异长 Decode | `page_aware_decode.py` | 禁止 materialize K/V / mixed length / logits+cache parity |
 | 19 | Continuous Batching 调度闭环 | `continuous_batching.py`, `scheduler.py` | decode+new prefill 同轮推进 / terminal block release / TTFT+TPOT |
 | 20 | 统一 Rollout Trace 与证据链 | `rollout_trace.py`, `rollout_trace_collector.py` | model/tool/steering/artifact/verifier provenance + hash-chain integrity |
+| 21 | 持久 AgentGraph、Mailbox 与真正并行 Worker | `agent_graph.py`, `parallel_agents.py` | hierarchy/restart + message lease/reclaim + real worker overlap + one-task-per-agent |
 
 对应文件：
 
@@ -52,14 +53,15 @@
 18-PageAwareAttention与异长Decode-page-aware-decode.md
 19-ContinuousBatching调度闭环-continuous-batching.md
 20-统一RolloutTrace与证据链-rollout-trace.md
+21-持久AgentGraph与并行Mailbox-multi-agent-runtime.md
 ```
 
 ## 当前硬证据
 
-普通 Fast CPU Capstone CI run 207：
+普通 Fast CPU Capstone CI run 214：
 
 ```text
-153 passed, 14 skipped, 1 warning in 9.06s
+163 passed, 14 skipped, 1 warning in 10.06s
 Ruff correctness lint: All checks passed
 ```
 
@@ -75,7 +77,7 @@ contiguous KV
 → interleaved continuous-batching lifecycle
 ```
 
-Agent / evaluation 主线也开始形成独立证据链：
+Agent / evaluation / multi-agent 主线现在已经串成：
 
 ```text
 Durable Thread / WorkItem
@@ -85,6 +87,13 @@ Durable Thread / WorkItem
 → independent verifier
 → Rollout Trace
 → hash-chain integrity check
+
+Persistent AgentGraph
+→ durable mailbox
+→ lease / reclaim / stale-owner rejection
+→ parallel coordinator
+→ one-task-per-agent execution
+→ worker-failure isolation
 ```
 
 关键自动验收包括：
@@ -104,9 +113,18 @@ same work-item → cannot rebind to another thread
 trace payload tampering → hash-chain verification fails
 second trace sync → zero duplicate evidence
 verifier result → explicit parent edge to artifact evidence
+AgentGraph close/reopen → hierarchy/status/mailbox persist
+message lease expiry → another consumer can reclaim
+stale mailbox owner → cannot ACK
+subtree cancellation → descendants stop without killing siblings
+two parallel workers → barrier proves real wall-clock overlap
+per-agent peak active tasks == 1
+worker exception → failed agent isolated, surviving worker continues
 ```
 
 这里仍然是 reference serving/agent system，而不是 production vLLM/SGLang/Codex/Astra 等价物。当前 prefill 仍是逐请求 reference path，page-aware attention 仍有 Python request/block loops，也没有 chunked prefill、preemption/swap、GPU fused kernel 或真实并发 workload benchmark。Rollout Trace 的 SHA-256 链只能提供 tamper-evident 语义；如果攻击者能重写整个数据库并重新计算所有 hash，仍需要外部可信 digest anchor 才能建立更强审计边界。
+
+当前 Multi-Agent 并发使用单进程 ThreadPool 作为**可观察的参考并发层**，持久 SQLite 状态只由 coordinator thread 更新；它尚不是 remote actor runtime，也还没有 worker-specific worktree、reviewer/merge、A2A 或跨机器执行。因此“并行已经存在”不等于“多 Agent 已证明优于单 Agent”。后续必须通过 1/2/4/8-agent controlled benchmark 给出 success/cost/wall-time/conflict 的实验结果。
 
 Docker/Bubblewrap runtime tests 会按环境能力跳过，因此另有专门的 security workflow。Docker tested boundary 使用 shared Linux kernel，不能宣传成 VM-grade hostile-code containment；Bubblewrap backend 在 runner 禁止 namespace 时会显式 skip，而不是把“无法启动”当成“隔离成功”。
 

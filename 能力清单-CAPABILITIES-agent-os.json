@@ -49,9 +49,9 @@
         "Fast CI run 91: steering submitted while a tool executes is consumed and injected before the next model sampling; full suite 86 passed"
       ],
       "next": [
-        "mirror steering consumption into the unified Thread event stream",
         "steering priority / replace / interrupt semantics",
-        "external streaming client"
+        "authenticated external clients",
+        "cancellation-aware tool execution"
       ]
     },
     {
@@ -82,6 +82,33 @@
       ]
     },
     {
+      "id": "agent.runtime_event_stream",
+      "track": "agent",
+      "title": "Durable Cursor-replay Runtime Event Stream",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/10-可重放事件流与HTTP控制面-event-stream-http.md",
+        "Codex源码解剖-codex-anatomy/02-会话线程与事件协议-session-thread-events.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/event_stream.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/codex_harness.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_event_stream_http.py"
+      ],
+      "evidence": [
+        "Fast CI run 103: restart-safe cursor replay, thread/topic filtering and live harness event publication passed; full suite 89 passed and Ruff passed"
+      ],
+      "next": [
+        "SSE / WebSocket push backed by the same durable cursor",
+        "event retention / compaction",
+        "consumer backpressure and slow-subscriber policy"
+      ]
+    },
+    {
       "id": "protocol.app_server_minimal",
       "track": "protocol",
       "title": "Minimal JSON-RPC Agent App Server Control Plane",
@@ -96,16 +123,42 @@
         "代码-code/从零构建Astra与Codex级系统/src/astra_codex/app_server.py"
       ],
       "tests": [
-        "代码-code/从零构建Astra与Codex级系统/tests/test_app_server.py"
+        "代码-code/从零构建Astra与Codex级系统/tests/test_app_server.py",
+        "代码-code/从零构建Astra与Codex级系统/tests/test_event_stream_http.py"
       ],
       "evidence": [
-        "Fast CI run 91: thread create/get/submit, runtime execution, steering, fork provenance, artifact listing and protocol errors are covered; full suite 86 passed and Ruff passed"
+        "Fast CI run 103: JSON-RPC thread/runtime/artifact control plus cursor-based event/poll passed; full suite 89 passed"
       ],
       "next": [
-        "event subscription / streaming",
-        "stdio / HTTP / WebSocket transports",
-        "authentication and session authorization",
+        "session authentication and authorization",
+        "push subscriptions",
         "protocol transcript comparison against public Codex App Server semantics"
+      ]
+    },
+    {
+      "id": "protocol.app_server_http",
+      "track": "protocol",
+      "title": "Local HTTP JSON-RPC App Server Transport",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/10-可重放事件流与HTTP控制面-event-stream-http.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/http_app_server.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/app_server.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_event_stream_http.py"
+      ],
+      "evidence": [
+        "Fast CI run 103: real localhost HTTP round-trip performs create→submit→run→event replay→thread inspect; thread-owned runtime handle avoids unsafe cross-thread SQLite sharing; full suite 89 passed and Ruff passed"
+      ],
+      "next": [
+        "bearer/session authentication",
+        "thread/method authorization",
+        "TLS termination guidance",
+        "SSE / WebSocket transport"
       ]
     }
   ]

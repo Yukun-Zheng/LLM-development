@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "extends": "能力清单-CAPABILITIES.json",
+  "capabilities": [
+    {
+      "id": "agent.rollout_trace_provenance",
+      "track": "agent",
+      "title": "Unified Rollout Trace / Evidence Provenance",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/20-统一RolloutTrace与证据链-rollout-trace.md",
+        "智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md",
+        "智能体-agent/04-记忆与上下文-memory-context.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/rollout_trace.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/rollout_trace_collector.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime_control.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_rollout_trace.py"
+      ],
+      "evidence": [
+        "Fast CI run 205 executed the full rollout-trace tests successfully: 153 passed, 14 skipped; that run failed only Ruff F401 on one unused import, which was removed in the immediate follow-up commit. Tests cover restart persistence, work-item/thread binding, hash-chain tamper detection, idempotent synchronization, consumed steering, artifact provenance and verifier→artifact parent edges."
+      ],
+      "next": [
+        "runtime-native trace sink instead of post-run collection",
+        "reviewer / merge / policy decisions as explicit provenance edges",
+        "external signed head-hash anchoring",
+        "parent/child trace identity for multi-agent execution",
+        "trajectory dataset materialization for RLVR / agentic RL"
+      ]
+    }
+  ]
+}

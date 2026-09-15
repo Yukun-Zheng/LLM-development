@@ -50,8 +50,8 @@
       ],
       "next": [
         "GPU slab benchmark",
-        "scheduler-owned reservation lifecycle",
-        "fused block-table attention kernel"
+        "fused block-table attention kernel",
+        "multi-process allocator ownership"
       ]
     },
     {
@@ -105,7 +105,6 @@
       ],
       "next": [
         "fused GPU block-table attention kernel",
-        "scheduler-owned reservation/fencing",
         "request preemption",
         "mixed-length throughput benchmark"
       ]
@@ -130,13 +129,40 @@
       ],
       "evidence": [
         "Fast CPU Capstone run 195 completed successfully: 148 passed, 14 skipped, 1 warning; Ruff passed",
-        "The mixed decode path checks aggregate COW/new-block capacity before embedding/model math or any cache mutation; deliberate zero-free-block tests raise MemoryError with unchanged block tables, sequence lengths and K/V slabs; a sufficient-capacity batch commits every request and matches full use_cache state"
+        "The mixed decode path checks aggregate COW/new-block capacity before embedding/model math or any cache mutation; deliberate zero-free-block tests raise MemoryError with unchanged block tables, sequence lengths and K/V slabs"
       ],
       "next": [
-        "replace conservative preflight with scheduler-owned concrete block-id reservation",
-        "reservation token commit/rollback",
-        "fencing against concurrent allocator users",
-        "preemption and admission policy under memory pressure"
+        "reduce conservative over-reservation for groups sharing one partial block",
+        "memory-pressure admission policy"
+      ]
+    },
+    {
+      "id": "inference.batch_kv_concrete_reservation",
+      "track": "inference",
+      "title": "Concrete Physical KV Block Reservation / Local Fencing",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "教材-book/10-推理服务系统-inference-systems.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/19-ContinuousBatching调度闭环-continuous-batching.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/kv_block_allocator.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/kv_tensor_pool.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/page_aware_decode.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_batch_kv_preflight.py"
+      ],
+      "evidence": [
+        "Fast CPU Capstone run 199 completed successfully: 150 passed, 14 skipped, 1 warning; Ruff passed",
+        "The allocator removes concrete reserved block ids from the normal free list; an unrelated request cannot consume them; page-aware decode reserves before model math and releases unconsumed ids on failure; successful batch append consumes reserved ids and leaves no reservation leak"
+      ],
+      "next": [
+        "transactional metadata/tensor rollback for arbitrary commit exceptions",
+        "cross-process reservation ownership/fencing token",
+        "scheduler-owned reservation lifetime",
+        "preemption and swap under memory pressure"
       ]
     },
     {
@@ -162,10 +188,10 @@
       ],
       "evidence": [
         "Fast CPU Capstone run 189 completed successfully: 145 passed, 14 skipped, 1 warning; Ruff passed",
-        "The reference engine interleaves an old decode lane with new prompt admission in the same iteration, uses mixed-length page-aware decode, frees physical blocks immediately at terminal state, handles cancellation, records TTFT/TPOT/latency, and terminates multi-request runs without leaked blocks"
+        "The reference engine interleaves an old decode lane with new prompt admission in the same iteration, uses mixed-length page-aware decode, frees physical blocks immediately at terminal state, handles cancellation, records TTFT/TPOT/latency, and terminates multi-request runs without leaked blocks",
+        "The decode subpath now fences concrete physical block ids before model execution via the validated run-199 reservation mechanism"
       ],
       "next": [
-        "scheduler-owned concrete block reservation before execution",
         "chunked prefill under a unified token budget",
         "request preemption/swap",
         "prefix-cache eviction/admission policy",

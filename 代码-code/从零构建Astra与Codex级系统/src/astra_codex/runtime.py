@@ -5,9 +5,12 @@ from pathlib import Path
 from typing import Any
 
 from .agent import ModelBackend
+from .artifacts import ArtifactStore
 from .codex_harness import CodexHarness, CodexTurnResult
 from .durable import DurableThreadStore, TERMINAL_THREAD_STATUSES, ThreadStatus
+from .runtime_control import ControlledBackend, LeaseHeartbeat
 from .runtime_queue import DurableWorkQueue, WorkItem, WorkStatus
+from .steering import DurableSteeringQueue
 from .tool_journal import (
     DurableToolJournal,
     JournaledToolExecutor,
@@ -27,22 +30,27 @@ class RuntimeExecutionRecord:
 
 
 class DurableAgentRuntime:
-    """Reference composition of ThreadStore + WorkQueue + TurnExecutor.
+    """Reference composition of durable thread, work, tool and steering state.
 
-    The durable pipeline is now:
+    The durable pipeline is:
 
         submission -> thread event -> work item -> worker lease -> turn/checkpoint
         -> journaled tool calls -> final checkpoint -> turn completion -> work ACK
+
+    The runtime now also owns a durable steering inbox and a content-addressed
+    artifact store. Before every model sampling step, ``ControlledBackend``
+    renews the worker lease and injects steering messages that arrived while the
+    turn was executing.
 
     Completed tool calls are keyed by the stable work-item id and call index. If
     a worker disappears and the lease is later reclaimed, completed calls can be
     replayed from the journal without repeating their side effects. A tool call
     left only in STARTED state is *in doubt* and is not retried by default.
 
-    This still does not provide universal exactly-once external side effects.
-    An external operation that committed before the process crashed but before
-    its COMPLETED journal row was written requires tool-specific reconciliation
-    or an external idempotency/transaction mechanism.
+    This still does not provide universal exactly-once external side effects or
+    an OS security sandbox. Remote side effects may need external idempotency or
+    reconciliation, and process/filesystem/network isolation remains a separate
+    subsystem.
     """
 
     def __init__(
@@ -59,6 +67,8 @@ class DurableAgentRuntime:
         self.thread_store = DurableThreadStore(root / "threads.sqlite")
         self.work_queue = DurableWorkQueue(root / "work.sqlite")
         self.tool_journal = DurableToolJournal(root / "tool-journal.sqlite")
+        self.steering_queue = DurableSteeringQueue(root / "steering.sqlite")
+        self.artifact_store = ArtifactStore(root / "artifacts")
         self.journaled_tools = JournaledToolExecutor(
             tools,
             self.tool_journal,
@@ -84,6 +94,46 @@ class DurableAgentRuntime:
             "turn",
             {"content": content},
             item_id=item_id,
+            now=now,
+        )
+
+    def steer(
+        self,
+        thread_id: str,
+        content: str,
+        *,
+        steering_id: str | None = None,
+        now: float | None = None,
+    ) -> str:
+        projection = self.thread_store.project(thread_id)
+        if projection.status in TERMINAL_THREAD_STATUSES:
+            raise RuntimeError(
+                f"cannot steer terminal thread: {projection.status.value}"
+            )
+        return self.steering_queue.submit(
+            thread_id,
+            content,
+            steering_id=steering_id,
+            now=now,
+        )
+
+    def snapshot_artifact(
+        self,
+        thread_id: str,
+        source: str | Path,
+        *,
+        kind: str = "file",
+        metadata: dict[str, Any] | None = None,
+        artifact_id: str | None = None,
+        now: float | None = None,
+    ) -> str:
+        self.thread_store.project(thread_id)
+        return self.artifact_store.snapshot_file(
+            thread_id,
+            source,
+            kind=kind,
+            metadata=metadata,
+            artifact_id=artifact_id,
             now=now,
         )
 
@@ -200,8 +250,6 @@ class DurableAgentRuntime:
                     now=now,
                 )
         elif projection.status is ThreadStatus.READY:
-            # Record work ownership before TURN_STARTED. This closes most of the
-            # crash window between queue claim and durable turn creation.
             self.thread_store.checkpoint(
                 item.thread_id,
                 {"phase": "claimed", "work_item_id": item.item_id},
@@ -231,8 +279,24 @@ class DurableAgentRuntime:
             self.journaled_tools,
             scope=item.item_id,
         )
-        harness = CodexHarness(
+        heartbeat = LeaseHeartbeat(
+            self.work_queue,
+            item.item_id,
+            worker_id,
+            lease_seconds,
+        )
+
+        def beat() -> float:
+            return heartbeat.renew(now=now) if now is not None else heartbeat.renew()
+
+        controlled_backend = ControlledBackend(
             self.backend,
+            heartbeat=beat,
+            steering_queue=self.steering_queue,
+            thread_id=item.thread_id,
+        )
+        harness = CodexHarness(
+            controlled_backend,
             scoped_tools,  # type: ignore[arg-type]
             max_model_steps=self.max_model_steps,
         )
@@ -287,9 +351,6 @@ class DurableAgentRuntime:
                 model_steps=result.model_steps,
             )
         except Exception as exc:
-            # This catches ordinary executor exceptions. A hard process death
-            # cannot execute this block; that is why lease reclaim + durable
-            # checkpoints + tool journal exist independently.
             self.work_queue.fail(
                 item.item_id,
                 worker_id,
@@ -306,6 +367,8 @@ class DurableAgentRuntime:
         self.thread_store.close()
         self.work_queue.close()
         self.tool_journal.close()
+        self.steering_queue.close()
+        self.artifact_store.close()
 
     def __enter__(self) -> "DurableAgentRuntime":
         return self

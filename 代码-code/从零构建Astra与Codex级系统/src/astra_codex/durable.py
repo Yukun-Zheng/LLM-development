@@ -20,6 +20,14 @@ class ThreadStatus(str, Enum):
     PAUSED = "paused"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+TERMINAL_THREAD_STATUSES = {
+    ThreadStatus.COMPLETED,
+    ThreadStatus.FAILED,
+    ThreadStatus.CANCELLED,
+}
 
 
 class DurableEventType(str, Enum):
@@ -32,6 +40,7 @@ class DurableEventType(str, Enum):
     THREAD_RESUMED = "thread_resumed"
     THREAD_COMPLETED = "thread_completed"
     THREAD_FAILED = "thread_failed"
+    THREAD_CANCELLED = "thread_cancelled"
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +64,9 @@ class ThreadProjection:
     submissions: tuple[str, ...]
     last_checkpoint: dict[str, Any] | None
     failure_reason: str | None
+    cancellation_reason: str | None
+    parent_thread_id: str | None
+    parent_event_id: int | None
 
 
 class DurableThreadStore:
@@ -64,8 +76,10 @@ class DurableThreadStore:
     replaying events, so a new Python process can reopen the same database and
     resume a task without relying on in-memory objects.
 
-    This module is intentionally a small reference implementation. It is not a
-    distributed queue, lease manager, or production transaction coordinator.
+    ``fork_thread`` copies a prefix of source events into a new independent
+    event stream and records source provenance on the child creation event.
+    This is intentionally a small reference implementation, not a distributed
+    transaction coordinator.
     """
 
     def __init__(self, path: str | Path) -> None:
@@ -100,7 +114,15 @@ class DurableThreadStore:
         )
         self.connection.commit()
 
-    def create_thread(self, thread_id: str | None = None) -> str:
+    def create_thread(
+        self,
+        thread_id: str | None = None,
+        *,
+        parent_thread_id: str | None = None,
+        parent_event_id: int | None = None,
+    ) -> str:
+        if parent_thread_id is not None and not self._thread_exists(parent_thread_id):
+            raise KeyError(f"unknown parent thread: {parent_thread_id}")
         thread_id = thread_id or f"thr_{uuid.uuid4().hex}"
         created_at = _utc_now()
         try:
@@ -111,7 +133,11 @@ class DurableThreadStore:
         except sqlite3.IntegrityError as exc:
             raise ValueError(f"thread already exists: {thread_id}") from exc
         self.connection.commit()
-        self.append_event(thread_id, DurableEventType.THREAD_CREATED)
+        payload: dict[str, Any] = {}
+        if parent_thread_id is not None:
+            payload["parent_thread_id"] = parent_thread_id
+            payload["parent_event_id"] = parent_event_id
+        self.append_event(thread_id, DurableEventType.THREAD_CREATED, payload)
         return thread_id
 
     def _thread_exists(self, thread_id: str) -> bool:
@@ -180,9 +206,19 @@ class DurableThreadStore:
         submissions: list[str] = []
         last_checkpoint: dict[str, Any] | None = None
         failure_reason: str | None = None
+        cancellation_reason: str | None = None
+        parent_thread_id: str | None = None
+        parent_event_id: int | None = None
 
         for event in events:
-            if event.event_type is DurableEventType.USER_SUBMISSION:
+            if event.event_type is DurableEventType.THREAD_CREATED:
+                parent = event.payload.get("parent_thread_id")
+                if parent is not None:
+                    parent_thread_id = str(parent)
+                parent_event = event.payload.get("parent_event_id")
+                if parent_event is not None:
+                    parent_event_id = int(parent_event)
+            elif event.event_type is DurableEventType.USER_SUBMISSION:
                 submissions.append(str(event.payload.get("content", "")))
             elif event.event_type is DurableEventType.TURN_STARTED:
                 status = ThreadStatus.RUNNING
@@ -203,6 +239,10 @@ class DurableThreadStore:
                 status = ThreadStatus.FAILED
                 active_turn_id = None
                 failure_reason = str(event.payload.get("reason", ""))
+            elif event.event_type is DurableEventType.THREAD_CANCELLED:
+                status = ThreadStatus.CANCELLED
+                active_turn_id = None
+                cancellation_reason = str(event.payload.get("reason", ""))
 
         return ThreadProjection(
             thread_id=thread_id,
@@ -212,11 +252,14 @@ class DurableThreadStore:
             submissions=tuple(submissions),
             last_checkpoint=last_checkpoint,
             failure_reason=failure_reason,
+            cancellation_reason=cancellation_reason,
+            parent_thread_id=parent_thread_id,
+            parent_event_id=parent_event_id,
         )
 
     def submit(self, thread_id: str, content: str) -> int:
         projection = self.project(thread_id)
-        if projection.status in {ThreadStatus.COMPLETED, ThreadStatus.FAILED}:
+        if projection.status in TERMINAL_THREAD_STATUSES:
             raise RuntimeError(f"cannot submit to terminal thread: {projection.status.value}")
         return self.append_event(
             thread_id,
@@ -260,7 +303,7 @@ class DurableThreadStore:
 
     def checkpoint(self, thread_id: str, state: dict[str, Any]) -> int:
         projection = self.project(thread_id)
-        if projection.status in {ThreadStatus.COMPLETED, ThreadStatus.FAILED}:
+        if projection.status in TERMINAL_THREAD_STATUSES:
             raise RuntimeError("cannot checkpoint a terminal thread")
         return self.append_event(
             thread_id,
@@ -290,13 +333,13 @@ class DurableThreadStore:
         projection = self.project(thread_id)
         if projection.status is ThreadStatus.RUNNING:
             raise RuntimeError("complete the active turn before completing the thread")
-        if projection.status in {ThreadStatus.COMPLETED, ThreadStatus.FAILED}:
+        if projection.status in TERMINAL_THREAD_STATUSES:
             raise RuntimeError(f"thread already terminal: {projection.status.value}")
         return self.append_event(thread_id, DurableEventType.THREAD_COMPLETED)
 
     def fail_thread(self, thread_id: str, reason: str) -> int:
         projection = self.project(thread_id)
-        if projection.status in {ThreadStatus.COMPLETED, ThreadStatus.FAILED}:
+        if projection.status in TERMINAL_THREAD_STATUSES:
             raise RuntimeError(f"thread already terminal: {projection.status.value}")
         return self.append_event(
             thread_id,
@@ -304,6 +347,51 @@ class DurableThreadStore:
             {"reason": reason},
             turn_id=projection.active_turn_id,
         )
+
+    def cancel_thread(self, thread_id: str, reason: str = "") -> int:
+        projection = self.project(thread_id)
+        if projection.status in TERMINAL_THREAD_STATUSES:
+            raise RuntimeError(f"thread already terminal: {projection.status.value}")
+        return self.append_event(
+            thread_id,
+            DurableEventType.THREAD_CANCELLED,
+            {"reason": reason},
+            turn_id=projection.active_turn_id,
+        )
+
+    def fork_thread(
+        self,
+        source_thread_id: str,
+        *,
+        new_thread_id: str | None = None,
+        through_event_id: int | None = None,
+    ) -> str:
+        source_events = self.events(source_thread_id)
+        if through_event_id is not None:
+            source_events = [
+                event for event in source_events if event.id <= through_event_id
+            ]
+        if not source_events:
+            raise ValueError("fork point does not include any source events")
+
+        fork_point = source_events[-1].id
+        child_id = self.create_thread(
+            new_thread_id,
+            parent_thread_id=source_thread_id,
+            parent_event_id=fork_point,
+        )
+        for event in source_events:
+            if event.event_type is DurableEventType.THREAD_CREATED:
+                continue
+            payload = dict(event.payload)
+            payload["_forked_from_event_id"] = event.id
+            self.append_event(
+                child_id,
+                event.event_type,
+                payload,
+                turn_id=event.turn_id,
+            )
+        return child_id
 
     def close(self) -> None:
         self.connection.close()

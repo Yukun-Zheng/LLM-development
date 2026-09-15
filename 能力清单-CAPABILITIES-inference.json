@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "extends": "能力清单-CAPABILITIES.json",
+  "capabilities": [
+    {
+      "id": "inference.physical_kv_block_allocator",
+      "track": "inference",
+      "title": "Physical KV Block Allocator / Prefix Sharing Metadata Runtime",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "教材-book/10-推理服务系统-inference-systems.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/16-物理KV块分配器与前缀共享-kv-block-allocator.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/kv_block_allocator.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_kv_block_allocator.py"
+      ],
+      "evidence": [
+        "Fast CPU Capstone run 172 completed successfully: 126 passed, 14 skipped, 1 warning; Ruff passed",
+        "Seven allocator tests cover finite free-list allocation, fragmentation metrics, exact prefix block sharing/refcounts, partial-prefix private tails, copy-on-write for shared partial final blocks, truncate/release semantics and append-atomic OOM behavior"
+      ],
+      "next": [
+        "attach block ids to real per-layer K/V tensor slabs",
+        "page-aware attention gather/kernel",
+        "scheduler integration and request preemption",
+        "block-hash/radix prefix index",
+        "eviction and swap policy",
+        "heterogeneous continuous batching"
+      ]
+    },
+    {
+      "id": "inference.physical_kv_tensor_pool",
+      "track": "inference",
+      "title": "Physical K/V Tensor Slab Pool Bound to Block Tables",
+      "status": "planned",
+      "maturity": "L1",
+      "theory": [
+        "教材-book/10-推理服务系统-inference-systems.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/16-物理KV块分配器与前缀共享-kv-block-allocator.md"
+      ],
+      "code": [],
+      "tests": [],
+      "evidence": [],
+      "next": [
+        "allocate [layer, block, H_kv, block_size, D] slabs",
+        "write token deltas directly into physical blocks",
+        "materialize reference contiguous history for numerical parity",
+        "remove materialization with page-aware attention backend"
+      ]
+    },
+    {
+      "id": "inference.heterogeneous_continuous_batching",
+      "track": "inference",
+      "title": "Heterogeneous Variable-length Continuous Batching",
+      "status": "planned",
+      "maturity": "L1",
+      "theory": [
+        "教材-book/10-推理服务系统-inference-systems.md"
+      ],
+      "code": [],
+      "tests": [],
+      "evidence": [],
+      "next": [
+        "bind scheduler request state to physical block tables",
+        "support per-request cached lengths in one decode batch",
+        "page-aware attention mask/indexing",
+        "measure TTFT/TPOT/throughput/fairness under mixed prompt lengths"
+      ]
+    }
+  ]
+}

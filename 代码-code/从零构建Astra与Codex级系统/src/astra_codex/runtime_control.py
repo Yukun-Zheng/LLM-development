@@ -1,23 +1,19 @@
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from .agent import Message, ModelBackend
-from .runtime_queue import DurableWorkQueue, WorkStatus
+from .runtime_queue import DurableWorkQueue
 from .steering import DurableSteeringQueue
 from .structured import ToolSpec
 
 
 @dataclass(slots=True)
 class LeaseHeartbeat:
-    """Explicit lease-renewal primitive for long-running workers.
-
-    A work item that takes longer than its original lease must renew ownership;
-    otherwise another worker may legally reclaim it. This class makes that
-    lifecycle visible instead of hiding it in a background thread.
-    """
+    """Explicit lease-renewal primitive for long-running workers."""
 
     queue: DurableWorkQueue
     item_id: str
@@ -25,39 +21,95 @@ class LeaseHeartbeat:
     lease_seconds: float
 
     def renew(self, *, now: float | None = None) -> float:
-        if self.lease_seconds <= 0:
-            raise ValueError("lease_seconds must be positive")
-        timestamp = time.time() if now is None else now
-        current = self.queue.get(self.item_id)
-        if current.status is not WorkStatus.LEASED:
-            raise RuntimeError(f"work item is not leased: {current.status.value}")
-        if current.lease_owner != self.worker_id:
-            raise PermissionError(
-                f"lease belongs to {current.lease_owner!r}, not {self.worker_id!r}"
-            )
-        if current.lease_until is not None and current.lease_until < timestamp:
-            raise RuntimeError("cannot renew an already expired lease")
-
-        lease_until = timestamp + self.lease_seconds
-        self.queue.connection.execute(
-            """
-            UPDATE work_items
-            SET lease_until = ?, updated_at = ?
-            WHERE item_id = ? AND status = ? AND lease_owner = ?
-            """,
-            (
-                lease_until,
-                timestamp,
-                self.item_id,
-                WorkStatus.LEASED.value,
-                self.worker_id,
-            ),
+        return self.queue.renew_lease(
+            self.item_id,
+            self.worker_id,
+            lease_seconds=self.lease_seconds,
+            now=now,
         )
-        return lease_until
+
+
+class BackgroundLeaseHeartbeat:
+    """Renew a lease on a dedicated thread using a thread-local SQLite handle.
+
+    This protects a worker while one model/tool call blocks longer than the
+    foreground sampling cadence. The runner opens its own ``DurableWorkQueue``
+    connection instead of sharing the main thread's SQLite connection.
+
+    ``last_error`` is retained rather than thrown from the background thread; a
+    caller can inspect it after the context closes and decide whether to fail the
+    enclosing turn. The runtime currently uses this as a liveness guard, not a
+    distributed fencing-token protocol.
+    """
+
+    def __init__(
+        self,
+        queue_path: str,
+        item_id: str,
+        worker_id: str,
+        *,
+        lease_seconds: float,
+        interval_seconds: float | None = None,
+    ) -> None:
+        if lease_seconds <= 0:
+            raise ValueError("lease_seconds must be positive")
+        interval = lease_seconds / 3 if interval_seconds is None else interval_seconds
+        if interval <= 0:
+            raise ValueError("interval_seconds must be positive")
+        if interval >= lease_seconds:
+            raise ValueError("heartbeat interval must be shorter than lease_seconds")
+        self.queue_path = queue_path
+        self.item_id = item_id
+        self.worker_id = worker_id
+        self.lease_seconds = lease_seconds
+        self.interval_seconds = interval
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self.renewals = 0
+        self.last_error: Exception | None = None
+
+    def _run(self) -> None:
+        try:
+            with DurableWorkQueue(self.queue_path) as queue:
+                while not self._stop.wait(self.interval_seconds):
+                    queue.renew_lease(
+                        self.item_id,
+                        self.worker_id,
+                        lease_seconds=self.lease_seconds,
+                    )
+                    self.renewals += 1
+        except Exception as exc:
+            self.last_error = exc
+            self._stop.set()
+
+    def start(self) -> None:
+        if self._thread is not None and self._thread.is_alive():
+            raise RuntimeError("background heartbeat is already running")
+        self._stop.clear()
+        self.last_error = None
+        self._thread = threading.Thread(
+            target=self._run,
+            name=f"lease-heartbeat-{self.item_id}",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def close(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=max(1.0, self.interval_seconds * 2))
+            self._thread = None
+
+    def __enter__(self) -> "BackgroundLeaseHeartbeat":
+        self.start()
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
 
 class ControlledBackend:
-    """ModelBackend decorator for worker heartbeat + durable live steering.
+    """ModelBackend decorator for foreground heartbeat + durable live steering.
 
     Before every model sampling call it can:
 
@@ -65,8 +117,9 @@ class ControlledBackend:
     2. atomically consume pending steering messages for the thread;
     3. append those messages to the same transcript seen by the harness.
 
-    This means steering submitted while a tool is executing becomes visible to
-    the *next* sampling step without restarting the turn.
+    The explicit foreground heartbeat remains useful for deterministic tests and
+    event visibility. ``BackgroundLeaseHeartbeat`` covers long blocking calls
+    between these boundaries.
     """
 
     def __init__(

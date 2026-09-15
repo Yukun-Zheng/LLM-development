@@ -69,7 +69,7 @@ def test_agent_graph_enforces_thread_and_terminal_boundaries(tmp_path) -> None:
             )
 
         graph.set_status(root, AgentStatus.COMPLETED)
-        with pytest.raises(RuntimeError, match="terminal"):
+        with pytest.raises(RuntimeError, match="invalid agent transition"):
             graph.set_status(root, AgentStatus.ACTIVE)
         with pytest.raises(RuntimeError, match="terminal"):
             graph.create_agent(

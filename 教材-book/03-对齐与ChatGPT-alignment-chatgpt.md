@@ -12,7 +12,7 @@
 
 $$
 \mathcal L_{\text{LM}}
-=-\sum_t\log p_\theta(x_t\mid x_{<t}).
+=-\sum_t\log p_\theta(x_t\mid x_{\lt t}).
 $$
 
 这个目标只要求：**真实语料里的下一个 token 概率尽可能高。**
@@ -98,7 +98,7 @@ $$
 $$
 \mathcal L_{\text{SFT}}
 =-\sum_{t\in\mathcal A}
-\log p_\theta(y_t\mid x,y_{<t}),
+\log p_\theta(y_t\mid x,y_{\lt t}),
 $$
 
 其中 $\mathcal A$ 是需要计算 loss 的 assistant token 集合。
@@ -482,7 +482,7 @@ $$
 形式化：
 
 $$
-s_t=(x,y_{<t}),
+s_t=(x,y_{\lt t}),
 $$
 
 $$
@@ -491,7 +491,7 @@ $$
 
 $$
 \pi_\theta(a_t\mid s_t)
-=p_\theta(y_t\mid x,y_{<t}).
+=p_\theta(y_t\mid x,y_{\lt t}).
 $$
 
 完整轨迹：
@@ -626,7 +626,7 @@ L^{CLIP}(\theta)
 \min
 \left(
 \rho_t\hat A_t,
-\operatorname{clip}(\rho_t,1-\epsilon,1+\epsilon)\hat A_t
+\mathrm{clip}(\rho_t,1-\epsilon,1+\epsilon)\hat A_t
 \right)
 \right].
 $$
@@ -1111,7 +1111,7 @@ $$
 DPO 希望：
 
 $$
-\Delta_w>\Delta_l.
+\Delta_w\gt \Delta_l.
 $$
 
 也就是：
@@ -1145,7 +1145,7 @@ $$
 \pi_\theta(y|x)
 =
 \prod_{t=1}^{T_y}
-\pi_\theta(y_t|x,y_{<t}).
+\pi_\theta(y_t|x,y_{\lt t}).
 $$
 
 取 log：
@@ -1154,7 +1154,7 @@ $$
 \log\pi_\theta(y|x)
 =
 \sum_{t=1}^{T_y}
-\log\pi_\theta(y_t|x,y_{<t}).
+\log\pi_\theta(y_t|x,y_{\lt t}).
 $$
 
 实现中：
@@ -1378,8 +1378,8 @@ $$
 $$
 \hat A_i
 =
-\frac{r_i-\operatorname{mean}(r_1,\ldots,r_G)}
-{\operatorname{std}(r_1,\ldots,r_G)+\epsilon}.
+\frac{r_i-\mathrm{mean}(r_1,\ldots,r_G)}
+{\mathrm{std}(r_1,\ldots,r_G)+\epsilon}.
 $$
 
 于是：
@@ -1580,7 +1580,7 @@ $$
 对同一 prompt 生成两个模型答案，让人类或独立 judge 比较：
 
 $$
-\operatorname{WinRate}(A,B)
+\mathrm{WinRate}(A,B)
 =
 \frac{\#(A\succ B)}{N}.
 $$

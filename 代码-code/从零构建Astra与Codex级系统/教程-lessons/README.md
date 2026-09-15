@@ -24,6 +24,8 @@
 | 15 | Docker 容器隔离与逃逸负测试 | `docker_sandbox.py`, `coding.py` | host-secret invisibility / ro workspace+rootfs / network-none / CapEff=0 / NoNewPrivs=1 / Coding Agent container path |
 | 16 | 物理 KV 块分配器与 Tensor Slab | `kv_block_allocator.py`, `kv_tensor_pool.py` | free-list / refcount / COW / fragmentation / physical K/V parity |
 | 17 | 物理前缀缓存与计算复用 | `physical_prefix_cache.py`, `kv_tensor_pool.py` | exact hit 0 forward / suffix-only compute / block sharing / COW / source release |
+| 18 | Page-Aware Attention 与异长 Decode | `page_aware_decode.py` | 禁止 materialize K/V / mixed length / logits+cache parity |
+| 19 | Continuous Batching 调度闭环 | `continuous_batching.py`, `scheduler.py` | decode+new prefill 同轮推进 / terminal block release / TTFT+TPOT |
 
 对应文件：
 
@@ -46,60 +48,48 @@
 15-Docker容器隔离与逃逸负测试-container-sandbox.md
 16-物理KV块分配器与前缀共享-kv-block-allocator.md
 17-物理前缀缓存与计算复用-physical-prefix-cache.md
+18-PageAwareAttention与异长Decode-page-aware-decode.md
+19-ContinuousBatching调度闭环-continuous-batching.md
 ```
 
 ## 当前硬证据
 
-普通 Fast CPU Capstone CI run 179：
+普通 Fast CPU Capstone CI run 189：
 
 ```text
-136 passed, 14 skipped, 1 warning in 8.90s
+145 passed, 14 skipped, 1 warning in 8.74s
 Ruff correctness lint: All checks passed
 ```
 
-这一轮新增的 inference 证据包括：
+Inference 主线现在已经实际串成：
 
 ```text
-physical KV block ids → real K/V tensor slabs
+contiguous KV
+→ logical paged KV
+→ physical block allocator
+→ physical K/V tensor slabs
+→ physical prefix sharing
+→ page-aware mixed-length decode
+→ interleaved continuous-batching lifecycle
+```
+
+关键自动验收包括：
+
+```text
 physical block decode logits == full recomputation
 exact physical prefix hit → zero extra model forward
 partial longest-prefix hit → only suffix forward
-partial reuse logits == full forward
-shared full blocks → refcounted physical reuse
-shared partial tail → copy-on-write before decode
-release source request → child cache remains valid
+page-aware decode → no historical K/V materialization
+mixed cached lengths → one decode API
+page-aware logits + per-layer K/V == full recomputation
+old request decode + newly arrived request prefill → same serving iteration
+finished/cancelled request → physical blocks released
+scheduler metrics → TTFT / TPOT / total latency
 ```
 
-Docker/Bubblewrap runtime tests 会按环境能力跳过，因此另有专门的 security workflow。
+这里仍然是 reference serving engine，而不是 production vLLM/SGLang 等价物。当前 prefill 仍是逐请求 reference path，page-aware attention 仍有 Python request/block loops，也没有 chunked prefill、preemption/swap、batch-wide reservation、GPU fused kernel 或真实并发 workload benchmark。
 
-Sandbox security CI run 8：
-
-```text
-namespace-sandbox         → success
-  restricted-process tests → 7 passed
-  bubblewrap contract       → hard assertions pass
-  unavailable namespace runtime cases → explicit skip with kernel-policy reason
-docker-container-sandbox → success
-  Docker security tests    → 8 passed
-  Ruff                     → All checks passed
-```
-
-Docker job 还实际验证了：
-
-```text
-Coding Agent
-→ sandbox_exec
-→ Docker container
-→ model observes container command output
-```
-
-并保持：
-
-```text
-shell ∉ model-visible tools
-```
-
-当前 Docker tested boundary 使用 shared Linux kernel，因此仍然不能宣传成 VM-grade hostile-code containment。Bubblewrap backend 也仍保持 `partial`：GitHub-hosted runner 不允许完整 user/network namespace runtime，项目不会把“无法启动”当成“隔离成功”。
+Docker/Bubblewrap runtime tests 会按环境能力跳过，因此另有专门的 security workflow。Docker tested boundary 使用 shared Linux kernel，不能宣传成 VM-grade hostile-code containment；Bubblewrap backend 在 runner 禁止 namespace 时会显式 skip，而不是把“无法启动”当成“隔离成功”。
 
 ## 课程成熟度规则
 
@@ -120,4 +110,4 @@ numerical parity
 benchmark / real environment evidence
 ```
 
-因此当前这些 Lesson 的定位是 **reference system curriculum**：把每一层做成可观察、可测试、可继续优化的最小正确实现，再逐渐替换成更强的工业级机制。
+因此当前这些 Lesson 的定位是 **reference system curriculum**：先把每一层做成可观察、可测试、可继续优化的最小正确实现，再逐渐替换成更强的工业级机制。

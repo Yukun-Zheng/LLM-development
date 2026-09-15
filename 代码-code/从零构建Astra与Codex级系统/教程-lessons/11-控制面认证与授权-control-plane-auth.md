@@ -11,6 +11,8 @@
 ```text
 src/astra_codex/control_auth.py
 src/astra_codex/app_server.py
+src/astra_codex/runtime.py
+src/astra_codex/runtime_queue.py
 src/astra_codex/http_app_server.py
 ```
 
@@ -102,57 +104,123 @@ event/poll(all)        ✗
 
 ---
 
-## 3　为什么 scoped principal 不能调用全局 `runtime/runOne`
+## 3　授权必须下沉到 Queue Claim，而不能只在 API 门口检查
 
-当前 `runtime/runOne` 的语义是：
-
-```text
-claim next global WorkItem
-```
-
-它没有：
+假设 queue 的 FIFO 顺序是：
 
 ```text
-threadId = ...
+work_b  thread=thr_b  created=1
+work_a  thread=thr_a  created=2
 ```
 
-因此如果 principal 只被授权访问：
+worker principal 只被授权：
 
 ```text
-thr_a
+thread_ids = {thr_a}
 ```
 
-但我们允许它调用全局：
+一个看似合理但错误的实现是：
 
 ```text
-runtime/runOne
+1. global queue.claim()
+2. 拿到 work_b
+3. App Server 发现 thr_b 不允许
+4. 再拒绝
 ```
 
-那么 queue 可能返回：
+问题是：**capability 已经泄漏到 worker claim 阶段了。** work_b 已经被错误 worker lease，可能造成 starvation、状态泄漏，甚至后续代码忘记再次检查。
+
+现在的实现把过滤条件直接放进 `DurableWorkQueue.claim(...)` 的同一个 `BEGIN IMMEDIATE` 事务：
 
 ```text
-thr_b 的 WorkItem
+WHERE eligible_status
+  AND kind IN (...)
+  AND thread_id IN (authorized_threads)
+ORDER BY created_at, item_id
+LIMIT 1
 ```
 
-这会绕过 Thread ACL。
-
-因此当前授权器采取保守规则：
-
-> **只要 principal 是 thread-scoped，就禁止调用无法安全映射到 Thread 的全局 worker endpoint。**
-
-这不是功能缺陷，而是 capability boundary。
-
-未来正确做法是增加：
+数据流变成：
 
 ```text
-authorized queue claim
+Principal(thread_ids={thr_a})
+       ↓
+runtime/runOne(threadId=thr_a)
+       ↓
+AgentAppServer authorization
+       ↓
+DurableAgentRuntime.run_one(
+    allowed_thread_ids={thr_a}
+)
+       ↓
+DurableWorkQueue.claim(
+    thread_ids={thr_a}
+)
+       ↓ SQL transaction
+只能 lease thr_a
 ```
 
-例如 worker principal 能提交一组允许的 Thread/tenant filter，由 Work Queue 在 SQL claim 阶段就施加约束。
+因此即使 `thr_b` 更早进入队列，scoped worker 也会跳过它并领取 `thr_a`。
+
+这比“领取之后再拒绝”强得多：
+
+> **授权边界越靠近真正发生 capability acquisition 的位置越可靠。**
 
 ---
 
-## 4　为什么 scoped Thread creation 必须显式给 ID
+## 4　Scoped worker 的 API 契约
+
+全局 admin 可以继续：
+
+```text
+runtime/runOne({workerId: admin-worker})
+```
+
+这表示：
+
+```text
+claim any eligible work
+```
+
+而 thread-scoped principal 必须显式：
+
+```text
+runtime/runOne({
+    workerId: worker-a,
+    threadId: thr_a
+})
+```
+
+否则拒绝：
+
+```text
+runtime/runOne({workerId: worker-a})
+→ Forbidden
+```
+
+错误 thread 也拒绝：
+
+```text
+runtime/runOne({
+    workerId: worker-a,
+    threadId: thr_b
+})
+→ Forbidden
+```
+
+这里有两道独立防线：
+
+```text
+App Server AuthZ
+        ↓
+Queue SQL Claim Filter
+```
+
+后者不是前者的重复，而是 capability acquisition 的执行级 fencing。
+
+---
+
+## 5　为什么 scoped Thread creation 必须显式给 ID
 
 若 principal 的 scope 是：
 
@@ -186,7 +254,7 @@ thread-scoped principal
 
 ---
 
-## 5　Bearer Token 为什么不以明文保存在 authorizer 中
+## 6　Bearer Token 为什么不以明文保存在 authorizer 中
 
 当前教学实现把 token 转成：
 
@@ -217,7 +285,7 @@ central policy/audit
 
 ---
 
-## 6　HTTP 层只负责携带身份，不负责决定权限
+## 7　HTTP 层只负责携带身份，不负责决定权限
 
 HTTP 请求：
 
@@ -234,7 +302,7 @@ HTTP handler
 → BearerTokenAuthorizer
 → Principal
 → method/thread policy
-→ dispatch
+→ runtime / queue enforcement
 ```
 
 这样授权逻辑不会散落成：
@@ -255,7 +323,7 @@ future SSE/WebSocket transport
 
 ---
 
-## 7　错误边界
+## 8　错误边界
 
 当前 App Server 区分：
 
@@ -283,7 +351,7 @@ runtime 本身执行失败
 
 ---
 
-## 8　当前实现仍然不能安全暴露公网
+## 9　当前实现仍然不能安全暴露公网
 
 目前 HTTP server 默认只绑定：
 
@@ -318,21 +386,30 @@ local authenticated reference control plane
 
 ---
 
-## 9　验收
+## 10　验收
 
-这一层第一版必须证明：
+这一层现在要求同时证明：
 
 ```text
-missing token       → Unauthenticated
-invalid token       → Unauthenticated
-wrong method        → Forbidden
-wrong thread        → Forbidden
-unscoped event feed → Forbidden for scoped principal
-global worker claim → Forbidden for scoped principal
-admin principal     → can run global worker
-HTTP bearer header  → same policy as in-process transport
+missing token               → Unauthenticated
+invalid token               → Unauthenticated
+wrong method                → Forbidden
+wrong thread                → Forbidden
+unscoped event feed         → Forbidden for scoped principal
+scoped runOne without thread→ Forbidden
+scoped runOne wrong thread  → Forbidden
+scoped runOne allowed thread→ executes only that thread
+older unauthorized work     → remains PENDING
+admin global runOne         → allowed
+HTTP bearer header          → same policy as in-process transport
 ```
 
-只有这些是自动测试过的，才可以说认证/授权进入了 runtime，而不是“README 写了权限设计”。
+特别是这一项：
 
-下一阶段：**SSE/WebSocket replay + session identity + queue-level thread/tenant filtering**，以及更底层、完全不同问题的 **OS/container sandbox**。
+```text
+older unauthorized work remains PENDING
+```
+
+是关键负对照。它证明 thread filtering 发生在 queue claim 本身，而不是领取后再补做检查。
+
+下一阶段：**SSE/WebSocket replay + session identity / expiry / rotation**，以及更底层、完全不同的问题——**真正 OS/container sandbox**。

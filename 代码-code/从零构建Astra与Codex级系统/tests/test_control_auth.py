@@ -7,6 +7,7 @@ from astra_codex.app_server import AgentAppClient, AgentAppServer, AppServerErro
 from astra_codex.control_auth import BearerTokenAuthorizer, Principal
 from astra_codex.http_app_server import HTTPAppTransport, LocalHTTPAppServer
 from astra_codex.runtime import DurableAgentRuntime
+from astra_codex.runtime_queue import WorkStatus
 from astra_codex.tools import ToolRegistry
 
 
@@ -54,7 +55,7 @@ def test_authenticated_app_server_rejects_missing_and_invalid_tokens(tmp_path) -
         assert exc_info.value.code == -32001
 
 
-def test_thread_scope_blocks_cross_thread_reads_unscoped_event_feed_and_global_worker(tmp_path) -> None:
+def test_thread_scope_blocks_cross_thread_reads_and_unscoped_event_feed(tmp_path) -> None:
     with DurableAgentRuntime(
         tmp_path / "state", ScriptedBackend([]), ToolRegistry([])
     ) as runtime:
@@ -80,12 +81,48 @@ def test_thread_scope_blocks_cross_thread_reads_unscoped_event_feed_and_global_w
             reader.call("thread/submit", {"threadId": "thr_a", "content": "no write"})
         assert exc_info.value.code == -32003
 
+
+def test_scoped_worker_requires_thread_and_queue_claim_cannot_leak_other_thread(tmp_path) -> None:
+    with DurableAgentRuntime(
+        tmp_path / "state",
+        ScriptedBackend(["thread a done"]),
+        ToolRegistry([]),
+    ) as runtime:
+        runtime.create_thread("thr_a")
+        runtime.create_thread("thr_b")
+
+        # Deliberately enqueue B first. A global FIFO claim would pick B. The
+        # scoped worker must skip it inside the SQL claim and lease A instead.
+        work_b = runtime.submit("thr_b", "older b task", item_id="work_b", now=1.0)
+        work_a = runtime.submit("thr_a", "allowed a task", item_id="work_a", now=2.0)
+
+        server = AgentAppServer(runtime, authorizer=_authorizer())
         scoped_worker = AgentAppClient(
             InProcessAppTransport(server, bearer_token="thread-a-worker")
         )
+
         with pytest.raises(AppServerError) as exc_info:
             scoped_worker.call("runtime/runOne", {"workerId": "worker"})
         assert exc_info.value.code == -32003
+
+        with pytest.raises(AppServerError) as exc_info:
+            scoped_worker.call(
+                "runtime/runOne",
+                {"workerId": "worker", "threadId": "thr_b"},
+            )
+        assert exc_info.value.code == -32003
+
+        result = scoped_worker.call(
+            "runtime/runOne",
+            {"workerId": "worker", "threadId": "thr_a"},
+        )
+        assert result["workItemId"] == work_a
+        assert result["threadId"] == "thr_a"
+        assert result["status"] == "completed"
+        assert result["finalAnswer"] == "thread a done"
+
+        assert runtime.work_queue.get(work_a).status is WorkStatus.COMPLETED
+        assert runtime.work_queue.get(work_b).status is WorkStatus.PENDING
 
 
 def test_admin_principal_can_use_global_worker_endpoint(tmp_path) -> None:

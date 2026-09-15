@@ -26,8 +26,8 @@ submission → durable Thread → leased WorkItem → TurnExecutor
 
 Control Plane / Context:
 Durable Event Feed → JSON-RPC App Server → real localhost HTTP
-→ Bearer AuthN → Method/Thread AuthZ
-→ scoped AGENTS.md instructions + provenance
+→ Bearer AuthN → Method/Thread AuthZ → queue-fenced worker claim
+→ scoped AGENTS.md instructions → ContextStore provenance
 → content-addressed artifacts
 
 Evaluation:
@@ -35,14 +35,14 @@ toy case/grader → deterministic repository fixture
 → independent final-state verification
 ```
 
-最新已核验 Fast CPU CI（run 114）：
+最新已核验 Fast CPU CI（run 127）：
 
 ```text
-100 passed, 1 warning in 5.67s
+102 passed, 1 warning in 4.67s
 Ruff correctness lint: All checks passed
 ```
 
-这 100 个 tests 覆盖模型数学、cache/parity、真实 checkpoint、推理 primitives、post-training、工具/MCP、Codex harness、durability、tool idempotency、live steering、worker lease、artifact integrity、replayable runtime events、HTTP App Server、control-plane AuthN/AuthZ、scoped AGENTS instructions、security、evaluation 与 repository final-state grading。
+这 102 个 tests 覆盖模型数学、cache/parity、真实 checkpoint、推理 primitives、post-training、工具/MCP、Codex harness、durability、tool idempotency、live steering、worker lease、artifact integrity、replayable runtime events、HTTP App Server、control-plane AuthN/AuthZ、queue-level thread fencing、scoped AGENTS instructions、ContextStore instruction provenance、security、evaluation 与 repository final-state grading。
 
 ---
 
@@ -169,7 +169,7 @@ TURN_STARTED
 
 `durable.py` 已有 persistent ThreadId/TurnId、append-only event log、restart replay、submission/checkpoint、pause/resume、terminal states、fork、parent provenance 与独立 child cancellation。
 
-## 6.2 Work Queue / Lease
+## 6.2 Work Queue / Lease / Scoped Claim
 
 `runtime_queue.py`：
 
@@ -183,6 +183,10 @@ PENDING
 ```
 
 `runtime_control.py` 的 `LeaseHeartbeat` 已验证 lease renewal 能阻止过早 reclaim。
+
+现在 `DurableWorkQueue.claim(...)` 还接受 `thread_ids`，并在同一个 SQL claim transaction 内增加 thread filter。测试故意让未授权 `thr_b` 的 work 更早入队，再让只允许 `thr_a` 的 worker 领取任务：结果 `thr_a` 被执行，`thr_b` 仍保持 `PENDING`。
+
+这意味着 thread authorization 已经从 App Server 下沉到真正的 capability acquisition point，而不是“先 lease 再拒绝”。
 
 **边界**：当前 integrated runtime 在 model sampling 边界续约。单个超长 tool/RPC 仍需要 background heartbeat 或 tool-owned lease。
 
@@ -224,9 +228,25 @@ INSTRUCTION
 
 Compaction summary 保留 parent lineage，raw evidence 不被覆盖。
 
+现在 `ContextStore.add_resolved_instructions(...)` 会把真正进入 Coding Agent prompt 的每一层仓库指令保存为 `INSTRUCTION` fragment，并记录：
+
+```text
+source_path
+scope_directory
+candidate_name
+truncated
+bytes_loaded
+project_root
+cwd
+max_bytes
+order
+```
+
+因此“模型为什么看到了这条规则”开始能从 prompt 反向追到具体仓库文件与作用域。
+
 ## 7.2 Scoped AGENTS.md
 
-新增 `instructions.py`，基于公开 Codex `agents_md.rs` 的已验证行为做 clean-room reference：
+`instructions.py` 基于公开 Codex `agents_md.rs` 的已验证行为做 clean-room reference：
 
 ```text
 nearest project root
@@ -239,14 +259,14 @@ nearest project root
 → exact source/scope/truncation provenance
 ```
 
-`coding.py` 已把 resolved instructions 注入 Coding Agent system prompt。
+`coding.py` 已把 resolved instructions 注入 Coding Agent system prompt；可选 `ContextStore` 同时持久化同一组 model-visible instructions。
 
 负对照测试证明：
 
 ```text
-root instruction   → visible
-cwd instruction    → visible
-sibling instruction→ not visible
+root instruction    → visible
+cwd instruction     → visible
+sibling instruction → not visible
 ```
 
 当前未复现 Codex 的 remote filesystem abstraction、multi-environment labeling、project trust gating 和完整 config layering。
@@ -277,9 +297,9 @@ Tool Proposal
 
 DENY / approval reject 时底层 tool body 不执行。
 
-## 8.2 Control-plane AuthN/AuthZ
+## 8.2 Control-plane AuthN/AuthZ + Queue Fencing
 
-新增 `control_auth.py` 与 App Server integration：
+`control_auth.py`、App Server、runtime 与 work queue 现在形成：
 
 ```text
 Bearer token
@@ -287,23 +307,25 @@ Bearer token
 → Principal
 ├─ allowed_methods
 └─ thread_ids
-→ Authorization
-→ App Server dispatch
+→ App Server Authorization
+→ allowed_thread_ids
+→ SQL-filtered DurableWorkQueue.claim
 ```
 
 已验证：
 
 ```text
-missing / invalid token → -32001 Unauthenticated
-wrong method            → -32003 Forbidden
-wrong thread            → -32003 Forbidden
-scoped event/poll(all)  → Forbidden
-scoped runtime/runOne   → Forbidden
-admin global worker     → allowed
-HTTP bearer             → same policy as in-process
+missing / invalid token         → -32001 Unauthenticated
+wrong method                    → -32003 Forbidden
+wrong thread                    → -32003 Forbidden
+scoped event/poll(all)          → Forbidden
+scoped runOne without threadId  → Forbidden
+scoped runOne wrong threadId    → Forbidden
+scoped runOne allowed threadId  → executes only that thread
+older unauthorized work         → remains PENDING
+admin global worker             → allowed
+HTTP bearer                     → same policy as in-process
 ```
-
-特别地，当前 `runtime/runOne` 是 global queue claim，没有 thread selector，因此 thread-scoped principal 被显式禁止调用；不能用 API 层授权假装 queue 层已经有 tenant isolation。
 
 Bearer token 当前仅做 SHA-256 digest → in-memory Principal mapping。没有 expiry、rotation、OIDC、mTLS、distributed policy engine。
 
@@ -330,15 +352,7 @@ event_id
 + created_at
 ```
 
-支持：
-
-```text
-afterEventId cursor replay
-thread filter
-topic filter
-high watermark
-restart-safe replay
-```
+支持 `afterEventId` cursor replay、thread/topic filter、high watermark 与 restart-safe replay。
 
 `CodexHarness` 事件通过 `event_sink` 在发生时进入 feed，而不是等整个 Turn 完成。
 
@@ -355,7 +369,7 @@ artifact/list
 event/poll
 ```
 
-`event/poll` 提供 cursor-based reconnect/replay。
+`runtime/runOne` 现在支持可选 `threadId`，并将其传入 queue-level claim filter。
 
 ## 9.3 Real localhost HTTP
 
@@ -370,15 +384,7 @@ AgentAppClient
 → DurableAgentRuntime
 ```
 
-HTTP server thread 为自己打开独立 runtime/SQLite handles，避免跨线程复用 SQLite connection。
-
-现在还支持：
-
-```text
-Authorization: Bearer <token>
-```
-
-并在 HTTP / in-process 两种 transport 上使用同一 App Server policy。
+HTTP server thread 为自己打开独立 runtime/SQLite handles，避免跨线程复用 SQLite connection；HTTP / in-process 两种 transport 使用同一 auth policy。
 
 **边界**：默认仅 loopback、serialized reference server；无 TLS、SSE/WebSocket、production concurrency、rate limit、OIDC 或公网 hardening。
 
@@ -403,7 +409,7 @@ real edit + command verification      → PASS
 
 # 11　Protocols / Multi-Agent / Computer Use
 
-已实现：minimal MCP JSON-RPC discover/list/call；task DAG、coordinator、worktree primitive；replayable App Server control plane；local HTTP bearer auth。
+已实现：minimal MCP JSON-RPC discover/list/call；task DAG、coordinator、worktree primitive；replayable App Server control plane；local HTTP bearer auth；queue-level scoped worker claim。
 
 仍未实现：完整 MCP transports/auth/tasks/extensions、A2A runtime、persistent AgentGraph/mailbox、parallel reviewer/merge、JS browser、DOM/A11y、screenshot/grounding、mouse/keyboard、Computer Use verifier。
 
@@ -411,30 +417,22 @@ real edit + command verification      → PASS
 
 # 12　最新硬证据
 
-Fast CPU CI run 114：
+Fast CPU CI run 127：
 
 ```text
-100 passed, 1 warning in 5.67s
+102 passed, 1 warning in 4.67s
 Ruff correctness lint: All checks passed
 ```
 
 本轮新增回归覆盖：
 
 ```text
-restart-safe runtime event cursor replay
-thread/topic event filtering
-live harness event publication
-real localhost HTTP round-trip
-Bearer authentication
-method/thread-scoped authorization
-scoped-principal negative controls
-AGENTS root→cwd ordering
-override/fallback priority
-global byte budget/truncation
-project-root boundary
-sibling instruction negative control
-Coding Agent instruction injection
+queue-level authorized thread claim
+older unauthorized work negative control
+instruction → ContextStore provenance persistence
 ```
+
+此前同一全量回归还覆盖 runtime cursor replay、HTTP round-trip、Bearer AuthN/AuthZ、AGENTS hierarchy 与 Coding Agent instruction injection。
 
 ---
 
@@ -468,11 +466,13 @@ Coding Agent instruction injection
 - [x] App Server `event/poll`
 - [x] real localhost HTTP JSON-RPC transport
 - [x] Bearer AuthN + method/thread AuthZ
+- [x] queue-level authorized thread claim
 - [x] scoped `AGENTS.md` resolver + coding-prompt injection
+- [x] project instruction → `ContextStore` provenance persistence
 - [ ] background heartbeat for one long tool/RPC
-- [ ] steering/instruction → unified ContextStore provenance
+- [ ] steering / artifacts / verifier → unified rollout provenance
 - [ ] SSE / WebSocket push backed by durable cursor
-- [ ] token expiry / rotation / session identity / queue-level tenant filtering
+- [ ] token expiry / rotation / session identity
 - [ ] rollout trace linked to artifacts/context/instructions
 
 ## Security / General Agent

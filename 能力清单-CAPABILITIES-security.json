@@ -24,24 +24,20 @@
         "Fast CPU CI run 152: argv-only execution, executable allowlisting, workspace-cwd escape rejection, environment secret scrubbing, wall-time termination, Linux NoNewPrivs=1 observation, tool metadata and sandboxed coding-agent integration are covered; full suite 119 passed"
       ],
       "next": [
-        "namespace/container backend",
-        "filesystem read/write isolation",
-        "network isolation",
-        "seccomp or equivalent syscall policy",
+        "prefer container backend for higher-risk coding workloads",
         "credential broker integration",
         "escape-oriented adversarial tests"
       ]
     },
     {
-      "id": "security.os_container_sandbox",
+      "id": "security.bubblewrap_namespace_sandbox",
       "track": "security",
-      "title": "OS / Container Isolation for Untrusted Agent Execution",
+      "title": "Bubblewrap Namespace Sandbox Backend",
       "status": "partial",
       "maturity": "L1",
       "theory": [
         "代码-code/从零构建Astra与Codex级系统/教程-lessons/14-受限进程沙箱与真实隔离边界-process-sandbox.md",
-        "智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md",
-        "Codex源码解剖-codex-anatomy/03-工具执行审批与沙箱-tools-approval-sandbox.md"
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/15-Docker容器隔离与逃逸负测试-container-sandbox.md"
       ],
       "code": [
         "代码-code/从零构建Astra与Codex级系统/src/astra_codex/bubblewrap_sandbox.py"
@@ -50,18 +46,77 @@
         "代码-code/从零构建Astra与Codex级系统/tests/test_bubblewrap_sandbox.py"
       ],
       "evidence": [
-        "Bubblewrap 0.9.0 backend and policy/command construction exist, including minimal root view, workspace bind/ro-bind, capability drop, environment clearing and optional network unshare",
-        "GitHub-hosted Ubuntu 24.04 security runs exposed host-policy limits rather than isolation success: one run failed network namespace loopback setup with RTM_NEWADDR Operation not permitted; another failed user-namespace uid mapping with Permission denied",
-        "Runtime namespace isolation is therefore intentionally not marked validated on hosted CI; tests record/skip known unavailable kernel capabilities instead of converting inability-to-start into a false PASS"
+        "Bubblewrap 0.9.0 backend and command contract exist: minimal root view, workspace bind/ro-bind, capability drop, explicit environment and optional network unshare",
+        "GitHub-hosted Ubuntu 24.04 blocks required namespace operations: observed RTM_NEWADDR Operation not permitted for isolated loopback setup and Permission denied while setting up uid map",
+        "Sandbox security CI therefore hard-checks policy construction but explicitly skips runtime namespace cases that the host kernel policy cannot execute; no unavailable capability is converted into a false validation"
       ],
       "next": [
-        "run escape-oriented namespace tests on a self-hosted environment that permits user namespaces",
-        "add a Docker/container backend that is testable on hosted CI",
-        "validate host-secret invisibility and read-only workspace enforcement",
-        "validate network-none mode",
-        "add seccomp or equivalent syscall policy",
-        "credential broker integration",
-        "pids/cpu/memory limits and escape-oriented adversarial tests"
+        "run host-secret/filesystem/network escape tests on a self-hosted kernel that permits unprivileged user namespaces",
+        "compare bubblewrap policy with container backend behavior",
+        "add syscall policy and explicit filesystem capability model"
+      ]
+    },
+    {
+      "id": "security.docker_container_sandbox",
+      "track": "security",
+      "title": "Docker Container Sandbox for Agent Command Execution",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/15-Docker容器隔离与逃逸负测试-container-sandbox.md",
+        "智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md",
+        "Codex源码解剖-codex-anatomy/03-工具执行审批与沙箱-tools-approval-sandbox.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/docker_sandbox.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_docker_sandbox.py"
+      ],
+      "evidence": [
+        "Sandbox security workflow run 6 passed both jobs on GitHub-hosted Ubuntu 24.04; Docker container job passed 7 escape-oriented tests and Ruff",
+        "Tested runtime: Docker Engine 28.0.4, containerd 2.3.4, runc 1.5.1, python:3.12-slim registry digest sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea, local image id sha256:ec7d6c95cd3692a2e2d228a8b1ca74e4025b54121fcc4c5da6f09cfa473315ad",
+        "Behavioral tests validate host-secret invisibility, declared workspace write, read-only workspace/rootfs rejection, --network none isolation from host loopback, parent-secret environment non-inheritance, CapEff=0 and NoNewPrivs=1",
+        "Validated claim is limited to this Docker/shared-kernel threat model; it is not VM-grade hostile-code containment and does not claim resistance to kernel or container-runtime vulnerabilities"
+      ],
+      "next": [
+        "pin immutable image digest in runtime policy",
+        "integrate DockerSandboxExecTool into build_coding_agent",
+        "custom seccomp/AppArmor or equivalent policy",
+        "short-lived credential broker",
+        "artifact-only output mode and per-path write capabilities",
+        "adversarial escape corpus"
+      ]
+    },
+    {
+      "id": "security.os_container_sandbox",
+      "track": "security",
+      "title": "General OS / Container Isolation for Untrusted Agent Execution",
+      "status": "partial",
+      "maturity": "L2",
+      "theory": [
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/14-受限进程沙箱与真实隔离边界-process-sandbox.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/15-Docker容器隔离与逃逸负测试-container-sandbox.md",
+        "智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/bubblewrap_sandbox.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/docker_sandbox.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_bubblewrap_sandbox.py",
+        "代码-code/从零构建Astra与Codex级系统/tests/test_docker_sandbox.py"
+      ],
+      "evidence": [
+        "One Docker backend is validated for a stated shared-kernel threat model while the Bubblewrap namespace backend remains host-policy-limited on GitHub runners",
+        "The umbrella capability remains partial because VM-grade isolation, custom syscall/LSM policy, distributed credential isolation and broader escape testing are not implemented"
+      ],
+      "next": [
+        "container backend integration into the default high-risk coding path",
+        "custom seccomp/AppArmor or equivalent enforcement",
+        "credential broker and secret lease model",
+        "self-hosted namespace evidence",
+        "VM/microVM backend for stronger hostile-code isolation"
       ]
     }
   ]

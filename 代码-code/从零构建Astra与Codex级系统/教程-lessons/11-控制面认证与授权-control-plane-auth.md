@@ -2,11 +2,11 @@
 
 当 App Server 从同进程对象调用扩展到真实 HTTP 后，一个新的问题立刻变成 P0：
 
-> **谁可以调用控制面？即使身份合法，他又可以控制哪些 Thread、执行哪些方法？**
+> **谁可以调用控制面？即使身份合法，他又可以控制哪些 Thread、执行哪些方法？凭据泄露或过期以后又会发生什么？**
 
 如果这一步没有进入 runtime，而只是依赖“URL 很难猜”“只给可信客户端”，那么拥有 shell、filesystem、Git、browser 等能力的 Agent 会把一个普通 API 权限漏洞放大成环境执行权限漏洞。
 
-本课对应源码：
+对应源码：
 
 ```text
 src/astra_codex/control_auth.py
@@ -39,7 +39,7 @@ tests/test_control_auth.py
 你可以作用于哪个 Thread？
 ```
 
-本项目当前最小模型：
+当前最小模型：
 
 ```text
 Bearer Token
@@ -54,6 +54,8 @@ Principal
 Authorization
      ↓
 App Server dispatch
+     ↓
+Runtime / Queue enforcement
 ```
 
 因此“token 正确”绝不等于“所有 endpoint 都可以调用”。
@@ -62,153 +64,91 @@ App Server dispatch
 
 ## 2　Principal 的两个正交 scope
 
-当前 `Principal` 有两个主要维度：
-
-```text
-allowed_methods
-thread_ids
-```
-
-例如只读某一任务的 IDE client 可以被定义为：
+一个只读 `thr_a` 的客户端可以被定义为：
 
 ```text
 subject = reader-a
-
-allowed_methods = {
-    server/discover,
-    thread/get,
-    event/poll
-}
-
-thread_ids = {
-    thr_a
-}
+allowed_methods = {server/discover, thread/get, event/poll}
+thread_ids = {thr_a}
 ```
 
-于是它可以：
+于是：
 
 ```text
 thread/get(thr_a)      ✓
 event/poll(thr_a)      ✓
-```
-
-但不能：
-
-```text
 thread/get(thr_b)      ✗
 thread/submit(thr_a)   ✗
 event/poll(all)        ✗
 ```
 
-这比“reader role”这种只有角色名、没有具体资源边界的设计更可审计。
+权限因此同时约束**动作**和**资源**。
 
 ---
 
-## 3　授权必须下沉到 Queue Claim，而不能只在 API 门口检查
+## 3　授权必须下沉到 Queue Claim
 
-假设 queue 的 FIFO 顺序是：
+假设 FIFO 顺序：
 
 ```text
 work_b  thread=thr_b  created=1
 work_a  thread=thr_a  created=2
 ```
 
-worker principal 只被授权：
+worker principal 只允许：
 
 ```text
 thread_ids = {thr_a}
 ```
 
-一个看似合理但错误的实现是：
+错误设计是：
 
 ```text
-1. global queue.claim()
-2. 拿到 work_b
-3. App Server 发现 thr_b 不允许
-4. 再拒绝
+global claim work_b
+→ 之后才发现不允许
+→ 再拒绝
 ```
 
-问题是：**capability 已经泄漏到 worker claim 阶段了。** work_b 已经被错误 worker lease，可能造成 starvation、状态泄漏，甚至后续代码忘记再次检查。
+此时 capability 已经泄漏到 lease 阶段。
 
-现在的实现把过滤条件直接放进 `DurableWorkQueue.claim(...)` 的同一个 `BEGIN IMMEDIATE` 事务：
+现在 `DurableWorkQueue.claim(...)` 在同一个 `BEGIN IMMEDIATE` 事务中直接加入：
 
 ```text
-WHERE eligible_status
-  AND kind IN (...)
-  AND thread_id IN (authorized_threads)
-ORDER BY created_at, item_id
-LIMIT 1
+AND thread_id IN (authorized_threads)
 ```
 
-数据流变成：
+所以数据流是：
 
 ```text
-Principal(thread_ids={thr_a})
-       ↓
-runtime/runOne(threadId=thr_a)
-       ↓
-AgentAppServer authorization
-       ↓
-DurableAgentRuntime.run_one(
-    allowed_thread_ids={thr_a}
-)
-       ↓
-DurableWorkQueue.claim(
-    thread_ids={thr_a}
-)
-       ↓ SQL transaction
-只能 lease thr_a
+Principal({thr_a})
+→ runtime/runOne(threadId=thr_a)
+→ App Server AuthZ
+→ runtime.run_one(allowed_thread_ids={thr_a})
+→ SQL-filtered queue.claim(thread_ids={thr_a})
+→ 只能 lease thr_a
 ```
 
-因此即使 `thr_b` 更早进入队列，scoped worker 也会跳过它并领取 `thr_a`。
-
-这比“领取之后再拒绝”强得多：
-
-> **授权边界越靠近真正发生 capability acquisition 的位置越可靠。**
+自动负对照故意让 `thr_b` 更早入队，最终 `thr_a` 被执行，而 `thr_b` 仍保持 `PENDING`。
 
 ---
 
 ## 4　Scoped worker 的 API 契约
 
-全局 admin 可以继续：
+全局 admin 可以：
 
 ```text
 runtime/runOne({workerId: admin-worker})
 ```
 
-这表示：
+thread-scoped principal 必须：
 
 ```text
-claim any eligible work
+runtime/runOne({workerId: worker-a, threadId: thr_a})
 ```
 
-而 thread-scoped principal 必须显式：
+缺失或越权 `threadId` 都返回 Forbidden。
 
-```text
-runtime/runOne({
-    workerId: worker-a,
-    threadId: thr_a
-})
-```
-
-否则拒绝：
-
-```text
-runtime/runOne({workerId: worker-a})
-→ Forbidden
-```
-
-错误 thread 也拒绝：
-
-```text
-runtime/runOne({
-    workerId: worker-a,
-    threadId: thr_b
-})
-→ Forbidden
-```
-
-这里有两道独立防线：
+这里存在两层防线：
 
 ```text
 App Server AuthZ
@@ -216,76 +156,105 @@ App Server AuthZ
 Queue SQL Claim Filter
 ```
 
-后者不是前者的重复，而是 capability acquisition 的执行级 fencing。
+后者位于真正发生任务所有权转移的位置。
 
 ---
 
-## 5　为什么 scoped Thread creation 必须显式给 ID
+## 5　Scoped Thread creation / fork
 
-若 principal 的 scope 是：
+如果 principal 只允许：
 
 ```text
 {thr_a, thr_a_child}
 ```
 
-却允许：
+那么随机生成一个新 Thread ID 会让资源归属变得不清楚。
 
-```text
-thread/create({})
-```
-
-由服务器随机生成：
-
-```text
-thr_8fa...
-```
-
-那么创建后这个新 Thread 是否属于 principal scope 就变得模糊。
-
-所以当前规则是：
-
-```text
-thread-scoped principal
-→ thread/create 必须显式 new threadId
-→ new threadId 必须已经属于授权集合
-```
-
-`thread/fork` 同理：parent 和 child 都必须落在 scope 内。
+所以 thread-scoped principal 创建或 fork 时必须显式给出目标 ID，并且 parent / child 都必须落在授权集合内。
 
 ---
 
-## 6　Bearer Token 为什么不以明文保存在 authorizer 中
+## 6　Bearer Credential 不只是 `token → Principal`
 
-当前教学实现把 token 转成：
+当前实现已经把 bearer credential 生命周期显式化为：
+
+```text
+BearerCredential
+├─ principal
+├─ issued_at
+├─ expires_at
+└─ revoked_at
+```
+
+原始 secret 不作为 lookup value 保存，而是：
 
 $$
 H=\mathrm{SHA256}(token)
 $$
 
-内存映射只保存：
+然后：
 
 ```text
-digest → Principal
+digest → BearerCredential
 ```
 
-这不是密码哈希方案，也不能代替 secret manager；目的只是避免授权表本身长期保留可直接复制使用的明文 token。
-
-真正生产身份系统仍需要：
-
-```text
-short-lived token
-expiry
-rotation
-revocation
-OIDC / workload identity
-mTLS
-secret manager
-central policy/audit
-```
+这不是 password KDF，也不能替代 secret manager；目标只是避免 authorizer 表直接保留可复制使用的明文 bearer secret。
 
 ---
 
-## 7　HTTP 层只负责携带身份，不负责决定权限
+## 7　Expiry、Revocation 与 Rotation
+
+### Expiry
+
+注册短期凭据：
+
+```text
+issued_at = 100
+expires_at = 110
+```
+
+则：
+
+```text
+auth(now=109.999) → pass
+auth(now=110.000) → expired
+```
+
+边界采用：
+
+```text
+now >= expires_at
+```
+
+即到期时刻本身已经不可用。
+
+### Revocation
+
+```text
+active
+→ revoke(token)
+→ revoked_at = t
+→ authenticate → rejected
+```
+
+重复 revoke 保持第一次 `revoked_at`，不会不断改写安全审计时间。
+
+### Rotation
+
+```text
+old token
+→ verify old is active
+→ register new token with same Principal scope
+→ revoke old token
+```
+
+因此权限不会因为换 token 意外扩大。
+
+自动测试还覆盖一个关键 failure case：如果新 token 已经存在，rotation 失败时旧 token **不能被提前吊销**。
+
+---
+
+## 8　HTTP / SSE 只携带身份，权限逻辑保持统一
 
 HTTP 请求：
 
@@ -293,39 +262,30 @@ HTTP 请求：
 Authorization: Bearer <token>
 ```
 
-经过：
+统一进入：
 
 ```text
-HTTP handler
-→ extract bearer
-→ AgentAppServer.handle(..., bearer_token=...)
-→ BearerTokenAuthorizer
+BearerTokenAuthorizer
 → Principal
-→ method/thread policy
+→ method/thread authorization
 → runtime / queue enforcement
 ```
 
-这样授权逻辑不会散落成：
+因此：
 
 ```text
-if header == ...
+InProcess JSON-RPC
+HTTP JSON-RPC
+SSE event stream
 ```
 
-写在每一个 endpoint 内。
-
-同样的 `AgentAppServer` policy 可以用于：
-
-```text
-InProcess transport
-HTTP transport
-future SSE/WebSocket transport
-```
+共享同一套 principal/thread policy，不各写一份权限判断。
 
 ---
 
-## 8　错误边界
+## 9　错误边界
 
-当前 App Server 区分：
+App Server 区分：
 
 ```text
 -32001  Unauthenticated
@@ -337,79 +297,84 @@ future SSE/WebSocket transport
 -32603  Internal error
 ```
 
-因此调用方可以区分：
+于是：
 
 ```text
-没有身份
+身份无效 / 已过期 / 已吊销
 ≠
-身份存在但权限不足
+身份有效但权限不足
 ≠
-runtime 本身执行失败
+runtime 执行失败
 ```
 
-这对 IDE、自动重试和安全审计都很重要。
+客户端可以据此决定重新登录、请求授权，还是处理任务失败。
 
 ---
 
-## 9　当前实现仍然不能安全暴露公网
+## 10　当前仍不是生产身份系统
 
-目前 HTTP server 默认只绑定：
+现在已经有：
 
 ```text
-127.0.0.1
+Bearer digest lookup
+expiry
+revocation
+rotation
+method scope
+thread scope
+queue-level claim fencing
+HTTP/SSE policy reuse
 ```
 
-即使已经有 bearer auth，仍然没有：
+但仍然没有：
 
 ```text
-TLS
-OIDC
-expiry / rotation
-session management
-rate limit
+secure credential persistence
+multi-process revocation propagation
+OIDC / workload identity
+mTLS
+central identity provider
+security audit service
+rate limiting
 CSRF / Origin policy
-multi-tenant policy database
-security audit sink
+TLS termination
 ```
 
-尤其是：
+尤其：
 
-> **Bearer Token + 明文公网 HTTP = token 可以被窃听。**
+> **Bearer Token + 明文公网 HTTP 仍然是不安全的。**
 
-所以当前能力只能定义为：
-
-```text
-local authenticated reference control plane
-```
-
-不是 production internet service。
+当前 HTTP/SSE reference server 默认只服务 loopback。
 
 ---
 
-## 10　验收
+## 11　验收标准
 
-这一层现在要求同时证明：
-
-```text
-missing token               → Unauthenticated
-invalid token               → Unauthenticated
-wrong method                → Forbidden
-wrong thread                → Forbidden
-unscoped event feed         → Forbidden for scoped principal
-scoped runOne without thread→ Forbidden
-scoped runOne wrong thread  → Forbidden
-scoped runOne allowed thread→ executes only that thread
-older unauthorized work     → remains PENDING
-admin global runOne         → allowed
-HTTP bearer header          → same policy as in-process transport
-```
-
-特别是这一项：
+现在自动测试要求：
 
 ```text
-older unauthorized work remains PENDING
+missing token                 → Unauthenticated
+invalid token                 → Unauthenticated
+expired token                 → rejected
+revoked token                 → rejected
+rotation                      → old revoked, new active
+failed rotation               → old remains active
+wrong method                  → Forbidden
+wrong thread                  → Forbidden
+unscoped event feed           → Forbidden for scoped principal
+scoped runOne without thread  → Forbidden
+scoped runOne wrong thread    → Forbidden
+scoped runOne allowed thread  → only that thread can be leased
+older unauthorized work       → remains PENDING
+admin global worker           → allowed
+HTTP / SSE bearer             → same resource policy
 ```
 
-是关键负对照。它证明 thread filtering 发生在 queue claim 本身，而不是领取后再补做检查。
+截至这一版进入全量回归，Fast CPU CI run 143：
 
-下一阶段：**SSE/WebSocket replay + session identity / expiry / rotation**，以及更底层、完全不同的问题——**真正 OS/container sandbox**。
+```text
+112 passed, 1 warning in 7.53s
+Ruff correctness lint: All checks passed
+```
+
+下一阶段身份侧重点不再是继续加静态字段，而是**持久 credential/session store、跨进程 revocation、OIDC/workload identity 与安全审计**；执行安全则继续独立推进真正的 OS/container sandbox。

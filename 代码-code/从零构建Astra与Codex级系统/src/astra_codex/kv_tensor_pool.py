@@ -29,9 +29,8 @@ class PhysicalKVTensorPool:
 
     The pool uses ``KVBlockAllocator`` for request ownership/refcounts/COW and
     performs the corresponding tensor copies/writes. The educational model still
-    consumes contiguous ``past_key_values``, so ``materialize`` concatenates a
-    request's block-table slices back into [1, H_kv, T, D]. This proves physical
-    storage semantics before a page-aware attention kernel removes that gather.
+    consumes contiguous ``past_key_values`` in older reference paths, while the
+    newer page-aware decoder reads these slabs directly by block id.
     """
 
     def __init__(
@@ -106,6 +105,33 @@ class PhysicalKVTensorPool:
             raise ValueError("delta sequence length must be positive")
         return length
 
+    def require_batch_append_capacity(self, token_counts: dict[str, int]) -> int:
+        """Preflight COW/new-block demand for a single-thread reference batch.
+
+        No allocator state is mutated. If the summed demand cannot fit, the
+        method raises before any request is appended. This gives OOM-atomic
+        *preflight* semantics to the current synchronous executor.
+
+        It is deliberately not called a distributed reservation: no block ids
+        are removed from the free list and another concurrent allocator user
+        could invalidate the check. A future scheduler-owned reservation token
+        must solve that stronger problem.
+        """
+
+        required = 0
+        for request_id, token_count in token_counts.items():
+            if token_count < 0:
+                raise ValueError("token_count cannot be negative")
+            table = self.allocator._table(request_id)
+            required += self.allocator._required_blocks_for_append(table, token_count)
+        free = self.allocator.metrics().free_blocks
+        if required > free:
+            raise MemoryError(
+                "KV block pool exhausted for batch append: "
+                f"batch needs {required} free blocks, only {free} available"
+            )
+        return required
+
     def _copy_cow_if_needed(
         self,
         before: tuple,
@@ -117,8 +143,6 @@ class PhysicalKVTensorPool:
         new_last = after[min(len(before), len(after)) - 1]
         if old_last.block_id == new_last.block_id:
             return
-        # Allocator COW preserves the old logical prefix in a new physical block.
-        # Copy exactly that prefix across all layers and K/V heads.
         tokens = min(old_last.logical_tokens, new_last.logical_tokens)
         self.keys[:, new_last.block_id, :, :tokens, :].copy_(
             self.keys[:, old_last.block_id, :, :tokens, :]
@@ -147,6 +171,21 @@ class PhysicalKVTensorPool:
                 self.values[
                     layer_index, entry.block_id, :, in_block, :
                 ].copy_(value[0, :, offset, :])
+
+    def append_batch_delta(
+        self,
+        deltas: dict[str, tuple[KVPair, ...]],
+    ) -> None:
+        """Validate and OOM-preflight a batch before the first append mutates it."""
+
+        lengths: dict[str, int] = {}
+        for request_id, delta in deltas.items():
+            if request_id not in self.allocator.requests:
+                raise KeyError(f"unknown request: {request_id}")
+            lengths[request_id] = self._validate_delta(delta)
+        self.require_batch_append_capacity(lengths)
+        for request_id, delta in deltas.items():
+            self.append_delta(request_id, delta)
 
     def ingest_present(
         self,
@@ -194,8 +233,6 @@ class PhysicalKVTensorPool:
         )
         target_entries = self.allocator.block_table(target_request_id)
 
-        # Full blocks share block ids. If allocator cloned a prefix that ends
-        # inside a source block, copy only that target entry's logical slice.
         logical_start = 0
         source_index = 0
         for target_entry in target_entries:
@@ -287,8 +324,8 @@ class PhysicalKVTensorPool:
 class PhysicalBlockGenerationEngine:
     """Generation path backed by a physical block tensor pool.
 
-    Attention still receives materialized contiguous history; therefore this is
-    a storage/allocator milestone, not yet a page-aware attention kernel.
+    Attention still receives materialized contiguous history in this older path;
+    ``HeterogeneousPageAwareDecodeReference`` is the newer direct-block reader.
     """
 
     def __init__(

@@ -106,6 +106,57 @@ def test_subscribe_replays_submitted_then_live_terminal_update(tmp_path) -> None
                 next(updates)
 
 
+def test_subscription_last_event_id_replays_only_updates_after_disconnect(tmp_path) -> None:
+    task_db = tmp_path / "tasks.sqlite"
+    update_db = tmp_path / "updates.sqlite"
+
+    def handler(task, message):  # type: ignore[no-untyped-def]
+        del message
+        return A2AExecutionResult(
+            message=A2AMessage(
+                message_id="msg_reconnect_done",
+                role=A2ARole.ROLE_AGENT,
+                parts=(A2APart(text="completed while disconnected"),),
+                task_id=task.id,
+                context_id=task.context_id,
+            )
+        )
+
+    with A2ATaskStore(task_db) as store, A2ATaskUpdateJournal(update_db) as journal:
+        service = JournaledA2AService(_card(), store, journal, handler=handler)
+        submitted = service.send_message(
+            A2ASendMessageRequest(
+                _message(),
+                A2ASendMessageConfiguration(return_immediately=True),
+            )
+        )
+        first_id = journal.latest_id(submitted.id)
+        assert first_id > 0
+
+        # Simulate the subscriber disappearing after observing SUBMITTED.
+        completed = service.process_task(submitted.id)
+        assert completed.status.state is A2ATaskState.TASK_STATE_COMPLETED
+        terminal_id = journal.latest_id(submitted.id)
+        assert terminal_id > first_id
+
+        with LocalA2ASubscriptionHTTPServer(task_db, update_db) as server:
+            resumed = A2ASubscriptionHTTPClient(server.base_url).subscribe(
+                submitted.id,
+                last_event_id=first_id,
+            )
+            replayed_id, replayed = next(resumed)
+            assert replayed_id == terminal_id
+            assert replayed.task is not None
+            assert replayed.task.status.state is A2ATaskState.TASK_STATE_COMPLETED
+            assert replayed.task.status.message is not None
+            assert (
+                replayed.task.status.message.parts[0].text
+                == "completed while disconnected"
+            )
+            with pytest.raises(StopIteration):
+                next(resumed)
+
+
 def test_journal_deduplicates_identical_consecutive_task_snapshots(tmp_path) -> None:
     task_db = tmp_path / "tasks.sqlite"
     update_db = tmp_path / "updates.sqlite"

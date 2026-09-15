@@ -4,6 +4,7 @@ from .app_server import AgentAppClient, AgentAppServer, AppServerError, InProces
 from .artifacts import ArtifactRecord, ArtifactStore
 from .batch_executor import BatchedDecodeState, HomogeneousBatchExecutor
 from .benchmark import BenchmarkCase, BenchmarkHarness, BenchmarkRecord, ExactAnswerGrader, Grade
+from .bubblewrap_sandbox import BubblewrapExecTool, BubblewrapPolicy, BubblewrapSandbox
 from .config import ModelConfig
 from .context import ContextFragment, ContextStore, FragmentKind
 from .control_auth import (
@@ -103,6 +104,9 @@ __all__ = [
     "BenchmarkCase",
     "BenchmarkHarness",
     "BenchmarkRecord",
+    "BubblewrapExecTool",
+    "BubblewrapPolicy",
+    "BubblewrapSandbox",
     "ByteBPETokenizer",
     "ByteTokenizer",
     "CommandVerifier",

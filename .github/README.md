@@ -1,84 +1,90 @@
 # 自动化配置 / GitHub Automation v3
 
-自动化现在承担五类责任：**代码正确性、公开模型 parity、教材证据质量、机器能力清单一致性、前沿事实新鲜度**。
-
-| Workflow | 作用 | 当前策略 |
-|---|---|---|
-| [`capstone-tests.yml`](workflows/capstone-tests.yml) | Reference System Fast CI：CPU PyTorch + pytest + Ruff | 阻塞 |
-| [`smollm2-parity.yml`](workflows/smollm2-parity.yml) | public checkpoint → own runtime → HF logits parity | 阻塞 |
-| [`content-audit.yml`](workflows/content-audit.yml) | Source-First + internal links + Capability Manifest + Frontier Snapshot | 结构/链接阻塞；来源与 freshness 报告 |
-| [`normalize-markdown-math.yml`](workflows/normalize-markdown-math.yml) | GitHub MathJax compatibility normalization | 自动修复 |
-| [`localize-chapter-headings.yml`](workflows/localize-chapter-headings.yml) | 中文优先章节标题 | 维护 |
-| [`localize-file-tree.yml`](workflows/localize-file-tree.yml) | 中文优先文件树迁移 | 手动维护 |
+本目录承担的不只是格式化，而是项目的**持续证据链**：实现正确性、真实 checkpoint parity、教材 Source-First、机器 capability manifest 与 frontier drift 都要被自动检查。
 
 ---
 
-# Fast CI
+# 当前工作流
 
-当前真实最新结果：
+| Workflow | 作用 | 约束 |
+|---|---|---|
+| [`capstone-tests.yml`](workflows/capstone-tests.yml) | CPU-only PyTorch + 全部 unit/parity/reference-system tests + Ruff | 阻塞 |
+| [`smollm2-parity.yml`](workflows/smollm2-parity.yml) | SmolLM2 raw weights → own runtime → HF reference logits | 阻塞 |
+| [`content-audit.yml`](workflows/content-audit.yml) | Source coverage + internal links + capability manifest + frontier snapshot | 链接/manifest/schema 阻塞 |
+| [`normalize-markdown-math.yml`](workflows/normalize-markdown-math.yml) | GitHub MathJax 兼容规范化 | 自动修复 |
+| [`localize-chapter-headings.yml`](workflows/localize-chapter-headings.yml) | 中文优先章节标题 | 维护 |
+| [`localize-file-tree.yml`](workflows/localize-file-tree.yml) | 中文优先真实路径迁移 | 手动维护 |
+
+---
+
+# Fast CI 当前真实证据
+
+最新已核验的完整回归（run 66）：
 
 ```text
-36 passed, 1 warning in 2.14s
+61 passed, 1 warning in 3.67s
 Ruff correctness lint: All checks passed
 ```
 
-除了原有 model/cache/tokenizer/MCP/Codex harness 测试，v3 新增验证：
+这已经覆盖：
 
 ```text
-Durable Thread
-├─ DB close / reopen
-├─ event replay
-├─ running turn recovery
-├─ checkpoint recovery
-└─ invalid transition rejection
-
-Permission Enforcement
-├─ DENY → tool body not executed
-├─ approval reject → not executed
-└─ approval allow → dispatch
-
-Evaluation
-├─ trajectory metrics
-├─ verifier outcome separation
-└─ aggregate success / time / cost
+Tokenizer / Transformer / real checkpoint primitives
+contiguous KV / paged KV / scheduler / batched executor
+SFT / DPO / group-relative RL objective
+Tool / Coding / MCP
+Codex-style Turn harness
+Thread replay / fork / cancellation
+Work lease / reclaim
+Integrated durable runtime
+Context provenance
+Permission enforcement
+Trajectory / benchmark / repository final-state grading
 ```
 
-普通单元测试保持 CPU-only；GPU/kernel benchmark 后续独立 workflow。
+普通 CI 使用 CPU-only PyTorch，避免为 unit/reference tests 下载整套 CUDA runtime。GPU/kernel benchmark 后续独立执行。
 
 ---
 
-# 真实 Checkpoint Parity
+# 真实 checkpoint parity
 
-`smollm2-parity.yml` 对：
+独立 workflow 下载并缓存：
 
 ```text
-HuggingFaceTB/SmolLM2-135M raw config + safetensors
-              ↓
-our key mapping
-              ↓
-our DecoderOnlyTransformer
-              ↓
-our logits
+HuggingFaceTB/SmolLM2-135M
 ```
 
-和 HF eager reference 做受测 CPU float32 对比：
+对比：
+
+```text
+raw config + safetensors
+→ our mapper
+→ our DecoderOnlyTransformer
+→ our logits
+
+vs
+
+HF eager reference
+```
+
+当前固定受测 CPU float32：
 
 ```json
 {"max_abs": 0.0, "mean_abs": 0.0, "argmax_agreement": 1.0}
 ```
 
-这项 CI 用于防止 RoPE layout、GQA、RMSNorm、SwiGLU 或 weight mapping “看起来合理但实际上错位”。
+不能把一次模型/输入 parity 外推成“支持所有 Llama-family”。
 
 ---
 
-# Content Audit v3
+# Content Audit
 
-`content-audit.yml` 现在运行四类审计。
+`content-audit.yml` 运行四层检查。
 
 ## 1. Source-First coverage
 
-```bash
-python 工具-scripts/原始资料审计-source_audit.py
+```text
+工具-scripts/原始资料审计-source_audit.py
 ```
 
 扫描：
@@ -89,85 +95,111 @@ python 工具-scripts/原始资料审计-source_audit.py
 Codex源码解剖-codex-anatomy/
 ```
 
-来源覆盖当前作为报告，不让历史格式差异直接阻塞 main。
+这是 coverage heuristic，不等于 citation scientific validity checker。
 
-## 2. Strict internal links
+## 2. Strict Internal Links
 
-```bash
-python 工具-scripts/内部链接审计-link_audit.py
+```text
+工具-scripts/内部链接审计-link_audit.py
 ```
 
-仓库内部 Markdown 相对链接损坏属于确定性错误，因此严格阻塞。
+所有 Markdown relative link 必须真实存在。确定性导航损坏直接阻塞。
 
 ## 3. Capability Manifest
 
-```bash
-python 工具-scripts/能力清单审计-capability_audit.py
+```text
+工具-scripts/能力清单审计-capability_audit.py
 ```
 
-验证根目录 [`../能力清单-CAPABILITIES.json`](../能力清单-CAPABILITIES.json)：
+检查：
 
 ```text
 unique capability id
-valid track / status / maturity
-theory/code/test paths exist
-implemented/validated capability has code
-validated capability has tests + evidence
+valid track/status/maturity
+all theory/code/test paths exist
+validated ⇒ code != empty
+validated ⇒ tests != empty
+validated ⇒ evidence != empty
 ```
 
-这样 `README / STATUS / QUALITY` 未来可以逐渐由同一份机器事实源生成，而不是人工维护多个互相漂移的勾选表。
+因此 README 不能单方面把某项能力“宣布完成”。
 
 ## 4. Frontier Snapshot
 
-```bash
-python 工具-scripts/前沿漂移审计-frontier_drift_audit.py
-```
-
-验证：
-
 ```text
-观测站-observatory/frontier-snapshot.json
+工具-scripts/前沿漂移审计-frontier_drift_audit.py
 ```
 
-包括 schema、唯一 id、官方 source URL、evidence boundary 与 snapshot age。常规 CI 报告 age；发布前可以使用：
-
-```bash
-python 工具-scripts/前沿漂移审计-frontier_drift_audit.py --strict-age
-```
-
-防止网络波动把仓库误判失败，因此 CI 不逐 URL 做强制在线健康检查。
-
-所有报告统一作为 `textbook-audit-reports` artifact 上传。
+检查 machine-readable frontier snapshot 的 schema / dates / source / evidence boundary / freshness，并把“快速变化事实”与稳定教材正文分离。
 
 ---
 
-# Codex Source-First Chain
+# 自动化 Artifact
+
+Content Audit 上传：
 
 ```text
-openai/codex pinned public source
-→ Codex源码解剖/
-→ Source Card / Claim Ledger
-→ clean-room implementation
-→ behavioral/protocol tests
-→ durable/security/eval subsystems
-→ later real benchmark
+source-audit.md
+capability-audit.md
+frontier-audit.md
 ```
 
-Codex 是 Coding Agent 的 industrial reference，不是整个 Agent 世界的唯一标准架构。
+作为 `textbook-audit-reports` artifact。
 
 ---
 
-# 自动化最终目标
+# 证据链标准
+
+模型机制：
 
 ```text
-Primary / Official Source
-→ Claim / Contract
-→ Theory / State / Data Flow
+Original Paper / Official Code
+→ Formula / Data Flow
 → Reference Implementation
-→ Unit / Numerical / Protocol Parity
-→ Capability / Systems Eval
-→ Failure / Safety Evidence
-→ Frontier Revalidation
+→ Numerical Parity
+→ Benchmark / Profile
 ```
 
-CI 的目标不是 badge 数量，而是让“这项能力真的完成了吗？”尽可能有机器可检查的答案。
+Codex/Agent：
+
+```text
+openai/codex official source / protocol spec
+→ state-machine contract
+→ clean-room runtime
+→ behavioral/protocol tests
+→ real environment benchmark
+```
+
+Serving：
+
+```text
+Reference semantics
+→ optimized implementation
+→ logits/distribution parity
+→ memory/latency/throughput
+```
+
+Post-training：
+
+```text
+Original objective
+→ hand-check invariant
+→ Tensor implementation
+→ gradient/optimizer test
+→ training curve
+→ held-out evaluation
+```
+
+---
+
+# 已知 CI 维护项
+
+GitHub runner 当前仍提示部分 action 版本基于已弃用 Node 20 runtime，并被强制运行在 Node 24。它目前只是 warning，没有阻塞 workflow；后续应在 upstream 新 major 稳定后统一升级 `actions/checkout` / `setup-python` / `upload-artifact`，不要为了消 warning 改动业务逻辑。
+
+---
+
+自动化最终目的不是得到一排绿色勾，而是持续强制：
+
+> **Claim → Source → Code → Test → Eval / Evidence**
+
+不能彼此脱节。

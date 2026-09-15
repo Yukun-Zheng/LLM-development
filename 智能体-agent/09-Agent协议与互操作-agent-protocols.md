@@ -30,7 +30,7 @@ Agent Runtime
 └─ local tools / sandbox / verifier
 ```
 
-这里其实存在三类不同协议问题：
+这里存在三类不同协议问题：
 
 ```text
 Tool Protocol
@@ -47,7 +47,7 @@ UI / IDE / Client ↔ Agent Runtime
 
 ---
 
-# 2　JSON-RPC 只是 transport-friendly RPC envelope，不是 Agent
+# 2　JSON-RPC 只是 RPC envelope，不是 Agent
 
 JSON-RPC 2.0 的核心形状是：
 
@@ -63,29 +63,6 @@ JSON-RPC 2.0 的核心形状是：
 }
 ```
 
-成功响应：
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {...}
-}
-```
-
-错误响应：
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "error": {
-    "code": -32601,
-    "message": "Method not found"
-  }
-}
-```
-
 RPC envelope 解决“请求如何编码、如何关联响应”，并不自动提供 planning、memory、permission、sandbox、durability 或 task lifecycle。
 
 ---
@@ -97,9 +74,9 @@ RPC envelope 解决“请求如何编码、如何关联响应”，并不自动�
 - https://modelcontextprotocol.io/specification/
 - 2026-07-28 版本说明：https://blog.modelcontextprotocol.io/posts/2026-07-28/
 
-截至 2026-07-28，MCP 已朝 stateless protocol core 演进，并引入新的能力发现和请求元数据语义。教材必须把**协议版本**当成事实的一部分，不能把 2025 年的生命周期描述直接套到 2026 版本。
+截至 2026-07-28，MCP 已朝 stateless protocol core 演进。教材必须把**协议版本**当成事实的一部分，不能把旧版生命周期描述直接套到新版本。
 
-## 3.1　MCP 的职责
+MCP 主要回答：
 
 ```text
 Host / Client
@@ -113,31 +90,15 @@ Server
 └─ other capabilities
 ```
 
-它主要回答：
+它标准化 capability/context access，而不是替 Agent 做 planning。
 
-> Agent/模型怎样用统一协议发现并访问外部能力与上下文？
-
-而不是：
-
-> Agent 下一步应该做什么？
-
-## 3.2　本项目的 Minimal MCP
-
-源码：
-
-```text
-代码-code/从零构建Astra与Codex级系统/src/astra_codex/mcp.py
-```
-
-当前 reference subset 已从零实现 JSON-RPC envelope、`server/discover`、`tools/list`、`tools/call`、ToolRegistry 映射、client 与 deterministic tests。
-
-它仍然不是完整生产 SDK；transport/auth/tasks/extensions 等继续分层实现。
+本项目的 `mcp.py` 已从零实现一个 inspectable teaching subset：JSON-RPC envelope、discover、tools/list、tools/call、ToolRegistry 映射、client 和 deterministic tests。完整 transports/auth/tasks/extensions 继续分层推进。
 
 ---
 
 # 4　为什么“用了 MCP”仍然不等于“有 Agent”
 
-一个完整执行系统至少仍需：
+完整执行系统至少还需要：
 
 ```text
 Policy / Planner
@@ -157,20 +118,20 @@ Observation / Artifact
 Verifier
 ```
 
-MCP 能让 capability access 标准化，但不会替你解决任务分解、重试、恢复、长期记忆和完成验证。
+MCP 不替你解决任务分解、重试、恢复、长期记忆和完成验证。
 
 ---
 
 # 5　A2A v1：Agent2Agent
 
-本章 A2A 部分不再只链接产品文档，而固定一份可重复核验的官方规范快照：
+A2A 部分固定一份可重复核验的官方规范快照：
 
 ```text
 a2aproject/A2A
 commit: 6d6640c29b102f7a8d23784901351b5d2454fe71
 ```
 
-规范源文件：
+原始规范：
 
 https://github.com/a2aproject/A2A/blob/6d6640c29b102f7a8d23784901351b5d2454fe71/specification/a2a.proto
 
@@ -178,7 +139,7 @@ https://github.com/a2aproject/A2A/blob/6d6640c29b102f7a8d23784901351b5d2454fe71/
 
 https://github.com/a2aproject/A2A/blob/6d6640c29b102f7a8d23784901351b5d2454fe71/docs/specification.md
 
-A2A v1 的核心不是“远程调用另一个 LLM”，而是**跨边界任务协作**。
+A2A v1 的核心不是“远程调用另一个 LLM”，而是**跨边界任务协作**：
 
 ```text
 Agent A
@@ -196,9 +157,9 @@ Task
 
 # 6　A2A v1 原始数据模型
 
-pinned `a2a.proto` 定义了 AgentCard、AgentInterface、AgentSkill、Message、Part、Task、TaskStatus、Artifact 等对象。
+pinned `a2a.proto` 定义 AgentCard、AgentInterface、AgentSkill、Message、Part、Task、TaskStatus、Artifact 等对象。
 
-TaskState 的 JSON 枚举语义包括：
+TaskState 的 wire enum 包括：
 
 ```text
 TASK_STATE_UNSPECIFIED
@@ -212,11 +173,11 @@ TASK_STATE_REJECTED
 TASK_STATE_AUTH_REQUIRED
 ```
 
-这类拼写属于 wire contract；不能为了“更 Pythonic”就自行改成 `done`、`waiting`、`cancelled`。
+协议 enum 拼写本身就是 contract，不能为了“更 Pythonic”自行改成 `done`、`waiting`、`cancelled`。
 
-## 6.1　Part 是真正的多模态容器
+## 6.1　Part 是多模态容器
 
-原始 proto 的 `Part` oneof 是：
+原始 proto 的 `Part` oneof：
 
 ```text
 text
@@ -225,43 +186,29 @@ url
 data
 ```
 
-并额外带 filename、media_type、metadata。
+并带 filename、media_type、metadata。
 
-所以 Agent-to-Agent 通信天然可以承载文本之外的数据。真正困难的地方随之而来：URL 谁来下载？raw bytes 多大？MIME 是否可信？凭证能否转发？内容进入哪个 sandbox？
-
-协议字段存在不等于 runtime 已经安全支持该内容类型。
+因此 Agent-to-Agent 通信可以承载文本之外的数据，但“协议允许”不等于 runtime 已安全支持。项目当前 bridge 支持 `text`/`data`，对 `raw`/`url` 在没有 fetch/security policy 前主动拒绝。
 
 ---
 
 # 7　AgentCard 与发现
 
-官方 v1 discovery 文档规定常见公开发现入口：
+官方 v1 discovery 文档使用标准公开入口：
 
 ```text
 GET /.well-known/agent-card.json
 ```
 
-AgentCard 描述：
+AgentCard 描述 identity、supportedInterfaces、protocolVersion、capabilities、I/O modes、skills 和 security requirements。
 
-```text
-identity
-supportedInterfaces
-protocolVersion
-capabilities
-input/output modes
-skills
-security requirements
-```
-
-其中 `protocolVersion` 位于每个 AgentInterface 上，而不是一个可忽略的装饰字段。
-
-本项目 `a2a.py` 和 `a2a_http.py` 都对这一结构做显式建模。
+其中 `protocolVersion` 位于每个 AgentInterface 上，是互操作 contract，而不是展示字段。
 
 ---
 
-# 8　A2A v1 HTTP+JSON：不要凭记忆写 URL
+# 8　A2A v1 HTTP+JSON：URL 不能凭记忆写
 
-pinned v1 `a2a.proto` 对 HTTP binding 给出的核心路由是：
+pinned v1 `a2a.proto` 给出的核心 HTTP binding：
 
 ```text
 POST /message:send
@@ -272,33 +219,27 @@ POST /tasks/{id}:cancel
 GET  /tasks/{id}:subscribe
 ```
 
-这也是为什么旧资料中常见的 `/v1/message:send` 或自己编的 `tasks/get` 不能直接写进 2026 教材；v1 已移除固定 `/v1` path prefix，版本可以由 interface/base URL 管理。
+所以不能把旧资料中的 `/v1/message:send` 或自定义 `tasks/get` 当成 2026 v1 事实。
 
-当前源码：
-
-```text
-src/astra_codex/a2a_http.py
-```
-
-已经实现真实 localhost TCP/HTTP 的 reference subset：
+项目当前已经用真实 localhost HTTP 验证：
 
 ```text
 GET  /.well-known/agent-card.json
 POST /message:send
+POST /message:stream
 GET  /tasks/{id}
 GET  /tasks
 POST /tasks/{id}:cancel
+GET  /tasks/{id}:subscribe
 ```
 
-尚未实现 `/message:stream`、`:subscribe`、push notification、tenant-prefixed binding、extended authenticated card 和正式 conformance suite，因此项目不会把它标成“完整 A2A server”。
+但这仍只是 reference subset，不代表完整 A2A conformance。tenant-prefixed binding、push notification、extended authenticated card、正式 transport security 和官方 conformance suite 仍未完成。
 
 ---
 
-# 9　ListTasks 为什么是一个很好的协议严谨性测试
+# 9　ListTasks：一个小接口足以暴露协议是否严谨
 
-原始 v1 `ListTasksRequest` 不是随便一个 `GET /tasks`。
-
-它定义：
+原始 v1 `ListTasksRequest` 定义：
 
 ```text
 tenant
@@ -311,7 +252,7 @@ status_timestamp_after
 include_artifacts
 ```
 
-`ListTasksResponse` 还必须表达：
+`ListTasksResponse`：
 
 ```text
 tasks
@@ -320,7 +261,7 @@ page_size
 total_size
 ```
 
-HTTP+JSON 映射使用 camelCase query parameters，例如：
+HTTP+JSON 使用 camelCase query：
 
 ```text
 contextId
@@ -332,42 +273,30 @@ statusTimestampAfter
 includeArtifacts
 ```
 
-因此本项目不再保留早期简化实现里的自定义 `state=` query，而是直接按照 pinned proto 的字段语义实现 reference pagination。
-
-`pageToken` 对客户端是 opaque token；当前教学实现内部用 offset 编码，但客户端不能依赖其内部格式。
+项目 reference 实现已经按这些字段工作，并使用 opaque `pageToken`。内部当前以 offset 编码，但客户端不依赖 token 内部格式。
 
 ---
 
-# 10　`returnImmediately` 是 lifecycle，不只是一个 bool
+# 10　`returnImmediately` 是 lifecycle，不只是 bool
 
-原始 `SendMessageConfiguration` 规定：
+原始 `SendMessageConfiguration` 的语义：
 
 ```text
 returnImmediately = false
 → 等到 terminal / interrupted state 后返回
 
 returnImmediately = true
-→ Task 创建后即可返回
-→ 后续通过 GetTask / streaming 等机制观察状态
+→ 创建 Task 后即可返回
+→ 后续通过 GetTask / streaming / subscription 观察状态
 ```
 
-项目测试真正验证：
-
-```text
-POST /message:send
-→ SUBMITTED
-→ SQLite durable Task
-→ process / restart
-→ GET /tasks/{id}
-```
-
-所以协议字段最终必须落到持久化状态机，而不是只出现在 dataclass 里。
+项目测试真正验证了 `SUBMITTED` Task 的 SQLite persistence、later processing 和 restart retrieval。
 
 ---
 
-# 11　A2A Task 与我们的 Durable Thread 必须分开
+# 11　A2A Task 与 Durable Thread 必须分开
 
-A2A 的 Task 是远程协议对象；本项目的 Thread 是本地 Agent OS 对象。
+A2A 的 Task 是远程协议对象；项目的 Thread 是本地 Agent OS 对象。
 
 ```text
 A2A Task
@@ -386,15 +315,13 @@ Durable Thread
 └─ Artifact Store
 ```
 
-因此正确做法不是把两个类名改成一样，而是建立显式 bridge。
-
-源码：
+所以：
 
 ```text
-src/astra_codex/a2a_runtime_bridge.py
+A2A Task ≠ Runtime Thread
 ```
 
-当前映射：
+项目通过 `a2a_runtime_bridge.py` 显式映射：
 
 ```text
 A2A Task
@@ -407,11 +334,108 @@ A2A Task
 → A2A TaskStatus / Message / Artifact
 ```
 
-这样协议世界与本地执行世界各自保持自己的不变量。
+---
+
+# 12　真实 HTTP 已经进入本地 Agent OS
+
+`a2a_runtime_http.py` 让 HTTP server thread 自己打开 A2ATaskStore 和 DurableAgentRuntime handles：
+
+```text
+remote HTTP client
+→ POST /message:send
+→ A2A Task
+→ server-thread-owned DurableAgentRuntime
+→ Thread / WorkItem / Turn
+→ A2A result
+```
+
+这样避免跨线程复用 SQLite connection。测试关闭 server 后还能从原 runtime replay committed state，并验证 A2A Task 在 server restart 后仍存在。
 
 ---
 
-# 12　MCP、A2A、App Server 的分工
+# 13　SendStreamingMessage：真实 SSE，而不是最终数组伪装成流
+
+pinned v1 `StreamResponse` oneof：
+
+```text
+task
+message
+status_update
+artifact_update
+```
+
+项目 `a2a_streaming.py` + `a2a_sse.py` 实现：
+
+```text
+POST /message:stream
+→ create durable SUBMITTED Task
+→ flush SSE {task: ...}
+→ run handler
+→ artifactUpdate(s)
+→ final statusUpdate
+```
+
+自动测试故意让 handler 阻塞，证明客户端先收到 SUBMITTED 首帧，再等 handler 完成；不是任务结束后一次性把数组叫作 streaming。
+
+---
+
+# 14　SubscribeToTask：durable update journal，而不是内存 Queue
+
+新增 `a2a_subscription.py`：
+
+```text
+A2A Task snapshot
+→ append-only SQLite update journal
+→ GET /tasks/{id}:subscribe
+→ text/event-stream
+```
+
+核心设计：
+
+```text
+producer/executor connection A
+→ durable Task update journal
+
+subscriber HTTP connection B
+→ read updates after cursor
+→ SSE delivery
+```
+
+subscriber 是否在线不会决定 update 是否存在。
+
+项目还显式实现一个 SSE transport-level replay extension：
+
+```text
+Last-Event-ID
+```
+
+它**不是声称的 A2A normative request field**。它只作为当前 reference transport 的 durable reconnect cursor。
+
+测试覆盖：
+
+```text
+SUBMITTED snapshot persisted
+→ subscriber receives SUBMITTED
+→ another DB connection completes Task
+→ subscriber receives terminal Task
+→ stream closes
+```
+
+以及：
+
+```text
+observed update N
+→ disconnect
+→ terminal update N+1 written
+→ reconnect Last-Event-ID=N
+→ only N+1 replayed
+```
+
+新的 fresh subscription 如果 Task 已经 terminal，则 reference server 返回 409，保持 pinned v1 对 terminal SubscribeToTask 的 unsupported-operation 边界。
+
+---
+
+# 15　MCP、A2A、App Server 的分工
 
 ```text
 MCP
@@ -435,30 +459,15 @@ Coordinator Agent
  └─ A2A → Research Worker
 ```
 
-这也是项目为什么不把所有东西塞进一个 `agent.py`。
-
 ---
 
-# 13　协议安全必须落到 capability acquisition point
+# 16　协议安全必须落到 capability acquisition point
 
-远程协议至少涉及：
+远程协议至少涉及：identity、AuthN、AuthZ、least privilege、schema validation、secret scope、injection、audit trail 与 sandbox boundary。
 
-```text
-identity
-AuthN
-AuthZ
-least privilege
-capability discovery
-schema validation
-secret scope
-prompt/tool-output injection
-audit trail
-sandbox boundary
-```
+项目 App Server 已有 Bearer AuthN、method/thread AuthZ 和 queue-level thread fencing；A2A transport security 仍是后续独立层。
 
-项目当前 App Server 已经做到 Bearer AuthN、method/thread AuthZ 和 queue-level thread fencing；MCP/A2A 的 transport security 则继续独立推进。
-
-关键原则：
+必须保持：
 
 ```text
 valid schema
@@ -469,38 +478,54 @@ valid schema
 
 ---
 
-# 14　当前代码与实验入口
+# 17　当前源码与实验入口
 
 ```text
 src/astra_codex/mcp.py
 src/astra_codex/a2a.py
 src/astra_codex/a2a_http.py
 src/astra_codex/a2a_runtime_bridge.py
+src/astra_codex/a2a_runtime_http.py
+src/astra_codex/a2a_streaming.py
+src/astra_codex/a2a_sse.py
+src/astra_codex/a2a_subscription.py
 src/astra_codex/app_server.py
 
 tests/test_mcp.py
 tests/test_a2a.py
 tests/test_a2a_http.py
 tests/test_a2a_runtime_bridge.py
+tests/test_a2a_runtime_http.py
+tests/test_a2a_streaming.py
+tests/test_a2a_subscription.py
 ```
 
 配套逐代码课程：
 
 ```text
-教程-lessons/23-A2Av1远程任务与HTTP绑定-a2a-runtime.md
+Lesson 23：A2A v1 远程任务、HTTP 与 Streaming
+Lesson 24：SubscribeToTask、持久更新日志与断线重放
+```
+
+Fast CPU CI run 248 当前硬证据：
+
+```text
+188 passed, 14 skipped, 1 warning in 46.16s
+Ruff correctness lint: All checks passed
 ```
 
 ---
 
-# 15　下一层协议工程
+# 18　下一层协议工程
 
-后续必须继续实现和验证：
+还需要继续实现和验证：
 
 ```text
-A2A SendStreamingMessage / SSE
-A2A SubscribeToTask
-TaskStatusUpdateEvent
-TaskArtifactUpdateEvent
+executor-native WORKING/intermediate updates
+TaskStatusUpdateEvent journal
+TaskArtifactUpdateEvent journal
+A2A cancellation → local running WorkItem propagation
+INPUT_REQUIRED / AUTH_REQUIRED continuation mapping
 push notification config
 extended authenticated Agent Card
 tenant routing
@@ -510,4 +535,4 @@ official SDK differential tests
 protocol conformance fixtures
 ```
 
-最终目标不是“项目支持很多协议名词”，而是读者能从原始 spec 推出 wire format、状态机和安全边界，再自己写出一个可以互操作的 reference runtime。
+最终目标不是“支持很多协议名词”，而是读者能从原始 spec 推出 wire format、持久状态机、reconnect semantics 和安全边界，再亲手写出可以互操作、可以失败恢复的 reference runtime。

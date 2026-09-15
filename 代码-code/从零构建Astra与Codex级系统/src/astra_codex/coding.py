@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Iterable
 
 from .agent import Agent, ModelBackend
 from .editing import ExactEditTool
+from .instructions import ProjectInstructionResolver
 from .repo_map import RepoMapTool
 from .tools import FilesystemTool, GitTool, ShellTool, ToolRegistry
 
@@ -24,9 +26,18 @@ def build_coding_agent(
     backend: ModelBackend,
     repository_root: str | Path,
     *,
+    working_directory: str | Path | None = None,
+    instruction_max_bytes: int = 32_768,
+    fallback_instruction_filenames: Iterable[str] = (),
     max_steps: int = 40,
 ) -> Agent:
-    """Construct a transparent Codex-class repository loop.
+    """Construct a transparent repository coding loop with scoped instructions.
+
+    ``AGENTS.md`` project instructions are resolved from the nearest marked
+    project root to ``working_directory`` using ``ProjectInstructionResolver``.
+    The exact same resolved text is inserted into the system prompt, while the
+    resolver itself exposes source path/scope/truncation provenance for callers
+    that need to audit why a model received an instruction.
 
     Current primitives:
     - repo_map: cheap structural orientation;
@@ -35,11 +46,32 @@ def build_coding_agent(
     - shell: tests/builds/commands;
     - git: status/diff/history.
 
-    Later stages add unified-diff application, language servers, worktree worker
-    orchestration, browser/computer adapters, and stronger sandbox isolation.
+    Later stages add unified-diff application, language servers, parallel
+    worktree orchestration, browser/computer adapters, and stronger sandbox
+    isolation.
     """
 
     root = Path(repository_root).resolve()
+    cwd = root if working_directory is None else Path(working_directory).resolve()
+    try:
+        cwd.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("working_directory must be inside repository_root") from exc
+
+    resolver = ProjectInstructionResolver(
+        fallback_filenames=fallback_instruction_filenames,
+        max_bytes=instruction_max_bytes,
+    )
+    resolved = resolver.resolve(cwd)
+    system_prompt = CODING_SYSTEM_PROMPT
+    if resolved.sources:
+        system_prompt += (
+            "\n\n# Project instructions\n"
+            "The following repository-scoped instructions are authoritative for "
+            "this working directory:\n\n"
+            + resolved.text
+        )
+
     tools = ToolRegistry(
         [
             RepoMapTool(root),
@@ -52,6 +84,6 @@ def build_coding_agent(
     return Agent(
         backend,
         tools,
-        system_prompt=CODING_SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         max_steps=max_steps,
     )

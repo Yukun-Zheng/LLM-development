@@ -22,7 +22,7 @@
         "代码-code/从零构建Astra与Codex级系统/tests/test_rollout_trace.py"
       ],
       "evidence": [
-        "Fast CI run 205 executed the full rollout-trace tests successfully: 153 passed, 14 skipped; that run failed only Ruff F401 on one unused import, which was removed in the immediate follow-up commit. Tests cover restart persistence, work-item/thread binding, hash-chain tamper detection, idempotent synchronization, consumed steering, artifact provenance and verifier→artifact parent edges."
+        "Fast CPU Capstone CI run 207: 153 passed, 14 skipped, 1 warning in 9.06s; Ruff correctness lint passed. Rollout-trace tests cover restart persistence, work-item/thread binding, hash-chain tamper detection, idempotent synchronization, consumed steering, artifact provenance and verifier→artifact parent edges."
       ],
       "next": [
         "runtime-native trace sink instead of post-run collection",

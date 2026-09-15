@@ -57,10 +57,10 @@
       "status": "validated",
       "maturity": "L2",
       "theory": ["代码-code/从零构建Astra与Codex级系统/教程-lessons/12-AGENTS作用域与指令来源-agents-md-provenance.md", "Codex源码解剖-codex-anatomy/04-指令上下文压缩与记忆-context-memory.md"],
-      "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/instructions.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/coding.py"],
+      "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/instructions.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/coding.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/context.py"],
       "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_instructions.py"],
-      "evidence": ["Fast CI run 114: root→cwd hierarchy, override/fallback priority, byte-budget truncation, no-root behavior, no ancestor escape, sibling negative control and coding-prompt injection passed; full suite 100 passed and Ruff passed"],
-      "next": ["persist instruction fragments into ContextStore", "turn/rollout instruction provenance", "trust gating and remote filesystem semantics"]
+      "evidence": ["Fast CI run 127: root→cwd hierarchy, override/fallback priority, byte-budget truncation, project-root/sibling negative controls, coding-prompt injection and exact INSTRUCTION-fragment persistence with source/scope metadata passed; full suite 102 passed and Ruff passed"],
+      "next": ["turn/rollout instruction fragment references", "trust gating", "remote filesystem semantics"]
     },
     {
       "id": "protocol.app_server_minimal",
@@ -83,20 +83,20 @@
       "theory": ["代码-code/从零构建Astra与Codex级系统/教程-lessons/10-可重放事件流与HTTP控制面-event-stream-http.md"],
       "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/http_app_server.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/app_server.py"],
       "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_event_stream_http.py", "代码-code/从零构建Astra与Codex级系统/tests/test_control_auth.py"],
-      "evidence": ["Fast CI run 114: real localhost HTTP transport plus bearer propagation and policy enforcement passed; full suite 100 passed and Ruff passed"],
+      "evidence": ["Fast CI run 127 includes real localhost HTTP transport, bearer propagation and policy enforcement; full suite 102 passed and Ruff passed"],
       "next": ["TLS termination guidance", "SSE / WebSocket transport", "request cancellation"]
     },
     {
       "id": "security.control_plane_auth",
       "track": "security",
-      "title": "Bearer Authentication + Method/Thread-scoped App Server Authorization",
+      "title": "Bearer Authentication + Method/Thread Authorization + Queue-fenced Worker Claims",
       "status": "validated",
       "maturity": "L2",
       "theory": ["代码-code/从零构建Astra与Codex级系统/教程-lessons/11-控制面认证与授权-control-plane-auth.md", "智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md"],
-      "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/control_auth.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/app_server.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/http_app_server.py"],
+      "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/control_auth.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/app_server.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime_queue.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/http_app_server.py"],
       "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_control_auth.py"],
-      "evidence": ["Fast CI run 114: missing/invalid bearer is unauthenticated; cross-thread/method access and unscoped feeds are forbidden; thread-scoped principals cannot invoke global worker claims; admin and HTTP bearer paths pass; full suite 100 passed and Ruff passed"],
-      "next": ["token expiry / rotation", "queue-level authorized claim", "OIDC/workload identity", "audit log", "TLS / mTLS"]
+      "evidence": ["Fast CI run 127: scoped workers require an authorized threadId; SQL queue claim skips an older unauthorized thread and completes the authorized thread while unauthorized work remains PENDING; missing/invalid bearer, cross-thread/method access and unscoped feeds are rejected; full suite 102 passed and Ruff passed"],
+      "next": ["token expiry / rotation", "OIDC/workload identity", "security audit log", "TLS / mTLS", "tenant-aware worker pools"]
     }
   ]
 }

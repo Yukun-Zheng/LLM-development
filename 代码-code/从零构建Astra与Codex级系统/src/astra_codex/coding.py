@@ -1,15 +1,22 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, TypeAlias
 
 from .agent import Agent, ModelBackend
+from .bubblewrap_sandbox import BubblewrapExecTool, BubblewrapSandbox
 from .context import ContextStore
+from .docker_sandbox import DockerSandbox, DockerSandboxExecTool
 from .editing import ExactEditTool
 from .instructions import ProjectInstructionResolver
 from .repo_map import RepoMapTool
 from .sandbox import RestrictedSubprocessSandbox, SandboxExecTool
 from .tools import FilesystemTool, GitTool, ShellTool, ToolRegistry
+
+
+ExecutionSandbox: TypeAlias = (
+    RestrictedSubprocessSandbox | BubblewrapSandbox | DockerSandbox
+)
 
 
 CODING_SYSTEM_PROMPT = """You are a repository coding agent.
@@ -24,6 +31,16 @@ Tool calls must be exactly one JSON object:
 """
 
 
+def _execution_tool(sandbox: ExecutionSandbox):  # type: ignore[no-untyped-def]
+    if isinstance(sandbox, DockerSandbox):
+        return DockerSandboxExecTool(sandbox), "docker-container"
+    if isinstance(sandbox, BubblewrapSandbox):
+        return BubblewrapExecTool(sandbox), "bubblewrap-namespace"
+    if isinstance(sandbox, RestrictedSubprocessSandbox):
+        return SandboxExecTool(sandbox), "restricted-process"
+    raise TypeError(f"unsupported execution sandbox: {type(sandbox).__name__}")
+
+
 def build_coding_agent(
     backend: ModelBackend,
     repository_root: str | Path,
@@ -32,10 +49,10 @@ def build_coding_agent(
     instruction_max_bytes: int = 32_768,
     fallback_instruction_filenames: Iterable[str] = (),
     context_store: ContextStore | None = None,
-    execution_sandbox: RestrictedSubprocessSandbox | None = None,
+    execution_sandbox: ExecutionSandbox | None = None,
     max_steps: int = 40,
 ) -> Agent:
-    """Construct a transparent repository coding loop with scoped instructions.
+    """Construct a repository coding loop with scoped instructions and pluggable execution.
 
     ``AGENTS.md`` project instructions are resolved from the nearest marked
     project root to ``working_directory`` using ``ProjectInstructionResolver``.
@@ -44,15 +61,18 @@ def build_coding_agent(
     persisted as a typed ``INSTRUCTION`` fragment carrying source/scope/
     truncation provenance.
 
-    Execution has two deliberately distinct modes:
+    Execution deliberately exposes a progression of security boundaries:
 
-    - default teaching mode: the legacy ``ShellTool`` executes ``bash -lc``;
-    - restricted mode: pass ``execution_sandbox`` and arbitrary commands are
-      exposed only through argv-based ``sandbox_exec``.
+    - no sandbox: legacy ``ShellTool`` / ``bash -lc`` for earliest teaching;
+    - ``RestrictedSubprocessSandbox``: argv/env/resource/no-new-privs guards;
+    - ``BubblewrapSandbox``: Linux namespace backend where host policy permits;
+    - ``DockerSandbox``: container boundary with fixed host-side Docker policy.
 
-    The restricted process runner enforces cwd/executable/env/resource guards
-    and Linux ``no_new_privs`` but is still not a filesystem/network namespace
-    or container boundary. The distinction remains explicit in tool metadata.
+    All sandboxed modes expose exactly one model-facing tool name,
+    ``sandbox_exec``. The model cannot choose Docker/bubblewrap flags; those are
+    fixed by the host-side sandbox policy. Tool metadata states the exact
+    boundary so a higher-level policy/verifier can distinguish restricted
+    process execution from a container.
     """
 
     root = Path(repository_root).resolve()
@@ -85,13 +105,15 @@ def build_coding_agent(
     if execution_sandbox is None:
         execution_tool = ShellTool(root)
     else:
-        execution_tool = SandboxExecTool(execution_sandbox)
+        execution_tool, boundary = _execution_tool(execution_sandbox)
         system_prompt += (
-            "\n\n# Restricted command execution\n"
+            "\n\n# Sandboxed command execution\n"
+            f"Execution boundary: {boundary}. "
             "Arbitrary commands are available only through sandbox_exec. Pass argv as "
-            "a JSON string array. Shell operators, pipelines and redirection are not "
-            "interpreted. A successful exit code is still evidence only for that "
-            "specific command, not proof of overall task correctness."
+            "a JSON string array; shell operators, pipelines and redirection are not "
+            "interpreted by the host launcher. Security-sensitive sandbox/container "
+            "configuration is fixed by host policy, not by model output. A successful "
+            "exit code is evidence only for that command, not proof of overall task correctness."
         )
 
     tools = ToolRegistry(

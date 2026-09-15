@@ -49,12 +49,14 @@ class RequestMetrics:
 
 
 class ReferenceRequestScheduler:
-    """Deterministic decode-first scheduler for teaching continuous batching.
+    """Deterministic scheduler for teaching continuous batching semantics.
 
-    The scheduler models request lifecycle and admission independently from the
-    model executor. A later engine will consume ``ScheduledBatch`` objects and
-    perform batched prefill/decode. Keeping this layer separate makes queueing,
-    fairness and serving metrics inspectable before kernel optimization.
+    ``next_batch`` preserves the original decode-first behavior. The explicit
+    ``next_decode_batch`` and ``next_prefill_batch`` lanes let a higher-level
+    reference engine service active decode work and then admit waiting prompts
+    between decode iterations. This keeps policy separate from model execution
+    while avoiding the misleading implication that a request must wait until all
+    older decode requests finish before it can ever be prefetched.
     """
 
     def __init__(
@@ -99,21 +101,23 @@ class ReferenceRequestScheduler:
         request.status = RequestStatus.CANCELLED
         request.finish_time = time.time() if now is None else now
 
-    def next_batch(self) -> ScheduledBatch | None:
+    def next_decode_batch(self) -> ScheduledBatch | None:
         decode = [
             request
             for request in self.requests.values()
             if request.status is RequestStatus.DECODE
         ]
         decode.sort(key=lambda item: (item.arrival_time, item.request_id))
-        if decode:
-            chosen = decode[: self.max_batch_size]
-            return ScheduledBatch(
-                BatchKind.DECODE,
-                tuple(item.request_id for item in chosen),
-                len(chosen),
-            )
+        if not decode:
+            return None
+        chosen = decode[: self.max_batch_size]
+        return ScheduledBatch(
+            BatchKind.DECODE,
+            tuple(item.request_id for item in chosen),
+            len(chosen),
+        )
 
+    def next_prefill_batch(self) -> ScheduledBatch | None:
         waiting = [
             request
             for request in self.requests.values()
@@ -137,6 +141,9 @@ class ReferenceRequestScheduler:
             tuple(item.request_id for item in chosen),
             total_tokens,
         )
+
+    def next_batch(self) -> ScheduledBatch | None:
+        return self.next_decode_batch() or self.next_prefill_batch()
 
     def mark_prefill_complete(
         self, request_ids: tuple[str, ...], *, now: float | None = None

@@ -25,6 +25,12 @@ from .a2a_http import (
 )
 from .a2a_runtime_bridge import DurableRuntimeA2AHandler
 from .a2a_runtime_http import LocalA2ADurableRuntimeHTTPServer
+from .a2a_sse import A2AStreamingHTTPClient, LocalA2AStreamingHTTPServer
+from .a2a_streaming import (
+    A2AStreamResponse,
+    A2ATaskArtifactUpdateEvent,
+    A2ATaskStatusUpdateEvent,
+)
 from .agent_graph import (
     AgentEvent,
     AgentMessage,
@@ -158,8 +164,12 @@ __all__ = [
     "A2ASendMessageConfiguration",
     "A2ASendMessageRequest",
     "A2AService",
+    "A2AStreamResponse",
+    "A2AStreamingHTTPClient",
     "A2ATask",
+    "A2ATaskArtifactUpdateEvent",
     "A2ATaskState",
+    "A2ATaskStatusUpdateEvent",
     "A2ATaskStore",
     "AgentAppClient",
     "AgentAppServer",
@@ -229,6 +239,7 @@ __all__ = [
     "LeaseHeartbeat",
     "LocalA2ADurableRuntimeHTTPServer",
     "LocalA2AHTTPServer",
+    "LocalA2AStreamingHTTPServer",
     "LocalHTTPAppServer",
     "LocalSSEEventServer",
     "MergeResult",

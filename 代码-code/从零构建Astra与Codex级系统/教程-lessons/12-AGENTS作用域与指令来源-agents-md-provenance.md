@@ -79,7 +79,7 @@ project root
 → cwd
 ```
 
-这条祖先链上查找。cite source: openai/codex agents_md.rs, verified snapshot fc269b66...
+这条祖先链上查找。这个行为直接来自上面固定快照中的 `agents_md_paths(...)` 实现，而不是根据产品表现推测。
 
 本项目的 reference resolver 默认以：
 

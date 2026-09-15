@@ -30,6 +30,7 @@ from .kv_block_allocator import (
     AllocatorMetrics,
     BlockTableEntry,
     KVBlockAllocator,
+    KVBlockReservation,
     PhysicalBlock,
     RequestBlockTable,
 )
@@ -163,6 +164,7 @@ __all__ = [
     "InstructionSource",
     "JournaledToolExecutor",
     "KVBlockAllocator",
+    "KVBlockReservation",
     "LeaseHeartbeat",
     "LocalHTTPAppServer",
     "LocalSSEEventServer",

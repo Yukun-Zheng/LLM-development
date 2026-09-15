@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "extends": "能力清单-CAPABILITIES.json",
+  "capabilities": [
+    {
+      "id": "security.restricted_subprocess_sandbox",
+      "track": "security",
+      "title": "Restricted Subprocess Sandbox Guards",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/14-受限进程沙箱与真实隔离边界-process-sandbox.md",
+        "智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md",
+        "Codex源码解剖-codex-anatomy/03-工具执行审批与沙箱-tools-approval-sandbox.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/sandbox.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/coding.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_sandbox.py"
+      ],
+      "evidence": [
+        "CI exercises argv-only execution, executable allowlisting, workspace-cwd escape rejection, environment secret scrubbing, wall-time termination, Linux NoNewPrivs=1 observation, tool metadata and sandboxed coding-agent integration"
+      ],
+      "next": [
+        "container/namespace backend",
+        "filesystem read/write isolation",
+        "network isolation",
+        "seccomp or equivalent syscall policy",
+        "credential broker integration",
+        "escape-oriented adversarial tests"
+      ]
+    },
+    {
+      "id": "security.os_container_sandbox",
+      "track": "security",
+      "title": "OS / Container Isolation for Untrusted Agent Execution",
+      "status": "planned",
+      "maturity": "L1",
+      "theory": [
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/14-受限进程沙箱与真实隔离边界-process-sandbox.md",
+        "智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md",
+        "Codex源码解剖-codex-anatomy/03-工具执行审批与沙箱-tools-approval-sandbox.md"
+      ],
+      "code": [],
+      "tests": [],
+      "evidence": [],
+      "next": [
+        "isolated rootfs / mount namespace",
+        "workspace mount policy",
+        "network-none mode",
+        "capability drop and no-new-privileges",
+        "pids/cpu/memory limits",
+        "host-secret / write-escape / network-escape negative tests"
+      ]
+    }
+  ]
+}

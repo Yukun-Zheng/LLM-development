@@ -1,5 +1,30 @@
 """From-scratch educational runtime for modern LLM and agent systems."""
 
+from .a2a import (
+    A2AAgentCard,
+    A2AAgentInterface,
+    A2AAgentSkill,
+    A2AArtifact,
+    A2AExecutionResult,
+    A2AMessage,
+    A2APart,
+    A2AProtocolError,
+    A2ARole,
+    A2ASendMessageConfiguration,
+    A2ASendMessageRequest,
+    A2AService,
+    A2ATask,
+    A2ATaskState,
+    A2ATaskStore,
+)
+from .a2a_http import (
+    A2AHTTPClient,
+    A2AHTTPError,
+    A2AListTasksPage,
+    LocalA2AHTTPServer,
+)
+from .a2a_runtime_bridge import DurableRuntimeA2AHandler
+from .a2a_runtime_http import LocalA2ADurableRuntimeHTTPServer
 from .agent_graph import (
     AgentEvent,
     AgentMessage,
@@ -118,6 +143,24 @@ from .verification import (
 )
 
 __all__ = [
+    "A2AAgentCard",
+    "A2AAgentInterface",
+    "A2AAgentSkill",
+    "A2AArtifact",
+    "A2AExecutionResult",
+    "A2AHTTPClient",
+    "A2AHTTPError",
+    "A2AListTasksPage",
+    "A2AMessage",
+    "A2APart",
+    "A2AProtocolError",
+    "A2ARole",
+    "A2ASendMessageConfiguration",
+    "A2ASendMessageRequest",
+    "A2AService",
+    "A2ATask",
+    "A2ATaskState",
+    "A2ATaskStore",
     "AgentAppClient",
     "AgentAppServer",
     "AgentEvent",
@@ -161,6 +204,7 @@ __all__ = [
     "DockerSandboxPolicy",
     "DurableAgentRuntime",
     "DurableEventStream",
+    "DurableRuntimeA2AHandler",
     "DurableSteeringQueue",
     "DurableThreadStore",
     "DurableToolJournal",
@@ -183,6 +227,8 @@ __all__ = [
     "KVBlockAllocator",
     "KVBlockReservation",
     "LeaseHeartbeat",
+    "LocalA2ADurableRuntimeHTTPServer",
+    "LocalA2AHTTPServer",
     "LocalHTTPAppServer",
     "LocalSSEEventServer",
     "MergeResult",

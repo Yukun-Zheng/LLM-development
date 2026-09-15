@@ -4,7 +4,7 @@ import pytest
 
 from astra_codex.agent import ScriptedBackend
 from astra_codex.app_server import AgentAppClient, AgentAppServer, AppServerError, InProcessAppTransport
-from astra_codex.control_auth import BearerTokenAuthorizer, Principal
+from astra_codex.control_auth import AuthenticationError, BearerTokenAuthorizer, Principal
 from astra_codex.http_app_server import HTTPAppTransport, LocalHTTPAppServer
 from astra_codex.runtime import DurableAgentRuntime
 from astra_codex.runtime_queue import WorkStatus
@@ -53,6 +53,68 @@ def test_authenticated_app_server_rejects_missing_and_invalid_tokens(tmp_path) -
         with pytest.raises(AppServerError) as exc_info:
             invalid.call("server/discover")
         assert exc_info.value.code == -32001
+
+
+def test_bearer_expiry_is_enforced_at_authentication_time() -> None:
+    authorizer = BearerTokenAuthorizer()
+    principal = Principal("short-lived")
+    authorizer.register(
+        "ephemeral",
+        principal,
+        now=100.0,
+        expires_at=110.0,
+    )
+
+    assert authorizer.authenticate("ephemeral", now=109.999) == principal
+    with pytest.raises(AuthenticationError, match="expired"):
+        authorizer.authenticate("ephemeral", now=110.0)
+
+
+def test_revoked_bearer_cannot_authenticate_and_revoke_is_idempotent() -> None:
+    authorizer = BearerTokenAuthorizer()
+    authorizer.register("revocable", Principal("operator"), now=1.0)
+    authorizer.revoke("revocable", now=5.0)
+    authorizer.revoke("revocable", now=6.0)
+
+    credential = authorizer.credential("revocable")
+    assert credential.revoked_at == 5.0
+    with pytest.raises(AuthenticationError, match="revoked"):
+        authorizer.authenticate("revocable", now=6.0)
+
+
+def test_rotation_preserves_scope_revokes_old_and_activates_new() -> None:
+    authorizer = BearerTokenAuthorizer()
+    principal = Principal(
+        "rotating-worker",
+        allowed_methods=frozenset({"runtime/runOne"}),
+        thread_ids=frozenset({"thr_a"}),
+    )
+    authorizer.register("old-secret", principal, now=1.0, expires_at=50.0)
+    authorizer.rotate(
+        "old-secret",
+        "new-secret",
+        now=10.0,
+        expires_at=100.0,
+    )
+
+    with pytest.raises(AuthenticationError, match="revoked"):
+        authorizer.authenticate("old-secret", now=11.0)
+    assert authorizer.authenticate("new-secret", now=11.0) == principal
+    assert authorizer.credential("old-secret").revoked_at == 10.0
+    assert authorizer.credential("new-secret").expires_at == 100.0
+
+
+def test_failed_rotation_does_not_revoke_old_credential() -> None:
+    authorizer = BearerTokenAuthorizer()
+    principal = Principal("primary")
+    authorizer.register("old", principal, now=1.0)
+    authorizer.register("already-used", Principal("other"), now=1.0)
+
+    with pytest.raises(ValueError, match="already registered"):
+        authorizer.rotate("old", "already-used", now=2.0)
+
+    assert authorizer.authenticate("old", now=3.0) == principal
+    assert authorizer.credential("old").revoked_at is None
 
 
 def test_thread_scope_blocks_cross_thread_reads_and_unscoped_event_feed(tmp_path) -> None:

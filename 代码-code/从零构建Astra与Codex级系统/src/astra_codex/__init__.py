@@ -9,6 +9,8 @@ from .context import ContextFragment, ContextStore, FragmentKind
 from .durable import DurableThreadStore, ThreadProjection, ThreadStatus
 from .engine import GenerationEngine
 from .evaluation import AggregateMetrics, TrajectoryMetrics, aggregate_metrics, summarize_codex_turn
+from .event_stream import DurableEventStream, RuntimeEvent
+from .http_app_server import HTTPAppTransport, LocalHTTPAppServer
 from .model import DecoderOnlyTransformer, ModelOutput
 from .multi_agent import SequentialCoordinator, WorkerResult
 from .paged_cache import ReferencePagedGenerationEngine, ReferencePagedKVCache
@@ -86,6 +88,7 @@ __all__ = [
     "DPOResult",
     "DecoderOnlyTransformer",
     "DurableAgentRuntime",
+    "DurableEventStream",
     "DurableSteeringQueue",
     "DurableThreadStore",
     "DurableToolJournal",
@@ -98,11 +101,13 @@ __all__ = [
     "Grade",
     "GroupRelativeResult",
     "GuardedToolExecutor",
+    "HTTPAppTransport",
     "HomogeneousBatchExecutor",
     "IGNORE_INDEX",
     "InProcessAppTransport",
     "JournaledToolExecutor",
     "LeaseHeartbeat",
+    "LocalHTTPAppServer",
     "ModelConfig",
     "ModelOutput",
     "PermissionDecision",
@@ -124,6 +129,7 @@ __all__ = [
     "RequestMetrics",
     "RequestState",
     "RequestStatus",
+    "RuntimeEvent",
     "RuntimeExecutionRecord",
     "SamplingConfig",
     "ScheduledBatch",

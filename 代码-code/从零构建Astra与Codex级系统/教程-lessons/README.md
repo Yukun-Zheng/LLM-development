@@ -21,6 +21,7 @@
 | 12 | AGENTS.md 作用域与来源 | `instructions.py`, `coding.py`, `context.py` | hierarchy / override / budget / sibling negative control / provenance |
 | 13 | SSE 实时事件推送与断线重连 | `sse_events.py`, `event_stream.py`, `control_auth.py` | cursor catch-up / Last-Event-ID / live delivery / auth-scoped stream |
 | 14 | 受限进程沙箱与真实隔离边界 | `sandbox.py`, `coding.py` | argv-only / executable+env guard / timeout+rlimit / Linux no_new_privs / negative controls |
+| 15 | Docker 容器隔离与逃逸负测试 | `docker_sandbox.py`, `coding.py` | host-secret invisibility / ro workspace+rootfs / network-none / CapEff=0 / NoNewPrivs=1 / Coding Agent container path |
 
 对应文件：
 
@@ -40,33 +41,49 @@
 12-AGENTS作用域与指令来源-agents-md-provenance.md
 13-SSE实时事件推送与断线重连-sse-reconnect.md
 14-受限进程沙箱与真实隔离边界-process-sandbox.md
+15-Docker容器隔离与逃逸负测试-container-sandbox.md
 ```
 
 ## 当前硬证据
 
-截至受限进程沙箱与 heartbeat startup-race 修复进入全量回归的 Fast CPU CI run 152：
+普通 Fast CPU Capstone CI run 167：
 
 ```text
-119 passed, 1 warning in 8.48s
+119 passed, 14 skipped, 1 warning in 8.74s
 Ruff correctness lint: All checks passed
 ```
 
-这一轮除了保持 SSE、Auth、AGENTS provenance、durable runtime 等既有回归，还新增或强化了：
+这里的 Docker/Bubblewrap runtime tests 会按环境能力跳过，因此另有专门的 security workflow。
+
+Sandbox security CI run 8：
 
 ```text
-restricted argv-only process execution
-executable allowlist
-workspace cwd escape rejection
-parent secret not inherited by child
-wall-time timeout + process-group termination
-Linux NoNewPrivs = 1 observation
-SandboxExecTool metadata
-Coding Agent shell → sandbox_exec opt-in replacement
-background heartbeat synchronous arming + ready barrier
-long blocking model call > original lease still cannot be reclaimed
+namespace-sandbox         → success
+  restricted-process tests → 7 passed
+  bubblewrap contract       → hard assertions pass
+  unavailable namespace runtime cases → explicit skip with kernel-policy reason
+
+docker-container-sandbox → success
+  Docker security tests    → 8 passed
+  Ruff                     → All checks passed
 ```
 
-这里仍然刻意不把 `RestrictedSubprocessSandbox` 写成“安全运行任意恶意代码”。它尚未提供 mount/network namespace、seccomp、container/VM boundary。真正 OS/container sandbox 是下一层独立 capability。
+Docker job 还实际验证了：
+
+```text
+Coding Agent
+→ sandbox_exec
+→ Docker container
+→ model observes container command output
+```
+
+并保持：
+
+```text
+shell ∉ model-visible tools
+```
+
+当前 Docker tested boundary 使用 shared Linux kernel，因此仍然不能宣传成 VM-grade hostile-code containment。Bubblewrap backend 也仍保持 `partial`：GitHub-hosted runner 不允许完整 user/network namespace runtime，项目不会把“无法启动”当成“隔离成功”。
 
 ## 课程成熟度规则
 

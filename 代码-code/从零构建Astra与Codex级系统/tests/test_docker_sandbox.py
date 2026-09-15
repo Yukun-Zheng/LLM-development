@@ -61,8 +61,8 @@ def test_docker_command_fixes_security_sensitive_runtime_flags(tmp_path) -> None
     assert command[command.index("--pids-limit") + 1] == "32"
     mount = command[command.index("--mount") + 1]
     assert str(workspace.resolve()) in mount
-    assert "dst=/workspace" in mount
-    assert mount.endswith(",ro")
+    assert "target=/workspace" in mount
+    assert mount.endswith(",readonly")
     assert IMAGE in command
 
 

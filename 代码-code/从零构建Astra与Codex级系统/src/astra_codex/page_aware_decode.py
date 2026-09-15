@@ -14,13 +14,13 @@ class HeterogeneousPageAwareDecodeReference:
 
     Historical K/V is read directly from ``PhysicalKVTensorPool`` block ids; the
     path does not call ``pool.materialize`` before attention. Q/K/V projections
-    and FFNs run as a normal batch, while the reference attention reduction walks
-    each request's own block table.
+    and FFNs run as a normal batch, while reference attention walks each request's
+    own block table.
 
-    Before model math starts, the whole batch performs one physical-block
-    capacity preflight including COW demand. In this single-thread reference
-    executor that prevents ordinary OOM from producing a partially committed
-    batch. It is still not a distributed reservation/fencing protocol.
+    Before model math starts, the executor fences concrete physical block ids for
+    all COW/new-block demand. Those ids are removed from the same allocator's free
+    list until the batch either consumes or releases them. This closes the local
+    capacity TOCTOU gap; it is not a distributed reservation/fencing protocol.
     """
 
     def __init__(
@@ -155,51 +155,58 @@ class HeterogeneousPageAwareDecodeReference:
                 raise ValueError(f"request {request_id!r} would exceed max_seq_len")
             old_lengths.append(length)
 
-        # COW can require an extra block even when a partial tail has free slots.
-        # Check the sum for every request before any model or allocator mutation.
-        self.pool.require_batch_append_capacity(
-            {request_id: 1 for request_id in request_ids}
-        )
+        token_counts = {request_id: 1 for request_id in request_ids}
+        reservation = self.pool.reserve_batch_append(token_counts)
+        try:
+            x = self.model.embed_tokens(token_ids)
+            new_pairs: dict[str, list[KVPair]] = {
+                request_id: [] for request_id in request_ids
+            }
 
-        x = self.model.embed_tokens(token_ids)
-        new_pairs: dict[str, list[KVPair]] = {request_id: [] for request_id in request_ids}
+            for layer_index, block in enumerate(self.model.blocks):
+                normalized = block.attn_norm(x)
+                q_batch = self._reshape_q(block.attn.q_proj(normalized))
+                k_batch = self._reshape_kv(block.attn.k_proj(normalized))
+                v_batch = self._reshape_kv(block.attn.v_proj(normalized))
 
-        for layer_index, block in enumerate(self.model.blocks):
-            normalized = block.attn_norm(x)
-            q_batch = self._reshape_q(block.attn.q_proj(normalized))
-            k_batch = self._reshape_kv(block.attn.k_proj(normalized))
-            v_batch = self._reshape_kv(block.attn.v_proj(normalized))
+                attention_outputs: list[torch.Tensor] = []
+                for batch_index, (request_id, old_length) in enumerate(
+                    zip(request_ids, old_lengths, strict=True)
+                ):
+                    q = q_batch[batch_index : batch_index + 1]
+                    k = k_batch[batch_index : batch_index + 1]
+                    v = v_batch[batch_index : batch_index + 1]
+                    position = torch.tensor([old_length], device=x.device)
+                    q, k = block.attn.rope(q, k, position)
 
-            attention_outputs: list[torch.Tensor] = []
-            for batch_index, (request_id, old_length) in enumerate(
-                zip(request_ids, old_lengths, strict=True)
-            ):
-                q = q_batch[batch_index : batch_index + 1]
-                k = k_batch[batch_index : batch_index + 1]
-                v = v_batch[batch_index : batch_index + 1]
-                position = torch.tensor([old_length], device=x.device)
-                q, k = block.attn.rope(q, k, position)
+                    context = self._attend_one_request(
+                        layer_index=layer_index,
+                        request_id=request_id,
+                        q=q,
+                        k_new=k,
+                        v_new=v,
+                    )
+                    context = (
+                        context.transpose(1, 2)
+                        .contiguous()
+                        .view(1, 1, self.model.config.hidden_size)
+                    )
+                    attention_outputs.append(block.attn.o_proj(context))
+                    new_pairs[request_id].append((k, v))
 
-                context = self._attend_one_request(
-                    layer_index=layer_index,
-                    request_id=request_id,
-                    q=q,
-                    k_new=k,
-                    v_new=v,
-                )
-                context = (
-                    context.transpose(1, 2)
-                    .contiguous()
-                    .view(1, 1, self.model.config.hidden_size)
-                )
-                attention_outputs.append(block.attn.o_proj(context))
-                new_pairs[request_id].append((k, v))
+                x = x + torch.cat(attention_outputs, dim=0)
+                x = x + block.ffn(block.ffn_norm(x))
 
-            x = x + torch.cat(attention_outputs, dim=0)
-            x = x + block.ffn(block.ffn_norm(x))
-
-        logits = self.model.lm_head(self.model.final_norm(x))[:, -1, :]
-        self.pool.append_batch_delta(
-            {request_id: tuple(new_pairs[request_id]) for request_id in request_ids}
-        )
-        return logits
+            logits = self.model.lm_head(self.model.final_norm(x))[:, -1, :]
+            self.pool.append_batch_delta(
+                {
+                    request_id: tuple(new_pairs[request_id])
+                    for request_id in request_ids
+                },
+                reservation=reservation,
+            )
+            return logits
+        finally:
+            # Returns only unconsumed ids. Consumed ids are already attached to
+            # request block tables and therefore no longer part of reservation.
+            self.pool.release_batch_reservation(reservation)

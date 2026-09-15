@@ -9,6 +9,7 @@ from .context import ContextFragment, ContextStore, FragmentKind
 from .control_auth import (
     AuthenticationError,
     AuthorizationError,
+    BearerCredential,
     BearerTokenAuthorizer,
     Principal,
 )
@@ -90,6 +91,7 @@ __all__ = [
     "BackgroundLeaseHeartbeat",
     "BatchKind",
     "BatchedDecodeState",
+    "BearerCredential",
     "BearerTokenAuthorizer",
     "BenchmarkCase",
     "BenchmarkHarness",

@@ -7,6 +7,7 @@ from typing import Any
 from urllib.request import Request, urlopen
 
 from .app_server import AgentAppServer, AppTransport
+from .runtime import DurableAgentRuntime
 
 
 class LocalHTTPAppServer:
@@ -14,9 +15,13 @@ class LocalHTTPAppServer:
 
     The server binds to loopback by default and exposes one POST endpoint:
     ``/rpc``. Requests are deliberately serialized through ``HTTPServer`` so the
-    reference runtime does not pretend to provide production multi-request
-    concurrency. SQLite stores are opened for cross-thread use because the HTTP
-    server itself runs in a dedicated thread.
+    reference control plane does not pretend to provide production concurrency.
+
+    SQLite connections are thread-affine by default. Rather than disabling that
+    safety check globally, the HTTP server opens its *own* DurableAgentRuntime
+    handle inside the server thread, pointing at the same durable state files.
+    This mirrors a real external control-plane process more closely than sharing
+    Python connection objects across threads.
 
     There is intentionally no TLS, authentication, CORS policy or
     internet-facing hardening. Those must be added before any non-local use.
@@ -29,7 +34,9 @@ class LocalHTTPAppServer:
         host: str = "127.0.0.1",
         port: int = 0,
     ) -> None:
-        self.app_server = app_server
+        self.prototype = app_server
+        self._thread_app_server: AgentAppServer | None = None
+        self._ready = threading.Event()
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -39,6 +46,9 @@ class LocalHTTPAppServer:
                 if self.path != "/rpc":
                     self._write_json(404, {"error": "not found"})
                     return
+                if outer._thread_app_server is None:
+                    self._write_json(503, {"error": "app server not ready"})
+                    return
                 try:
                     length = int(self.headers.get("Content-Length", "0"))
                     if length <= 0:
@@ -47,7 +57,7 @@ class LocalHTTPAppServer:
                     payload = json.loads(raw.decode("utf-8"))
                     if not isinstance(payload, dict):
                         raise ValueError("JSON-RPC request must be an object")
-                    response = outer.app_server.handle(payload)
+                    response = outer._thread_app_server.handle(payload)
                     self._write_json(200, response)
                 except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
                     self._write_json(
@@ -86,22 +96,45 @@ class LocalHTTPAppServer:
         host, port = self.address
         return f"http://{host}:{port}/rpc"
 
+    def _serve(self) -> None:
+        prototype_runtime = self.prototype.runtime
+        registry = prototype_runtime.journaled_tools.registry
+        retryable = prototype_runtime.journaled_tools.retryable_in_doubt_tools
+        try:
+            with DurableAgentRuntime(
+                prototype_runtime.state_dir,
+                prototype_runtime.backend,
+                registry,
+                max_model_steps=prototype_runtime.max_model_steps,
+                retryable_in_doubt_tools=retryable,
+            ) as runtime_handle:
+                self._thread_app_server = AgentAppServer(runtime_handle)
+                self._ready.set()
+                self.server.serve_forever()
+        finally:
+            self._thread_app_server = None
+            self._ready.set()
+
     def start(self) -> None:
         if self.thread is not None and self.thread.is_alive():
             raise RuntimeError("HTTP App Server is already running")
+        self._ready.clear()
         self.thread = threading.Thread(
-            target=self.server.serve_forever,
+            target=self._serve,
             name="astra-codex-app-server",
             daemon=True,
         )
         self.thread.start()
+        if not self._ready.wait(timeout=5.0) or self._thread_app_server is None:
+            raise RuntimeError("HTTP App Server failed to initialize its runtime handle")
 
     def close(self) -> None:
-        self.server.shutdown()
-        self.server.server_close()
-        if self.thread is not None:
+        if self.thread is not None and self.thread.is_alive():
+            self.server.shutdown()
             self.thread.join(timeout=5.0)
-            self.thread = None
+        self.server.server_close()
+        self.thread = None
+        self._thread_app_server = None
 
     def __enter__(self) -> "LocalHTTPAppServer":
         self.start()

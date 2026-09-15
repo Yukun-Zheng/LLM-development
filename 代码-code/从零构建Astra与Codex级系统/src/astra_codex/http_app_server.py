@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 from urllib.request import Request, urlopen
 
@@ -13,7 +13,12 @@ class LocalHTTPAppServer:
     """Small stdlib HTTP transport for the educational App Server.
 
     The server binds to loopback by default and exposes one POST endpoint:
-    ``/rpc``. It intentionally has no TLS, authentication, CORS policy or
+    ``/rpc``. Requests are deliberately serialized through ``HTTPServer`` so the
+    reference runtime does not pretend to provide production multi-request
+    concurrency. SQLite stores are opened for cross-thread use because the HTTP
+    server itself runs in a dedicated thread.
+
+    There is intentionally no TLS, authentication, CORS policy or
     internet-facing hardening. Those must be added before any non-local use.
     """
 
@@ -68,7 +73,7 @@ class LocalHTTPAppServer:
             def log_message(self, format: str, *args: object) -> None:
                 del format, args
 
-        self.server = ThreadingHTTPServer((host, port), Handler)
+        self.server = HTTPServer((host, port), Handler)
         self.thread: threading.Thread | None = None
 
     @property

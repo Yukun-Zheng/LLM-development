@@ -48,7 +48,7 @@ from .prefix_cache import (
 from .repository_eval import RepositoryEvalRecord, RepositoryFixture, RepositoryFixtureHarness, RepositoryGrade
 from .rlvr import GroupRelativeResult, grpo_style_objective, group_relative_advantages
 from .runtime import DurableAgentRuntime, RuntimeExecutionRecord
-from .runtime_control import ControlledBackend, LeaseHeartbeat
+from .runtime_control import BackgroundLeaseHeartbeat, ControlledBackend, LeaseHeartbeat
 from .runtime_queue import DurableWorkQueue, WorkItem, WorkStatus
 from .sampling import SamplingConfig
 from .scheduler import (
@@ -86,6 +86,7 @@ __all__ = [
     "ArtifactStore",
     "AuthenticationError",
     "AuthorizationError",
+    "BackgroundLeaseHeartbeat",
     "BatchKind",
     "BatchedDecodeState",
     "BearerTokenAuthorizer",

@@ -9,6 +9,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from .instructions import ResolvedInstructions
+
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -40,6 +42,11 @@ class ContextStore:
     Raw observations are never overwritten by compaction. A summary is a new
     fragment that points back to its parent fragments, so any model-visible
     context item can be traced to its source material.
+
+    Project instructions can also be recorded as typed ``INSTRUCTION`` fragments
+    before they are inserted into a model prompt. That makes prompt construction
+    auditable: a later rollout can recover the exact file, scope directory and
+    truncation state that produced each instruction segment.
     """
 
     def __init__(self, path: str | Path) -> None:
@@ -103,6 +110,36 @@ class ContextStore:
         )
         self.connection.commit()
         return fragment_id
+
+    def add_resolved_instructions(
+        self,
+        resolved: ResolvedInstructions,
+        *,
+        source: str = "project_instructions",
+    ) -> tuple[str, ...]:
+        """Persist every model-visible project instruction with provenance."""
+
+        fragment_ids: list[str] = []
+        for order, instruction in enumerate(resolved.sources):
+            fragment_ids.append(
+                self.add(
+                    FragmentKind.INSTRUCTION,
+                    instruction.contents,
+                    source=source,
+                    metadata={
+                        "order": order,
+                        "source_path": str(instruction.source_path),
+                        "scope_directory": str(instruction.scope_directory),
+                        "candidate_name": instruction.candidate_name,
+                        "truncated": instruction.truncated,
+                        "bytes_loaded": instruction.bytes_loaded,
+                        "project_root": str(resolved.project_root),
+                        "cwd": str(resolved.cwd),
+                        "max_bytes": resolved.max_bytes,
+                    },
+                )
+            )
+        return tuple(fragment_ids)
 
     def get(self, fragment_id: str) -> ContextFragment:
         row = self.connection.execute(

@@ -9,7 +9,7 @@ from .artifacts import ArtifactStore
 from .codex_harness import CodexHarness, CodexTurnResult, HarnessEvent
 from .durable import DurableThreadStore, TERMINAL_THREAD_STATUSES, ThreadStatus
 from .event_stream import DurableEventStream
-from .runtime_control import ControlledBackend, LeaseHeartbeat
+from .runtime_control import BackgroundLeaseHeartbeat, ControlledBackend, LeaseHeartbeat
 from .runtime_queue import DurableWorkQueue, WorkItem, WorkStatus
 from .steering import DurableSteeringQueue
 from .tool_journal import (
@@ -43,9 +43,11 @@ class DurableAgentRuntime:
     the source of truth for reconstructing thread state; ``DurableEventStream``
     is a replayable integration surface for UIs, IDEs and remote clients.
 
-    Before every model sampling step, ``ControlledBackend`` renews the worker
-    lease and injects steering messages that arrived while the turn was running.
-    Harness events are published to the event stream as they happen.
+    A foreground heartbeat is emitted at model sampling boundaries. For normal
+    real-time execution (``now is None``), a separate background heartbeat also
+    keeps the work lease alive while one model or tool call blocks longer than a
+    sampling interval. Synthetic-clock tests intentionally skip the background
+    thread so time remains deterministic.
 
     Completed tool calls are keyed by the stable work-item id and call index. If
     a worker disappears and the lease is later reclaimed, completed calls can be
@@ -268,12 +270,7 @@ class DurableAgentRuntime:
         now: float | None = None,
         allowed_thread_ids: set[str] | None = None,
     ) -> RuntimeExecutionRecord | None:
-        """Run one eligible turn, optionally fenced to an allowed thread set.
-
-        The authorization filter is passed directly to the durable queue claim,
-        so an out-of-scope work item is never leased to this worker in the first
-        place. This is stronger than claiming globally and rejecting afterward.
-        """
+        """Run one eligible turn, optionally fenced to an allowed thread set."""
 
         item = self.work_queue.claim(
             worker_id,
@@ -430,9 +427,44 @@ class DurableAgentRuntime:
             event_sink=publish_harness_event,
             max_model_steps=self.max_model_steps,
         )
+        background = (
+            BackgroundLeaseHeartbeat(
+                str(self.work_queue.path),
+                item.item_id,
+                worker_id,
+                lease_seconds=lease_seconds,
+            )
+            if now is None
+            else None
+        )
 
         try:
-            result: CodexTurnResult = harness.run_turn(content)
+            if background is not None:
+                background.start()
+            try:
+                result: CodexTurnResult = harness.run_turn(content)
+            finally:
+                if background is not None:
+                    background.close()
+
+            if background is not None:
+                self._emit(
+                    "work.background_heartbeat_summary",
+                    {
+                        "workItemId": item.item_id,
+                        "renewals": background.renewals,
+                        "error": None
+                        if background.last_error is None
+                        else f"{type(background.last_error).__name__}: {background.last_error}",
+                    },
+                    thread_id=item.thread_id,
+                    turn_id=turn_id,
+                )
+                if background.last_error is not None:
+                    raise RuntimeError(
+                        f"background lease heartbeat failed: {background.last_error}"
+                    )
+
             self.thread_store.checkpoint(
                 item.thread_id,
                 {
@@ -493,6 +525,8 @@ class DurableAgentRuntime:
                 model_steps=result.model_steps,
             )
         except Exception as exc:
+            if background is not None:
+                background.close()
             self.work_queue.fail(
                 item.item_id,
                 worker_id,

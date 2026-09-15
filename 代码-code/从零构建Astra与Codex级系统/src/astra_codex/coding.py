@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .agent import Agent, ModelBackend
+from .context import ContextStore
 from .editing import ExactEditTool
 from .instructions import ProjectInstructionResolver
 from .repo_map import RepoMapTool
@@ -29,15 +30,17 @@ def build_coding_agent(
     working_directory: str | Path | None = None,
     instruction_max_bytes: int = 32_768,
     fallback_instruction_filenames: Iterable[str] = (),
+    context_store: ContextStore | None = None,
     max_steps: int = 40,
 ) -> Agent:
     """Construct a transparent repository coding loop with scoped instructions.
 
     ``AGENTS.md`` project instructions are resolved from the nearest marked
     project root to ``working_directory`` using ``ProjectInstructionResolver``.
-    The exact same resolved text is inserted into the system prompt, while the
-    resolver itself exposes source path/scope/truncation provenance for callers
-    that need to audit why a model received an instruction.
+    The exact same resolved text is inserted into the system prompt. If
+    ``context_store`` is supplied, every model-visible instruction is also
+    persisted as a typed ``INSTRUCTION`` fragment carrying source/scope/
+    truncation provenance.
 
     Current primitives:
     - repo_map: cheap structural orientation;
@@ -63,6 +66,9 @@ def build_coding_agent(
         max_bytes=instruction_max_bytes,
     )
     resolved = resolver.resolve(cwd)
+    if context_store is not None:
+        context_store.add_resolved_instructions(resolved)
+
     system_prompt = CODING_SYSTEM_PROMPT
     if resolved.sources:
         system_prompt += (

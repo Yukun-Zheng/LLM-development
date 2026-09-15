@@ -6,6 +6,12 @@ from .batch_executor import BatchedDecodeState, HomogeneousBatchExecutor
 from .benchmark import BenchmarkCase, BenchmarkHarness, BenchmarkRecord, ExactAnswerGrader, Grade
 from .config import ModelConfig
 from .context import ContextFragment, ContextStore, FragmentKind
+from .control_auth import (
+    AuthenticationError,
+    AuthorizationError,
+    BearerTokenAuthorizer,
+    Principal,
+)
 from .durable import DurableThreadStore, ThreadProjection, ThreadStatus
 from .engine import GenerationEngine
 from .evaluation import AggregateMetrics, TrajectoryMetrics, aggregate_metrics, summarize_codex_turn
@@ -73,8 +79,11 @@ __all__ = [
     "AppServerError",
     "ArtifactRecord",
     "ArtifactStore",
+    "AuthenticationError",
+    "AuthorizationError",
     "BatchKind",
     "BatchedDecodeState",
+    "BearerTokenAuthorizer",
     "BenchmarkCase",
     "BenchmarkHarness",
     "BenchmarkRecord",
@@ -117,6 +126,7 @@ __all__ = [
     "PrefixCacheEntry",
     "PrefixCacheStats",
     "PrefixPrefillResult",
+    "Principal",
     "ReferencePagedGenerationEngine",
     "ReferencePagedKVCache",
     "ReferencePrefixCacheEngine",

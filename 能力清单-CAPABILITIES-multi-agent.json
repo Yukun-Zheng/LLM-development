@@ -75,11 +75,41 @@
         "Fast CPU Capstone CI run 214: 163 passed, 14 skipped; a threading.Barrier test requires two worker callbacks to overlap in wall-clock time, per-agent peak concurrency is constrained to one, worker exceptions isolate the failed agent while surviving workers continue, and wrong task identity is converted to an explicit failed result."
       ],
       "next": [
-        "worker-specific Git worktrees",
-        "patch artifacts and independent reviewer",
-        "merge/conflict coordinator",
-        "1/2/4/8-agent controlled success/cost/wall-time benchmark",
-        "process/remote-worker execution"
+        "process/remote-worker execution",
+        "fair queueing / priorities",
+        "1/2/4/8-agent controlled success/cost/wall-time benchmark"
+      ]
+    },
+    {
+      "id": "multi_agent.worktree_coding_team",
+      "track": "multi_agent",
+      "title": "Worktree-isolated Candidate Patches / Verifier / Reviewer / Merge",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "智能体-agent/05-编程智能体-coding-agents.md",
+        "智能体-agent/06-多智能体与协调-multi-agent.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/22-并行Worktree候选Reviewer与Merge-coding-team.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/coding_team.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/worktree.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/artifacts.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/verification.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_coding_team.py"
+      ],
+      "evidence": [
+        "Fast CPU Capstone CI run 219: 165 passed, 14 skipped, 1 warning in 8.96s; Ruff correctness lint passed. Tests create real Git worktrees from one base commit, produce good/bad candidate patches, require independent verifier PASS for reviewer eligibility, apply the selected patch with git apply --check, rerun post-merge verification, and reverse the patch when the stricter merge verifier fails."
+      ],
+      "next": [
+        "write reviewer/merge decisions into Rollout Trace provenance",
+        "multi-patch dependency/conflict graph",
+        "LLM reviewer with independent hidden tests",
+        "tree-sitter / LSP semantic patch analysis",
+        "SWE-bench task adapter",
+        "controlled 1/2/4/8-agent coding benchmark"
       ]
     }
   ]

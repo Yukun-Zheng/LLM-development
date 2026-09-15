@@ -92,7 +92,7 @@ lease_until = t_expire
 若：
 
 $$
-t > t_{expire},
+t \gt  t_{expire},
 $$
 
 其他 worker 才可以 reclaim。
@@ -246,7 +246,7 @@ assistant: "done"
 `ArtifactStore` 采用 content-addressed snapshot：
 
 $$
-h=\operatorname{SHA256}(bytes).
+h=\mathrm{SHA256}(bytes).
 $$
 
 对象路径由 hash 决定，相同字节可以共享底层 object，但每次产物仍有独立 `artifact_id` 与 metadata。

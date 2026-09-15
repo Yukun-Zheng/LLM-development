@@ -20,6 +20,7 @@
 | 11 | 控制面认证与授权 | `control_auth.py`, `app_server.py`, `runtime_queue.py` | bearer identity / method scope / thread scope / queue-level claim fencing |
 | 12 | AGENTS.md 作用域与来源 | `instructions.py`, `coding.py`, `context.py` | hierarchy / override / budget / sibling negative control / provenance |
 | 13 | SSE 实时事件推送与断线重连 | `sse_events.py`, `event_stream.py`, `control_auth.py` | cursor catch-up / Last-Event-ID / live delivery / auth-scoped stream |
+| 14 | 受限进程沙箱与真实隔离边界 | `sandbox.py`, `coding.py` | argv-only / executable+env guard / timeout+rlimit / Linux no_new_privs / negative controls |
 
 对应文件：
 
@@ -38,18 +39,34 @@
 11-控制面认证与授权-control-plane-auth.md
 12-AGENTS作用域与指令来源-agents-md-provenance.md
 13-SSE实时事件推送与断线重连-sse-reconnect.md
+14-受限进程沙箱与真实隔离边界-process-sandbox.md
 ```
 
 ## 当前硬证据
 
-截至 SSE 第一版进入全量回归的 Fast CPU CI run 138：
+截至受限进程沙箱与 heartbeat startup-race 修复进入全量回归的 Fast CPU CI run 152：
 
 ```text
-108 passed, 1 warning in 8.59s
+119 passed, 1 warning in 8.48s
 Ruff correctness lint: All checks passed
 ```
 
-这意味着 Lesson 13 不只是协议说明：cursor replay、`Last-Event-ID`、thread/topic filter、连接后新事件实时到达、401/403 认证授权边界都已经进入自动测试。
+这一轮除了保持 SSE、Auth、AGENTS provenance、durable runtime 等既有回归，还新增或强化了：
+
+```text
+restricted argv-only process execution
+executable allowlist
+workspace cwd escape rejection
+parent secret not inherited by child
+wall-time timeout + process-group termination
+Linux NoNewPrivs = 1 observation
+SandboxExecTool metadata
+Coding Agent shell → sandbox_exec opt-in replacement
+background heartbeat synchronous arming + ready barrier
+long blocking model call > original lease still cannot be reclaimed
+```
+
+这里仍然刻意不把 `RestrictedSubprocessSandbox` 写成“安全运行任意恶意代码”。它尚未提供 mount/network namespace、seccomp、container/VM boundary。真正 OS/container sandbox 是下一层独立 capability。
 
 ## 课程成熟度规则
 

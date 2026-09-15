@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from astra_codex.agent import Message
 from astra_codex.coding import build_coding_agent
+from astra_codex.context import ContextStore, FragmentKind
 from astra_codex.instructions import ProjectInstructionResolver
 from astra_codex.structured import ToolSpec
 
@@ -145,3 +146,40 @@ def test_coding_agent_injects_only_in_scope_project_instructions(tmp_path) -> No
     assert "ROOT-INSTRUCTION" in system_message.content
     assert "API-INSTRUCTION" in system_message.content
     assert "WEB-MUST-NOT-APPEAR" not in system_message.content
+
+
+def test_coding_agent_can_persist_exact_instruction_provenance(tmp_path) -> None:
+    root = tmp_path / "repo"
+    cwd = root / "service"
+    cwd.mkdir(parents=True)
+    (root / ".git").mkdir()
+    (root / "AGENTS.md").write_text("ROOT-RULE", encoding="utf-8")
+    (cwd / "AGENTS.override.md").write_text("LOCAL-OVERRIDE", encoding="utf-8")
+
+    backend = RecordingBackend("done")
+    with ContextStore(tmp_path / "context.sqlite") as context_store:
+        agent = build_coding_agent(
+            backend,
+            root,
+            working_directory=cwd,
+            context_store=context_store,
+        )
+        agent.run("inspect")
+
+        fragments = context_store.select_for_context(
+            max_chars=10_000,
+            kinds={FragmentKind.INSTRUCTION},
+        )
+        assert [fragment.content for fragment in fragments] == [
+            "ROOT-RULE",
+            "LOCAL-OVERRIDE",
+        ]
+        assert fragments[0].metadata["source_path"] == str(root / "AGENTS.md")
+        assert fragments[0].metadata["scope_directory"] == str(root)
+        assert fragments[1].metadata["candidate_name"] == "AGENTS.override.md"
+        assert fragments[1].metadata["cwd"] == str(cwd)
+        assert fragments[1].metadata["truncated"] is False
+
+    system_message = backend.calls[0][0]
+    assert "ROOT-RULE" in system_message.content
+    assert "LOCAL-OVERRIDE" in system_message.content

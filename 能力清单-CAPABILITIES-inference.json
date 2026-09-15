@@ -20,13 +20,12 @@
       ],
       "evidence": [
         "Fast CPU Capstone run 172 completed successfully: 126 passed, 14 skipped, 1 warning; Ruff passed",
-        "Seven allocator tests cover finite free-list allocation, fragmentation metrics, exact prefix block sharing/refcounts, partial-prefix private tails, copy-on-write for shared partial final blocks, truncate/release semantics and append-atomic OOM behavior"
+        "Allocator tests cover finite free-list allocation, fragmentation metrics, exact prefix block sharing/refcounts, partial-prefix private tails, copy-on-write for shared partial final blocks, truncate/release semantics and append-atomic OOM behavior"
       ],
       "next": [
-        "attach block ids to real per-layer K/V tensor slabs",
-        "page-aware attention gather/kernel",
+        "page-aware attention kernel",
         "scheduler integration and request preemption",
-        "block-hash/radix prefix index",
+        "block-hash/radix production index",
         "eviction and swap policy",
         "heterogeneous continuous batching"
       ]
@@ -35,20 +34,56 @@
       "id": "inference.physical_kv_tensor_pool",
       "track": "inference",
       "title": "Physical K/V Tensor Slab Pool Bound to Block Tables",
-      "status": "planned",
-      "maturity": "L1",
+      "status": "validated",
+      "maturity": "L2",
       "theory": [
         "教材-book/10-推理服务系统-inference-systems.md",
         "代码-code/从零构建Astra与Codex级系统/教程-lessons/16-物理KV块分配器与前缀共享-kv-block-allocator.md"
       ],
-      "code": [],
-      "tests": [],
-      "evidence": [],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/kv_tensor_pool.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_kv_tensor_pool.py"
+      ],
+      "evidence": [
+        "Fast CPU Capstone run 176 completed successfully: 131 passed, 14 skipped, 1 warning; Ruff passed",
+        "Physical tensor slabs are indexed as [layer, block, H_kv, block_size, D], preserve shared-prefix COW semantics, zero released private blocks, and match full-recomputation decode logits in the tested tiny Transformer path"
+      ],
       "next": [
-        "allocate [layer, block, H_kv, block_size, D] slabs",
-        "write token deltas directly into physical blocks",
-        "materialize reference contiguous history for numerical parity",
-        "remove materialization with page-aware attention backend"
+        "page-aware attention gather/kernel without contiguous materialization",
+        "GPU slab benchmark",
+        "prefix-index integration",
+        "scheduler-owned allocation lifecycle"
+      ]
+    },
+    {
+      "id": "inference.physical_prefix_cache",
+      "track": "inference",
+      "title": "Physical Prefix Cache / Longest-prefix Compute and Block Reuse",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": [
+        "教材-book/10-推理服务系统-inference-systems.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/17-物理前缀缓存与计算复用-physical-prefix-cache.md"
+      ],
+      "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/physical_prefix_cache.py",
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/kv_tensor_pool.py"
+      ],
+      "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_physical_prefix_cache.py"
+      ],
+      "evidence": [
+        "Fast CPU Capstone run 179 completed successfully: 136 passed, 14 skipped, 1 warning; Ruff passed",
+        "Exact prompt hits reuse logits with zero additional model forward; partial longest-prefix reuse computes only the unmatched suffix and matches full forward logits; full blocks share physical ids while partial tails are private; decode after shared partial tail triggers COW without mutating the source; releasing the source preserves the child cache"
+      ],
+      "next": [
+        "replace token trie with block-hash/radix index",
+        "eviction and cache admission policy",
+        "scheduler integration",
+        "cross-request prefix-cache hit-rate benchmark",
+        "distributed prefix cache"
       ]
     },
     {

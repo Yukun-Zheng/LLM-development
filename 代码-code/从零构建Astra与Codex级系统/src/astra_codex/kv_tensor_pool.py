@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import torch
 
-from .kv_block_allocator import KVBlockAllocator
+from .kv_block_allocator import KVBlockAllocator, KVBlockReservation
 
 KVPair = tuple[torch.Tensor, torch.Tensor]
 
@@ -12,6 +12,7 @@ KVPair = tuple[torch.Tensor, torch.Tensor]
 @dataclass(frozen=True, slots=True)
 class TensorPoolStats:
     allocated_blocks: int
+    reserved_blocks: int
     free_blocks: int
     logical_tokens: int
     physical_token_slots_used: int
@@ -28,9 +29,8 @@ class PhysicalKVTensorPool:
     for keys and values independently.
 
     The pool uses ``KVBlockAllocator`` for request ownership/refcounts/COW and
-    performs the corresponding tensor copies/writes. The educational model still
-    consumes contiguous ``past_key_values`` in older reference paths, while the
-    newer page-aware decoder reads these slabs directly by block id.
+    performs the corresponding tensor copies/writes. The newer page-aware decode
+    path reads these slabs directly by physical block id.
     """
 
     def __init__(
@@ -105,25 +105,22 @@ class PhysicalKVTensorPool:
             raise ValueError("delta sequence length must be positive")
         return length
 
-    def require_batch_append_capacity(self, token_counts: dict[str, int]) -> int:
-        """Preflight COW/new-block demand for a single-thread reference batch.
-
-        No allocator state is mutated. If the summed demand cannot fit, the
-        method raises before any request is appended. This gives OOM-atomic
-        *preflight* semantics to the current synchronous executor.
-
-        It is deliberately not called a distributed reservation: no block ids
-        are removed from the free list and another concurrent allocator user
-        could invalidate the check. A future scheduler-owned reservation token
-        must solve that stronger problem.
-        """
-
+    def _batch_required_blocks(self, token_counts: dict[str, int]) -> int:
         required = 0
         for request_id, token_count in token_counts.items():
             if token_count < 0:
                 raise ValueError("token_count cannot be negative")
             table = self.allocator._table(request_id)
+            # This is deliberately conservative for a rare case where every
+            # owner of the same shared partial block appears in one batch: the
+            # final owner could keep the original block after siblings COW.
             required += self.allocator._required_blocks_for_append(table, token_count)
+        return required
+
+    def require_batch_append_capacity(self, token_counts: dict[str, int]) -> int:
+        """Mutation-free conservative preflight for COW/new-block demand."""
+
+        required = self._batch_required_blocks(token_counts)
         free = self.allocator.metrics().free_blocks
         if required > free:
             raise MemoryError(
@@ -131,6 +128,23 @@ class PhysicalKVTensorPool:
                 f"batch needs {required} free blocks, only {free} available"
             )
         return required
+
+    def reserve_batch_append(
+        self,
+        token_counts: dict[str, int],
+    ) -> KVBlockReservation:
+        """Fence concrete block ids for the forthcoming synchronous batch.
+
+        The ids are physically removed from the allocator free list. This closes
+        the time-of-check/time-of-use gap against other allocations through the
+        same allocator object. It is not a cross-process/distributed reservation.
+        """
+
+        required = self.require_batch_append_capacity(token_counts)
+        return self.allocator.reserve_blocks(required)
+
+    def release_batch_reservation(self, reservation: KVBlockReservation) -> None:
+        self.allocator.release_reservation(reservation)
 
     def _copy_cow_if_needed(
         self,
@@ -151,11 +165,21 @@ class PhysicalKVTensorPool:
             self.values[:, old_last.block_id, :, :tokens, :]
         )
 
-    def append_delta(self, request_id: str, delta: tuple[KVPair, ...]) -> None:
+    def append_delta(
+        self,
+        request_id: str,
+        delta: tuple[KVPair, ...],
+        *,
+        reservation: KVBlockReservation | None = None,
+    ) -> None:
         token_count = self._validate_delta(delta)
         before = self.allocator.block_table(request_id)
         old_length = self.allocator.requests[request_id].sequence_length
-        self.allocator.append_tokens(request_id, token_count)
+        self.allocator.append_tokens(
+            request_id,
+            token_count,
+            reservation=reservation,
+        )
         after = self.allocator.block_table(request_id)
         self._copy_cow_if_needed(before, after)
 
@@ -175,17 +199,49 @@ class PhysicalKVTensorPool:
     def append_batch_delta(
         self,
         deltas: dict[str, tuple[KVPair, ...]],
+        *,
+        reservation: KVBlockReservation | None = None,
     ) -> None:
-        """Validate and OOM-preflight a batch before the first append mutates it."""
+        """Validate all deltas and commit them through one fenced reservation.
+
+        If no reservation is supplied, this method creates and releases one
+        around the append phase. ``HeterogeneousPageAwareDecodeReference`` creates
+        its reservation *before* model math so capacity stays fenced throughout
+        execution.
+
+        The reservation prevents ordinary capacity races/OOM partial commits in
+        this synchronous allocator. Arbitrary exceptions during tensor writes are
+        not yet backed by a full metadata/tensor rollback journal.
+        """
 
         lengths: dict[str, int] = {}
         for request_id, delta in deltas.items():
             if request_id not in self.allocator.requests:
                 raise KeyError(f"unknown request: {request_id}")
             lengths[request_id] = self._validate_delta(delta)
-        self.require_batch_append_capacity(lengths)
-        for request_id, delta in deltas.items():
-            self.append_delta(request_id, delta)
+
+        owned = reservation is None
+        if reservation is None:
+            reservation = self.reserve_batch_append(lengths)
+        else:
+            required = self._batch_required_blocks(lengths)
+            remaining = self.allocator.reservation_remaining(reservation)
+            if required > remaining:
+                raise MemoryError(
+                    "KV block reservation is too small for batch append: "
+                    f"batch needs {required}, reservation has {remaining}"
+                )
+
+        try:
+            for request_id, delta in deltas.items():
+                self.append_delta(
+                    request_id,
+                    delta,
+                    reservation=reservation,
+                )
+        finally:
+            if owned:
+                self.release_batch_reservation(reservation)
 
     def ingest_present(
         self,
@@ -314,6 +370,7 @@ class PhysicalKVTensorPool:
         )
         return TensorPoolStats(
             allocated_blocks=allocator.allocated_blocks,
+            reserved_blocks=allocator.reserved_blocks,
             free_blocks=allocator.free_blocks,
             logical_tokens=allocator.logical_tokens,
             physical_token_slots_used=allocator.physical_token_slots_used,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the machine-readable Theory ↔ Code ↔ Test ↔ Evidence manifest."""
+"""Validate machine-readable Theory ↔ Code ↔ Test ↔ Evidence manifests."""
 
 from __future__ import annotations
 
@@ -8,7 +8,8 @@ from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = ROOT / "能力清单-CAPABILITIES.json"
+BASE_MANIFEST = ROOT / "能力清单-CAPABILITIES.json"
+OVERLAY_GLOB = "能力清单-CAPABILITIES-*.json"
 
 REQUIRED_FIELDS = {
     "id",
@@ -30,33 +31,57 @@ def _paths(value: object, field: str, capability_id: str) -> list[str]:
     return value
 
 
+def _load_manifests() -> tuple[dict[str, object], list[tuple[Path, dict[str, object]]]]:
+    base = json.loads(BASE_MANIFEST.read_text(encoding="utf-8"))
+    overlays: list[tuple[Path, dict[str, object]]] = []
+    for path in sorted(ROOT.glob(OVERLAY_GLOB)):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        extends = data.get("extends")
+        if extends not in {None, BASE_MANIFEST.name}:
+            raise ValueError(f"{path.name}: unsupported extends target {extends!r}")
+        overlays.append((path, data))
+    return base, overlays
+
+
 def main() -> int:
-    data = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    data, overlays = _load_manifests()
     statuses = set(data["status_values"])
     maturities = set(data["maturity_values"])
     tracks = set(data["tracks"])
-    capabilities = data["capabilities"]
 
-    if not isinstance(capabilities, list):
-        raise ValueError("capabilities must be a list")
+    sources: list[tuple[str, object]] = [
+        (BASE_MANIFEST.name, data.get("capabilities")),
+        *[(path.name, overlay.get("capabilities")) for path, overlay in overlays],
+    ]
 
-    seen: set[str] = set()
+    capabilities: list[tuple[str, object]] = []
     errors: list[str] = []
+    for source_name, entries in sources:
+        if not isinstance(entries, list):
+            errors.append(f"{source_name}: capabilities must be a list")
+            continue
+        capabilities.extend((source_name, item) for item in entries)
+
+    seen: dict[str, str] = {}
     status_counts: Counter[str] = Counter()
     track_counts: Counter[str] = Counter()
 
-    for item in capabilities:
+    for source_name, item in capabilities:
         if not isinstance(item, dict):
-            errors.append("capability entry is not an object")
+            errors.append(f"{source_name}: capability entry is not an object")
             continue
         capability_id = str(item.get("id", "<missing-id>"))
         missing = REQUIRED_FIELDS - item.keys()
         if missing:
-            errors.append(f"{capability_id}: missing fields {sorted(missing)}")
+            errors.append(
+                f"{source_name}:{capability_id}: missing fields {sorted(missing)}"
+            )
             continue
         if capability_id in seen:
-            errors.append(f"{capability_id}: duplicate id")
-        seen.add(capability_id)
+            errors.append(
+                f"{capability_id}: duplicate id in {seen[capability_id]} and {source_name}"
+            )
+        seen[capability_id] = source_name
 
         status = item["status"]
         maturity = item["maturity"]
@@ -79,7 +104,9 @@ def main() -> int:
         for field, paths in (("theory", theory), ("code", code), ("tests", tests)):
             for relative in paths:
                 if not (ROOT / relative).exists():
-                    errors.append(f"{capability_id}: {field} path does not exist: {relative}")
+                    errors.append(
+                        f"{capability_id}: {field} path does not exist: {relative}"
+                    )
 
         if status in {"implemented", "validated"} and not code:
             errors.append(f"{capability_id}: {status} capability must reference code")
@@ -89,6 +116,10 @@ def main() -> int:
             errors.append(f"{capability_id}: validated capability must contain evidence")
 
     print("# Capability manifest audit")
+    print()
+    print("Manifest files:")
+    for source_name, _ in sources:
+        print(f"- {source_name}")
     print()
     print(f"Capabilities: {len(capabilities)}")
     print("Status counts:", dict(sorted(status_counts.items())))
@@ -101,7 +132,7 @@ def main() -> int:
             print(f"- {error}")
         return 1
 
-    print("Capability manifest: PASS")
+    print("Capability manifests: PASS")
     return 0
 
 

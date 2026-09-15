@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from .control_auth import (
+    AuthenticationError,
+    AuthorizationError,
+    BearerTokenAuthorizer,
+)
 from .durable import ThreadProjection
 from .event_stream import RuntimeEvent
 from .runtime import DurableAgentRuntime, RuntimeExecutionRecord
@@ -82,26 +87,51 @@ def _runtime_event_payload(event: RuntimeEvent) -> dict[str, Any]:
 
 
 class AgentAppServer:
-    """Minimal JSON-RPC control plane over ``DurableAgentRuntime``.
+    """JSON-RPC control plane over ``DurableAgentRuntime``.
 
-    This layer keeps UI/IDE concerns outside the agent kernel. It now exposes a
-    durable cursor-based event feed through ``event/poll``. Polling is useful for
-    deterministic reconnect/replay and is intentionally implemented before a
-    websocket/SSE push transport.
+    The App Server can run unauthenticated for in-process teaching tests, or be
+    given ``BearerTokenAuthorizer``. When authorization is enabled, every
+    request is authenticated before dispatch and checked against explicit method
+    and thread scopes.
 
-    Current boundary: no authentication, authorization, multi-tenant ACLs or
-    network transport in this module. Those are separate control-plane layers.
+    The current event feed is durable cursor polling. Network transport, TLS and
+    push subscriptions are separate layers; enabling bearer auth does not make a
+    plaintext network channel safe for internet exposure.
     """
 
-    def __init__(self, runtime: DurableAgentRuntime) -> None:
+    def __init__(
+        self,
+        runtime: DurableAgentRuntime,
+        *,
+        authorizer: BearerTokenAuthorizer | None = None,
+    ) -> None:
         self.runtime = runtime
+        self.authorizer = authorizer
 
-    def handle(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def handle(
+        self,
+        payload: dict[str, Any],
+        *,
+        bearer_token: str | None = None,
+    ) -> dict[str, Any]:
         request_id = payload.get("id") if isinstance(payload, dict) else None
         try:
             request = self._parse(payload)
+            if self.authorizer is not None:
+                principal = self.authorizer.authenticate(bearer_token)
+                self.authorizer.authorize(principal, request.method, request.params)
             result = self._dispatch(request.method, request.params)
             return AppResponse(request.request_id, result=result).to_dict()
+        except AuthenticationError as exc:
+            return AppResponse(
+                request_id,
+                error={"code": -32001, "message": f"Unauthenticated: {exc}"},
+            ).to_dict()
+        except AuthorizationError as exc:
+            return AppResponse(
+                request_id,
+                error={"code": -32003, "message": f"Forbidden: {exc}"},
+            ).to_dict()
         except AppServerError as exc:
             error: dict[str, Any] = {"code": exc.code, "message": exc.message}
             if exc.data is not None:
@@ -150,7 +180,7 @@ class AgentAppServer:
     def _dispatch(self, method: str, params: dict[str, Any]) -> Any:
         if method == "server/discover":
             return {
-                "serverInfo": {"name": "astra-codex-app-server", "version": "0.2.0"},
+                "serverInfo": {"name": "astra-codex-app-server", "version": "0.3.0"},
                 "methods": [
                     "thread/create",
                     "thread/get",
@@ -168,6 +198,10 @@ class AgentAppServer:
                     "mode": "cursor-poll",
                     "cursor": "eventId",
                     "replayable": True,
+                },
+                "authentication": {
+                    "required": self.authorizer is not None,
+                    "scheme": "bearer" if self.authorizer is not None else None,
                 },
             }
 
@@ -210,7 +244,7 @@ class AgentAppServer:
             if not isinstance(reason, str):
                 raise AppServerError(-32602, "reason must be a string")
             self.runtime.thread_store.pause(thread_id, reason)
-            self.runtime._emit(  # control-plane mirror of authoritative thread event
+            self.runtime._emit(
                 "thread.paused", {"reason": reason}, thread_id=thread_id
             )
             return _projection_payload(self.runtime.thread_store.project(thread_id))
@@ -311,11 +345,17 @@ class AgentAppServer:
 
 
 class InProcessAppTransport:
-    def __init__(self, server: AgentAppServer) -> None:
+    def __init__(
+        self,
+        server: AgentAppServer,
+        *,
+        bearer_token: str | None = None,
+    ) -> None:
         self.server = server
+        self.bearer_token = bearer_token
 
     def request(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return self.server.handle(payload)
+        return self.server.handle(payload, bearer_token=self.bearer_token)
 
 
 class AgentAppClient:

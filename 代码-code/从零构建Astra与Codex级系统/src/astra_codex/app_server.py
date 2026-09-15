@@ -180,7 +180,7 @@ class AgentAppServer:
     def _dispatch(self, method: str, params: dict[str, Any]) -> Any:
         if method == "server/discover":
             return {
-                "serverInfo": {"name": "astra-codex-app-server", "version": "0.3.0"},
+                "serverInfo": {"name": "astra-codex-app-server", "version": "0.4.0"},
                 "methods": [
                     "thread/create",
                     "thread/get",
@@ -202,6 +202,10 @@ class AgentAppServer:
                 "authentication": {
                     "required": self.authorizer is not None,
                     "scheme": "bearer" if self.authorizer is not None else None,
+                },
+                "workerClaim": {
+                    "optionalThreadFilter": True,
+                    "enforcedInQueueSelection": True,
                 },
             }
 
@@ -291,8 +295,16 @@ class AgentAppServer:
             lease_seconds = params.get("leaseSeconds", 300.0)
             if not isinstance(lease_seconds, (int, float)) or lease_seconds <= 0:
                 raise AppServerError(-32602, "leaseSeconds must be positive")
+            thread_id = params.get("threadId")
+            if thread_id is not None and (not isinstance(thread_id, str) or not thread_id):
+                raise AppServerError(-32602, "threadId must be a non-empty string")
+            allowed_threads = None if thread_id is None else {thread_id}
             return _execution_payload(
-                self.runtime.run_one(worker_id, lease_seconds=float(lease_seconds))
+                self.runtime.run_one(
+                    worker_id,
+                    lease_seconds=float(lease_seconds),
+                    allowed_thread_ids=allowed_threads,
+                )
             )
 
         if method == "artifact/list":

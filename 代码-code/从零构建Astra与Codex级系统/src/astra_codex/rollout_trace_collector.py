@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .event_stream import RuntimeEvent
-from .rollout_trace import RolloutTrace, RolloutTraceEvent, RolloutTraceStore
+from .rollout_trace import RolloutTrace, RolloutTraceStore
 from .runtime import DurableAgentRuntime
 from .steering import SteeringStatus
 from .verification import VerificationResult

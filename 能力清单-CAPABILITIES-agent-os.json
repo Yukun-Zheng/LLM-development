@@ -5,14 +5,14 @@
     {
       "id": "agent.lease_heartbeat",
       "track": "agent",
-      "title": "Worker Lease Heartbeat / Renewal",
+      "title": "Foreground + Background Worker Lease Heartbeat",
       "status": "validated",
       "maturity": "L2",
       "theory": ["代码-code/从零构建Astra与Codex级系统/教程-lessons/09-实时Steering租约与AppServer-live-control-plane.md"],
-      "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime_control.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py"],
-      "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_runtime_control_artifacts.py"],
-      "evidence": ["Fast CI run 91: renewed lease blocks premature reclaim; full suite 86 passed and Ruff passed"],
-      "next": ["background heartbeat during a single long-running tool/RPC", "lease-loss fencing token", "multi-worker fairness experiments"]
+      "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime_control.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime_queue.py"],
+      "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_runtime_control_artifacts.py", "代码-code/从零构建Astra与Codex级系统/tests/test_background_heartbeat.py"],
+      "evidence": ["Fast CI run 138: a background thread with its own SQLite handle renews a lease while one model call blocks beyond the original lease; competitor reclaim remains impossible; full suite 108 passed and Ruff passed"],
+      "next": ["lease-loss fencing token", "tool-owned cancellation/heartbeat contract", "multi-worker fairness experiments"]
     },
     {
       "id": "agent.live_steering",
@@ -24,7 +24,7 @@
       "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/steering.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime_control.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py"],
       "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_runtime_control_artifacts.py"],
       "evidence": ["Fast CI run 91: steering submitted while a tool executes is consumed and injected before the next model sampling; full suite 86 passed"],
-      "next": ["steering priority / replace / interrupt semantics", "authenticated external clients", "cancellation-aware tool execution"]
+      "next": ["steering priority / replace / interrupt semantics", "cancellation-aware tool execution"]
     },
     {
       "id": "agent.artifact_store",
@@ -44,11 +44,11 @@
       "title": "Durable Cursor-replay Runtime Event Stream",
       "status": "validated",
       "maturity": "L2",
-      "theory": ["代码-code/从零构建Astra与Codex级系统/教程-lessons/10-可重放事件流与HTTP控制面-event-stream-http.md", "Codex源码解剖-codex-anatomy/02-会话线程与事件协议-session-thread-events.md"],
+      "theory": ["代码-code/从零构建Astra与Codex级系统/教程-lessons/10-可重放事件流与HTTP控制面-event-stream-http.md", "代码-code/从零构建Astra与Codex级系统/教程-lessons/13-SSE实时事件推送与断线重连-sse-reconnect.md", "Codex源码解剖-codex-anatomy/02-会话线程与事件协议-session-thread-events.md"],
       "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/event_stream.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/codex_harness.py"],
-      "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_event_stream_http.py"],
-      "evidence": ["Fast CI run 103: restart-safe cursor replay, thread/topic filtering and live harness event publication passed; full suite 89 passed and Ruff passed"],
-      "next": ["SSE / WebSocket push backed by the same durable cursor", "event retention / compaction", "consumer backpressure and slow-subscriber policy"]
+      "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_event_stream_http.py", "代码-code/从零构建Astra与Codex级系统/tests/test_sse_events.py"],
+      "evidence": ["Fast CI run 138: cursor catch-up, Last-Event-ID resume, no-duplicate replay, thread/topic filtering and live post-connect delivery all passed; full suite 108 passed and Ruff passed"],
+      "next": ["event retention / compaction", "consumer backpressure and slow-subscriber policy", "multi-process notification"]
     },
     {
       "id": "agent.scoped_project_instructions",
@@ -72,7 +72,7 @@
       "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/app_server.py"],
       "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_app_server.py", "代码-code/从零构建Astra与Codex级系统/tests/test_event_stream_http.py"],
       "evidence": ["Fast CI run 103: JSON-RPC thread/runtime/artifact control plus cursor-based event/poll passed; full suite 89 passed"],
-      "next": ["push subscriptions", "protocol transcript comparison against public Codex App Server semantics"]
+      "next": ["protocol transcript comparison against public Codex App Server semantics", "request cancellation"]
     },
     {
       "id": "protocol.app_server_http",
@@ -84,7 +84,19 @@
       "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/http_app_server.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/app_server.py"],
       "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_event_stream_http.py", "代码-code/从零构建Astra与Codex级系统/tests/test_control_auth.py"],
       "evidence": ["Fast CI run 127 includes real localhost HTTP transport, bearer propagation and policy enforcement; full suite 102 passed and Ruff passed"],
-      "next": ["TLS termination guidance", "SSE / WebSocket transport", "request cancellation"]
+      "next": ["TLS termination guidance", "request cancellation", "production concurrency policy"]
+    },
+    {
+      "id": "protocol.sse_event_stream",
+      "track": "protocol",
+      "title": "Authenticated SSE Event Projection with Durable Cursor Reconnect",
+      "status": "validated",
+      "maturity": "L2",
+      "theory": ["代码-code/从零构建Astra与Codex级系统/教程-lessons/13-SSE实时事件推送与断线重连-sse-reconnect.md"],
+      "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/sse_events.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/event_stream.py"],
+      "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_sse_events.py"],
+      "evidence": ["Fast CI run 138: finite loopback SSE validates afterEventId and Last-Event-ID reconnect, thread/topic filters, live delivery after connection, bearer 401 and thread-scope 403; full suite 108 passed and Ruff passed"],
+      "next": ["long-lived production stream", "backpressure", "retention cursor", "WebSocket/realtime bidirectional transport"]
     },
     {
       "id": "security.control_plane_auth",
@@ -94,8 +106,8 @@
       "maturity": "L2",
       "theory": ["代码-code/从零构建Astra与Codex级系统/教程-lessons/11-控制面认证与授权-control-plane-auth.md", "智能体-agent/07-评测安全与开放问题-agent-evaluation-safety.md"],
       "code": ["代码-code/从零构建Astra与Codex级系统/src/astra_codex/control_auth.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/app_server.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/runtime_queue.py", "代码-code/从零构建Astra与Codex级系统/src/astra_codex/http_app_server.py"],
-      "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_control_auth.py"],
-      "evidence": ["Fast CI run 127: scoped workers require an authorized threadId; SQL queue claim skips an older unauthorized thread and completes the authorized thread while unauthorized work remains PENDING; missing/invalid bearer, cross-thread/method access and unscoped feeds are rejected; full suite 102 passed and Ruff passed"],
+      "tests": ["代码-code/从零构建Astra与Codex级系统/tests/test_control_auth.py", "代码-code/从零构建Astra与Codex级系统/tests/test_sse_events.py"],
+      "evidence": ["Fast CI run 138 keeps the same principal/thread policy across in-process JSON-RPC, HTTP and SSE transports; queue-level scoped worker negative control remains covered; full suite 108 passed and Ruff passed"],
       "next": ["token expiry / rotation", "OIDC/workload identity", "security audit log", "TLS / mTLS", "tenant-aware worker pools"]
     }
   ]

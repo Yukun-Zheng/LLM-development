@@ -31,14 +31,22 @@ class LeaseHeartbeat:
 class BackgroundLeaseHeartbeat:
     """Renew a lease on a dedicated thread using a thread-local SQLite handle.
 
-    This protects a worker while one model/tool call blocks longer than the
-    foreground sampling cadence. The runner opens its own ``DurableWorkQueue``
-    connection instead of sharing the main thread's SQLite connection.
+    Starting a heartbeat has a two-phase arming protocol:
 
-    ``last_error`` is retained rather than thrown from the background thread; a
-    caller can inspect it after the context closes and decide whether to fail the
-    enclosing turn. The runtime currently uses this as a liveness guard, not a
-    distributed fencing-token protocol.
+    1. synchronously renew the lease on a short-lived caller-thread connection;
+    2. start the background thread, have it renew once immediately, then signal
+       ``ready`` before ``start`` returns.
+
+    The caller therefore does not enter a long blocking model/tool call merely
+    because a heartbeat thread was *scheduled*; it waits until a renewal has
+    actually succeeded. This closes the startup race exposed by short-lease CI
+    tests and mirrors the more general distributed-systems rule that liveness
+    protection must be active before protected work begins.
+
+    The runner opens its own ``DurableWorkQueue`` connection instead of sharing
+    the main thread's SQLite connection. ``last_error`` is retained rather than
+    thrown asynchronously. This is still a liveness guard, not a fencing-token
+    or consensus protocol.
     """
 
     def __init__(
@@ -49,6 +57,7 @@ class BackgroundLeaseHeartbeat:
         *,
         lease_seconds: float,
         interval_seconds: float | None = None,
+        startup_timeout_seconds: float = 5.0,
     ) -> None:
         if lease_seconds <= 0:
             raise ValueError("lease_seconds must be positive")
@@ -57,41 +66,69 @@ class BackgroundLeaseHeartbeat:
             raise ValueError("interval_seconds must be positive")
         if interval >= lease_seconds:
             raise ValueError("heartbeat interval must be shorter than lease_seconds")
+        if startup_timeout_seconds <= 0:
+            raise ValueError("startup_timeout_seconds must be positive")
         self.queue_path = queue_path
         self.item_id = item_id
         self.worker_id = worker_id
         self.lease_seconds = lease_seconds
         self.interval_seconds = interval
+        self.startup_timeout_seconds = startup_timeout_seconds
         self._stop = threading.Event()
+        self._ready = threading.Event()
         self._thread: threading.Thread | None = None
         self.renewals = 0
         self.last_error: Exception | None = None
 
+    def _renew_once(self, queue: DurableWorkQueue) -> None:
+        queue.renew_lease(
+            self.item_id,
+            self.worker_id,
+            lease_seconds=self.lease_seconds,
+        )
+        self.renewals += 1
+
     def _run(self) -> None:
         try:
             with DurableWorkQueue(self.queue_path) as queue:
+                # Do not wait for the first interval. A heartbeat thread that has
+                # merely started but has never renewed is not yet protecting the
+                # lease.
+                self._renew_once(queue)
+                self._ready.set()
                 while not self._stop.wait(self.interval_seconds):
-                    queue.renew_lease(
-                        self.item_id,
-                        self.worker_id,
-                        lease_seconds=self.lease_seconds,
-                    )
-                    self.renewals += 1
+                    self._renew_once(queue)
         except Exception as exc:
             self.last_error = exc
+            self._ready.set()
             self._stop.set()
 
     def start(self) -> None:
         if self._thread is not None and self._thread.is_alive():
             raise RuntimeError("background heartbeat is already running")
         self._stop.clear()
+        self._ready.clear()
         self.last_error = None
+        self.renewals = 0
+
+        # Arm synchronously first. This makes thread scheduling latency unable to
+        # consume the entire lease before the heartbeat worker even opens SQLite.
+        with DurableWorkQueue(self.queue_path) as queue:
+            self._renew_once(queue)
+
         self._thread = threading.Thread(
             target=self._run,
             name=f"lease-heartbeat-{self.item_id}",
             daemon=True,
         )
         self._thread.start()
+        if not self._ready.wait(timeout=self.startup_timeout_seconds):
+            self.close()
+            raise RuntimeError("background heartbeat failed to become ready")
+        if self.last_error is not None:
+            error = self.last_error
+            self.close()
+            raise RuntimeError(f"background heartbeat failed to arm: {error}") from error
 
     def close(self) -> None:
         self._stop.set()

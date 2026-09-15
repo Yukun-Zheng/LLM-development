@@ -4,9 +4,9 @@ Primary source:
 https://github.com/a2aproject/A2A/blob/6d6640c29b102f7a8d23784901351b5d2454fe71/specification/a2a.proto
 
 The official ``StreamResponse`` oneof can carry ``task``, ``message``,
-``status_update`` or ``artifact_update``.  This module models those exact four
+``status_update`` or ``artifact_update``. This module models those exact four
 payload families and provides a small generator used by the reference SSE
-transport.  It does not claim that a synchronous handler becomes magically
+transport. It does not claim that a synchronous handler becomes magically
 incremental: the reference generator emits the durable submitted Task first,
 then final artifact/status deltas after ``process_task`` returns.
 """
@@ -44,6 +44,15 @@ class A2ATaskStatusUpdateEvent:
             payload["metadata"] = self.metadata
         return payload
 
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "A2ATaskStatusUpdateEvent":
+        return cls(
+            task_id=str(payload["taskId"]),
+            context_id=str(payload["contextId"]),
+            status=A2ATaskStatus.from_dict(dict(payload["status"])),
+            metadata=dict(payload.get("metadata") or {}),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class A2ATaskArtifactUpdateEvent:
@@ -65,6 +74,17 @@ class A2ATaskArtifactUpdateEvent:
         if self.metadata:
             payload["metadata"] = self.metadata
         return payload
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "A2ATaskArtifactUpdateEvent":
+        return cls(
+            task_id=str(payload["taskId"]),
+            context_id=str(payload["contextId"]),
+            artifact=A2AArtifact.from_dict(dict(payload["artifact"])),
+            append=bool(payload.get("append", False)),
+            last_chunk=bool(payload.get("lastChunk", False)),
+            metadata=dict(payload.get("metadata") or {}),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +116,29 @@ class A2AStreamResponse:
             return {"statusUpdate": self.status_update.to_dict()}
         assert self.artifact_update is not None
         return {"artifactUpdate": self.artifact_update.to_dict()}
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "A2AStreamResponse":
+        if not isinstance(payload, dict):
+            raise ValueError("A2A StreamResponse must be an object")
+        keys = [
+            key
+            for key in ("task", "message", "statusUpdate", "artifactUpdate")
+            if key in payload
+        ]
+        if len(keys) != 1:
+            raise ValueError("A2A StreamResponse must contain exactly one payload key")
+        key = keys[0]
+        raw = payload[key]
+        if not isinstance(raw, dict):
+            raise ValueError(f"A2A StreamResponse.{key} must be an object")
+        if key == "task":
+            return cls(task=A2ATask.from_dict(raw))
+        if key == "message":
+            return cls(message=A2AMessage.from_dict(raw))
+        if key == "statusUpdate":
+            return cls(status_update=A2ATaskStatusUpdateEvent.from_dict(raw))
+        return cls(artifact_update=A2ATaskArtifactUpdateEvent.from_dict(raw))
 
 
 def parse_send_message_request(payload: dict[str, Any]) -> A2ASendMessageRequest:
@@ -131,9 +174,9 @@ def stream_send_message(
 ) -> Iterator[A2AStreamResponse]:
     """Yield a source-aligned reference stream for one SendStreamingMessage.
 
-    The first response is the durable SUBMITTED Task.  The handler then runs.
+    The first response is the durable SUBMITTED Task. The handler then runs.
     Newly created artifacts are emitted as ``artifactUpdate`` events, followed
-    by a final ``statusUpdate``.  A truly asynchronous production implementation
+    by a final ``statusUpdate``. A truly asynchronous production implementation
     would publish WORKING/intermediate deltas from the executor itself; this
     deterministic reference layer intentionally does not fabricate deltas the
     underlying handler never exposed.

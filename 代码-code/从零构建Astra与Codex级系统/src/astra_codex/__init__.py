@@ -7,6 +7,11 @@ from .benchmark import BenchmarkCase, BenchmarkHarness, BenchmarkRecord, ExactAn
 from .bubblewrap_sandbox import BubblewrapExecTool, BubblewrapPolicy, BubblewrapSandbox
 from .config import ModelConfig
 from .context import ContextFragment, ContextStore, FragmentKind
+from .continuous_batching import (
+    ContinuousBatchingReferenceEngine,
+    ContinuousIteration,
+    ContinuousRequest,
+)
 from .control_auth import (
     AuthenticationError,
     AuthorizationError,
@@ -127,6 +132,9 @@ __all__ = [
     "CompositeVerifier",
     "ContextFragment",
     "ContextStore",
+    "ContinuousBatchingReferenceEngine",
+    "ContinuousIteration",
+    "ContinuousRequest",
     "ControlledBackend",
     "DPOResult",
     "DecoderOnlyTransformer",

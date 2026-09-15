@@ -17,8 +17,9 @@
 | 08 | 副作用幂等与崩溃恢复 | `tool_journal.py`, `runtime.py` | completed side effect 不重复执行，in-doubt 不盲重试 |
 | 09 | 实时 Steering、租约与 App Server | `steering.py`, `runtime_control.py`, `artifacts.py`, `app_server.py` | mid-turn steering / heartbeat / artifact / JSON-RPC |
 | 10 | 可重放事件流与 HTTP 控制面 | `event_stream.py`, `http_app_server.py`, `app_server.py` | cursor replay / live harness events / real localhost HTTP |
-| 11 | 控制面认证与授权 | `control_auth.py`, `app_server.py`, `http_app_server.py` | bearer identity / method scope / thread scope / HTTP policy parity |
-| 12 | AGENTS.md 作用域与来源 | `instructions.py`, `coding.py` | root→cwd hierarchy / override / budget / sibling negative control / provenance |
+| 11 | 控制面认证与授权 | `control_auth.py`, `app_server.py`, `runtime_queue.py` | bearer identity / method scope / thread scope / queue-level claim fencing |
+| 12 | AGENTS.md 作用域与来源 | `instructions.py`, `coding.py`, `context.py` | hierarchy / override / budget / sibling negative control / provenance |
+| 13 | SSE 实时事件推送与断线重连 | `sse_events.py`, `event_stream.py`, `control_auth.py` | cursor catch-up / Last-Event-ID / live delivery / auth-scoped stream |
 
 对应文件：
 
@@ -36,7 +37,19 @@
 10-可重放事件流与HTTP控制面-event-stream-http.md
 11-控制面认证与授权-control-plane-auth.md
 12-AGENTS作用域与指令来源-agents-md-provenance.md
+13-SSE实时事件推送与断线重连-sse-reconnect.md
 ```
+
+## 当前硬证据
+
+截至 SSE 第一版进入全量回归的 Fast CPU CI run 138：
+
+```text
+108 passed, 1 warning in 8.59s
+Ruff correctness lint: All checks passed
+```
+
+这意味着 Lesson 13 不只是协议说明：cursor replay、`Last-Event-ID`、thread/topic filter、连接后新事件实时到达、401/403 认证授权边界都已经进入自动测试。
 
 ## 课程成熟度规则
 

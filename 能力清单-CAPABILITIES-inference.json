@@ -23,10 +23,9 @@
         "Allocator tests cover finite free-list allocation, fragmentation metrics, exact prefix block sharing/refcounts, partial-prefix private tails, copy-on-write for shared partial final blocks, truncate/release semantics and append-atomic OOM behavior"
       ],
       "next": [
-        "scheduler integration and request preemption",
+        "request preemption",
         "block-hash/radix production index",
-        "eviction and swap policy",
-        "heterogeneous continuous batching"
+        "eviction and swap policy"
       ]
     },
     {
@@ -51,7 +50,7 @@
       ],
       "next": [
         "GPU slab benchmark",
-        "scheduler-owned allocation lifecycle",
+        "scheduler-owned reservation lifecycle",
         "fused block-table attention kernel"
       ]
     },
@@ -79,7 +78,6 @@
       "next": [
         "replace token trie with block-hash/radix index",
         "eviction and cache admission policy",
-        "scheduler integration",
         "cross-request prefix-cache hit-rate benchmark",
         "distributed prefix cache"
       ]
@@ -108,38 +106,42 @@
       "next": [
         "fused GPU block-table attention kernel",
         "batch-level capacity reservation",
-        "scheduler integration",
-        "request preemption and live admission",
+        "request preemption",
         "mixed-length throughput benchmark"
       ]
     },
     {
       "id": "inference.heterogeneous_continuous_batching",
       "track": "inference",
-      "title": "Heterogeneous Variable-length Continuous Batching",
-      "status": "partial",
-      "maturity": "L1",
+      "title": "Reference Heterogeneous Continuous Batching Lifecycle",
+      "status": "validated",
+      "maturity": "L2",
       "theory": [
         "教材-book/10-推理服务系统-inference-systems.md",
-        "代码-code/从零构建Astra与Codex级系统/教程-lessons/18-PageAwareAttention与异长Decode-page-aware-decode.md"
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/18-PageAwareAttention与异长Decode-page-aware-decode.md",
+        "代码-code/从零构建Astra与Codex级系统/教程-lessons/19-ContinuousBatching调度闭环-continuous-batching.md"
       ],
       "code": [
+        "代码-code/从零构建Astra与Codex级系统/src/astra_codex/continuous_batching.py",
         "代码-code/从零构建Astra与Codex级系统/src/astra_codex/page_aware_decode.py",
         "代码-code/从零构建Astra与Codex级系统/src/astra_codex/scheduler.py"
       ],
       "tests": [
+        "代码-code/从零构建Astra与Codex级系统/tests/test_continuous_batching.py",
         "代码-code/从零构建Astra与Codex级系统/tests/test_page_aware_decode.py",
         "代码-code/从零构建Astra与Codex级系统/tests/test_scheduler_benchmark.py"
       ],
       "evidence": [
-        "The page-aware decode reference now supports heterogeneous cached lengths, but request arrival/finish/preemption are not yet integrated into one continuously mutating scheduler-executor loop"
+        "Fast CPU Capstone run 189 completed successfully: 145 passed, 14 skipped, 1 warning; Ruff passed",
+        "The reference engine interleaves an old decode lane with new prompt admission in the same iteration, uses mixed-length page-aware decode, frees physical blocks immediately at terminal state, handles cancellation, records TTFT/TPOT/latency, and terminates multi-request runs without leaked blocks"
       ],
       "next": [
-        "bind scheduler request state to physical block tables and prefix cache",
-        "reserve blocks before execution",
-        "admit new requests between decode iterations",
-        "free completed request blocks immediately",
-        "measure TTFT/TPOT/throughput/fairness under mixed prompt lengths and arrivals"
+        "batch-wide physical-block reservation before execution",
+        "chunked prefill under a unified token budget",
+        "request preemption/swap",
+        "prefix-cache eviction/admission policy",
+        "live-arrival TTFT/TPOT/throughput/fairness benchmark",
+        "fused GPU page-attention kernel"
       ]
     }
   ]

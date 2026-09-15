@@ -159,7 +159,7 @@ L_{policy}
 -\mathbb E\left[
 \min\left(
 \rho A,
-\operatorname{clip}(\rho,1-\epsilon,1+\epsilon)A
+\mathrm{clip}(\rho,1-\epsilon,1+\epsilon)A
 \right)
 \right].
 $$

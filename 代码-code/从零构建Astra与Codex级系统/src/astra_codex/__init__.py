@@ -20,11 +20,15 @@ from .engine import GenerationEngine
 from .evaluation import AggregateMetrics, TrajectoryMetrics, aggregate_metrics, summarize_codex_turn
 from .event_stream import DurableEventStream, RuntimeEvent
 from .http_app_server import HTTPAppTransport, LocalHTTPAppServer
-from .instructions import (
-    InstructionSource,
-    ProjectInstructionResolver,
-    ResolvedInstructions,
+from .instructions import InstructionSource, ProjectInstructionResolver, ResolvedInstructions
+from .kv_block_allocator import (
+    AllocatorMetrics,
+    BlockTableEntry,
+    KVBlockAllocator,
+    PhysicalBlock,
+    RequestBlockTable,
 )
+from .kv_tensor_pool import PhysicalBlockGenerationEngine, PhysicalKVTensorPool, TensorPoolStats
 from .model import DecoderOnlyTransformer, ModelOutput
 from .multi_agent import SequentialCoordinator, WorkerResult
 from .paged_cache import ReferencePagedGenerationEngine, ReferencePagedKVCache
@@ -92,6 +96,7 @@ __all__ = [
     "AgentAppClient",
     "AgentAppServer",
     "AggregateMetrics",
+    "AllocatorMetrics",
     "AppServerError",
     "ArtifactRecord",
     "ArtifactStore",
@@ -105,6 +110,7 @@ __all__ = [
     "BenchmarkCase",
     "BenchmarkHarness",
     "BenchmarkRecord",
+    "BlockTableEntry",
     "BubblewrapExecTool",
     "BubblewrapPolicy",
     "BubblewrapSandbox",
@@ -140,6 +146,7 @@ __all__ = [
     "InProcessAppTransport",
     "InstructionSource",
     "JournaledToolExecutor",
+    "KVBlockAllocator",
     "LeaseHeartbeat",
     "LocalHTTPAppServer",
     "LocalSSEEventServer",
@@ -147,6 +154,9 @@ __all__ = [
     "ModelOutput",
     "PermissionDecision",
     "PermissionProfile",
+    "PhysicalBlock",
+    "PhysicalBlockGenerationEngine",
+    "PhysicalKVTensorPool",
     "PlanGraph",
     "PlanStep",
     "PrefixCacheEntry",
@@ -163,6 +173,7 @@ __all__ = [
     "RepositoryFixture",
     "RepositoryFixtureHarness",
     "RepositoryGrade",
+    "RequestBlockTable",
     "RequestMetrics",
     "RequestState",
     "RequestStatus",
@@ -183,6 +194,7 @@ __all__ = [
     "SteeringMessage",
     "SteeringStatus",
     "StepStatus",
+    "TensorPoolStats",
     "ThreadProjection",
     "ThreadStatus",
     "ToolExecutionRecord",

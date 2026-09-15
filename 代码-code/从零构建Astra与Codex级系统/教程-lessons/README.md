@@ -22,6 +22,8 @@
 | 13 | SSE 实时事件推送与断线重连 | `sse_events.py`, `event_stream.py`, `control_auth.py` | cursor catch-up / Last-Event-ID / live delivery / auth-scoped stream |
 | 14 | 受限进程沙箱与真实隔离边界 | `sandbox.py`, `coding.py` | argv-only / executable+env guard / timeout+rlimit / Linux no_new_privs / negative controls |
 | 15 | Docker 容器隔离与逃逸负测试 | `docker_sandbox.py`, `coding.py` | host-secret invisibility / ro workspace+rootfs / network-none / CapEff=0 / NoNewPrivs=1 / Coding Agent container path |
+| 16 | 物理 KV 块分配器与 Tensor Slab | `kv_block_allocator.py`, `kv_tensor_pool.py` | free-list / refcount / COW / fragmentation / physical K/V parity |
+| 17 | 物理前缀缓存与计算复用 | `physical_prefix_cache.py`, `kv_tensor_pool.py` | exact hit 0 forward / suffix-only compute / block sharing / COW / source release |
 
 对应文件：
 
@@ -42,18 +44,33 @@
 13-SSE实时事件推送与断线重连-sse-reconnect.md
 14-受限进程沙箱与真实隔离边界-process-sandbox.md
 15-Docker容器隔离与逃逸负测试-container-sandbox.md
+16-物理KV块分配器与前缀共享-kv-block-allocator.md
+17-物理前缀缓存与计算复用-physical-prefix-cache.md
 ```
 
 ## 当前硬证据
 
-普通 Fast CPU Capstone CI run 167：
+普通 Fast CPU Capstone CI run 179：
 
 ```text
-119 passed, 14 skipped, 1 warning in 8.74s
+136 passed, 14 skipped, 1 warning in 8.90s
 Ruff correctness lint: All checks passed
 ```
 
-这里的 Docker/Bubblewrap runtime tests 会按环境能力跳过，因此另有专门的 security workflow。
+这一轮新增的 inference 证据包括：
+
+```text
+physical KV block ids → real K/V tensor slabs
+physical block decode logits == full recomputation
+exact physical prefix hit → zero extra model forward
+partial longest-prefix hit → only suffix forward
+partial reuse logits == full forward
+shared full blocks → refcounted physical reuse
+shared partial tail → copy-on-write before decode
+release source request → child cache remains valid
+```
+
+Docker/Bubblewrap runtime tests 会按环境能力跳过，因此另有专门的 security workflow。
 
 Sandbox security CI run 8：
 
@@ -62,7 +79,6 @@ namespace-sandbox         → success
   restricted-process tests → 7 passed
   bubblewrap contract       → hard assertions pass
   unavailable namespace runtime cases → explicit skip with kernel-policy reason
-
 docker-container-sandbox → success
   Docker security tests    → 8 passed
   Ruff                     → All checks passed

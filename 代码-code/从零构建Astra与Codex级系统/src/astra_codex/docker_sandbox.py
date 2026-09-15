@@ -133,9 +133,18 @@ class DockerSandbox:
     ) -> tuple[list[str], str]:
         checked = self._validate_argv(argv)
         guest_cwd = self._resolve_cwd(cwd)
-        mount_mode = "rw" if self.policy.workspace_writable else "ro"
         uid = os.getuid() if hasattr(os, "getuid") else 65534
         gid = os.getgid() if hasattr(os, "getgid") else 65534
+
+        mount_spec = (
+            "type=bind,source="
+            + str(self.policy.workspace_root)
+            + ",target=/workspace"
+        )
+        if not self.policy.workspace_writable:
+            # Docker --mount uses the flag token `readonly`; `rw` is not a
+            # valid field. Read-write is the default and therefore omitted.
+            mount_spec += ",readonly"
 
         command = [
             self.docker_path,
@@ -157,12 +166,7 @@ class DockerSandbox:
             "--workdir",
             guest_cwd,
             "--mount",
-            (
-                "type=bind,src="
-                + str(self.policy.workspace_root)
-                + ",dst=/workspace,"
-                + mount_mode
-            ),
+            mount_spec,
             "--tmpfs",
             f"/tmp:rw,nosuid,nodev,size={self.policy.tmpfs_bytes}",
         ]
